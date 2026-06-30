@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """通用模拟入口：支持多场景选择。"""
 
+from render.console import ConsoleRenderer
+from memory.memory import AgentMemory
+from llm.client import LLMClient
+from core.rules import RuleEngine
+from core.gm import GMAgent
+from core.agent import Agent
+from core.action import ActionRegistry
 import argparse
 import asyncio
 import os
@@ -11,19 +18,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from core.action import ActionRegistry
-from core.agent import Agent
-from core.gm import GMAgent
-from core.rules import RuleEngine
-from llm.client import LLMClient
-from memory.memory import AgentMemory
-from render.console import ConsoleRenderer
-
 
 def load_config(config_path: str | None = None) -> dict:
     """加载配置文件"""
     if config_path is None:
-        config_path = Path(__file__).parent / "config.yaml"
+        config_path = str(Path(__file__).parent / "config.yaml")
 
     import yaml
 
