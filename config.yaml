@@ -1,0 +1,25 @@
+llm:
+  provider: "deepseek"
+  model: "deepseek-chat"
+  base_url: "https://api.deepseek.com/v1"
+  api_key: "${DEEPSEEK_API_KEY}"
+  response_mode: "tool_call"  # tool_call | text_parse
+
+simulation:
+  max_ticks: 20
+  mode: "interactive"  # interactive | auto
+  auto_delay: 2
+  rotate_order: true
+  show_full_inbox: false  # 是否完整显示收件箱内容
+  show_full_monologue: true  # 是否完整显示内心独白
+
+agent:
+  memory_short_limit: 10
+  memory_compress_threshold: 15
+  max_energy: 100
+
+gm:
+  use_llm: false
+  random_event_chance: 0.3
+
+scene: "tavern"
