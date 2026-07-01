@@ -36,6 +36,36 @@ def setup(self, registry: ActionRegistry):
     # common actions 在场景外 core/actions/common.py
 ```
 
+### 自定义 Action 的 tool schema
+
+每个 Action 注册时自动生成独立 tool schema。可覆盖 `get_tool_schema()` 自定义参数：
+
+```python
+class MyAction(ActionSpec):
+    name = "myaction"
+    description = "自定义行动"
+
+    def get_tool_schema(self, locations=None):
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "target": {"type": "string", "enum": locations},
+                        "content": {"type": "string"},
+                        "internal_monologue": {"type": "string", "description": "内心独白"},
+                    },
+                    "required": ["target"],
+                },
+            },
+        }
+```
+
+`locations` 参数由系统传入（`world.locations`），可用于 `move` 等行动的 target enum。
+
 ## MessageBus 关键细节
 
 **Agents 必须先注册才能接收消息:**
