@@ -77,6 +77,25 @@ world.message_bus.register_agent(agent_name)
 
 广播消息只到达已注册的 agents，未注册的 agents 收不到 "all" 消息。
 
+### Message 结构
+
+`target` 字段区分直接目标和旁观者：
+
+```python
+@dataclass
+class Message:
+    sender: str          # 发送者
+    recipients: list[str]  # 所有收到的人（目标 + 旁观者）
+    target: str | None   # 直接目标（如说话对象），None=广播
+    content: str
+    msg_type: str
+    tick: int
+```
+
+- `speak -> 艾莉娅`：recipients=`[艾莉娅, 旁观者]`，target=`艾莉娅`
+- `whisper -> 雷恩`：recipients=`[雷恩]`，target=`雷恩`
+- 广播（`speak` 无 target）：recipients=`["all"]`，target=`None`
+
 ## LLM 集成
 
 ### DeepSeek 配置
@@ -93,6 +112,16 @@ world.message_bus.register_agent(agent_name)
 
 `text_parse` 模式要求 LLM 输出格式: `[ACTION]...[/ACTION] [CONTENT]...[/CONTENT] [THOUGHT]...[/THOUGHT]`
 
+### 无 tool call 自动重试
+
+LLM 返回纯文本未调用工具时，自动追加提示重试（最多 2 次）：
+
+```
+user: 请选择一个可用的工具来行动，不要只输出文字。
+```
+
+仍不调用工具则 fallback 到 `observe`，控制台提示 `[LLM] {name} 重试耗尽，使用 fallback`。
+
 ## 配置加载
 
 环境变量展开语法: `${VAR_NAME}`
@@ -101,20 +130,80 @@ world.message_bus.register_agent(agent_name)
 api_key: "${DEEPSEEK_API_KEY}"
 ```
 
+### 日志配置
+
+```yaml
+logging:
+  file: "logs/simulation.log"
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+```
+
+### Agent 配置
+
+```yaml
+agent:
+  memory_short_limit: 10
+  memory_compress_threshold: 15
+  content_max_length: 200  # 记忆和消息的统一截断长度
+```
+
 ## Agent 流程
 
-每个 tick: `perceive()` → `think()` → `act()`
+每个 tick 按 `action_order` 依次执行每个 agent:
 
-- `perceive()`: 拼接 inbox + 环境 + 记忆
-- `think()`: 调用 LLM 生成 Action
-- `act()`: 通过 ActionRegistry 查找并执行，**自动将行动摘要写入短期记忆**
+1. **`perceive()`** → 读取 inbox → 构建上下文（环境 → 状态 → 记忆 → 收件箱） → inbox 消息写入记忆 → **清空 inbox**
+2. **`think()`** → 调用 LLM 生成 Action
+3. **`act()`** → 通过 ActionRegistry 查找并执行，**自动将行动摘要写入短期记忆**
+
+### 上下文顺序
+
+perceive() 构建的 LLM prompt 顺序：
+
+```
+【当前环境】    ← 位置、同位置的人、可见范围
+【你的状态】    ← 情绪、精力
+【你最近记得的事】 ← 记忆（短期 + 摘要 + 关系）
+【你收到的消息】  ← 当前 inbox 内容（处理后清空）
+```
+
+### inbox 生命周期
+
+```
+perceive() → 读取并清空 inbox
+act()      → 发送消息到所有 inbox（包括自己）
+下一个 tick → perceive() 读取跨 tick 存活的消息
+```
+
+**不跨 tick**：每条消息在 `perceive()` 中恰好被看到一次，然后清空。最后一个人的消息存活到下一 tick。
+
+### 手动控制（ManualAgent）
+
+通过文件 `manual_actions.json` 控制指定 agent 的行动，不走 LLM：
+
+```bash
+python3 run.py --scene tavern --ticks 5 --mode auto --manual 老巴克
+```
+
+```json
+{
+  "老巴克": {
+    "1": {"action_type": "speak", "target": "艾莉娅", "content": "欢迎光临"},
+    "3": {"action_type": "move", "target": "主厅", "content": "走向主厅"}
+  }
+}
+```
+
+未在 JSON 中配置的 tick → 自动 `observe`，不阻塞。
 
 ## 记忆系统
 
 ### 写入时机
 
-- **`agent.act()`**: 每次执行 action 后写入 `{action_type}: {content[:80]} (目标: {target})`
-- **`ObserveAction.execute()`**: 从可见范围收集事实，写入 `观察到: 你在{位置} | 看到: {人名}({角色})在{位置} - 情绪:{情绪}，...`
+- **`agent.act()`**: 每次执行 action 后写入 `[{action_type}] {name}: {content[:content_max_length]} (目标: {target})`
+- **`ObserveAction.execute()`**: 通过 `action.result` 写入 `[observed] 你在{位置} | 看到: {人名}({角色})在{位置} - 情绪:{情绪}，...`
+- **`perceive()`**: 将收到的 inbox 消息写入记忆，格式 `[{msg_type}] {sender} -> {target}: {content[:content_max_length]}`
+
+所有截断长度由 `content_max_length`（config，默认 200）统一控制。
 
 ### 读取方式
 
@@ -146,6 +235,7 @@ class TavernScene(Scene):
 - 未定义 `visibility` = 只能看到同位置的 agent（向前兼容）
 - 空列表 `[]` = 同位置也看不到其他人（如暗室）
 - `ObserveAction` 自动从所有可见位置收集 agent 信息并存入记忆
+- `SpeakAction` 对特定目标说话时，可见范围内的旁观者也会收到消息
 
 ## 规则引擎
 
@@ -165,6 +255,13 @@ def _on_insult(msg, world):
 测试文件: `test/*.py`
 
 运行需要 `.env` 文件中的 `DEEPSEEK_API_KEY`
+
+| 测试文件 | 内容 |
+|---------|------|
+| `test_model.py` | LLM 基础调用和并发测试 |
+| `test_agent.py` | Agent 基本流程 |
+| `test_gm.py` | GM 事件注入 |
+| `test_retry.py` | LLM 无 tool call 重试机制 |
 
 ## 日志系统
 
