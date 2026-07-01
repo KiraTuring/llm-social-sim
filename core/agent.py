@@ -38,6 +38,10 @@ class Agent:
 
         action_names = ", ".join(registry.get_action_names())
 
+        desc_lines = "\n".join(
+            f"- {name}: {registry.get(name).description}" for name in registry.get_action_names()
+        )
+
         relations_text = "\n".join(
             [f"- {name}: {rel.get('impression', '')}" for name, rel in self.relationships.items()]
         )
@@ -49,20 +53,15 @@ class Agent:
 {self.goal}
 
 ## 你能做的事
-每次选择一个行动类型：{action_names}
-- speak: 对某人或所有人说话
-- whisper: 悄悄话（只有目标听到）
-- move: 移动到另一个位置
-- observe: 观察 surroundings（不做其他事）
-- interact: 与物品/环境互动
+行动类型: {action_names}
+{desc_lines}
 
 ## 你和其他人的关系
 {relations_text if relations_text else "暂无"}
 
 ## 输出要求
-调用 act 工具，包含:
-- action_type, target, content
-- internal_monologue: 你的内心独白（别人看不到）"""
+选择要执行的行动工具: {action_names}
+所有工具都包含可选的 internal_monologue 字段（内心独白，别人看不到）"""
 
     async def perceive(self, world: "WorldState") -> str:
         """感知：收集消息 + 环境 + 记忆"""
