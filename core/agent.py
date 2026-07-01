@@ -99,6 +99,7 @@ class Agent:
         llm: "LLMClient",
         registry: "ActionRegistry",
         context: str,
+        tick: int = 0,
     ) -> "Action":
         """思考：调用 LLM 决策"""
 
@@ -111,6 +112,8 @@ class Agent:
             messages=messages,
             action_registry=registry,
             temperature=0.7,
+            agent_name=self.name,
+            tick=tick,
         )
 
         if not action:
@@ -129,6 +132,12 @@ class Agent:
         if action_spec:
             try:
                 messages = action_spec.execute(self.name, {"target": action.target, "content": action.content, **action.params}, world)
+
+                action_summary = f"{action.action_type}: {action.content[:80]}"
+                if action.target:
+                    action_summary += f" (目标: {action.target})"
+                self.memory.add(action_summary)
+
                 return messages
             except Exception as e:
                 print(f"[{self.name}] 执行 action 失败: {e}")

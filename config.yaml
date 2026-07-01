@@ -23,3 +23,7 @@ gm:
   random_event_chance: 0.3
 
 scene: "tavern"
+
+logging:
+  file: "logs/simulation.log"
+  level: "DEBUG"  # DEBUG, INFO, WARNING, ERROR

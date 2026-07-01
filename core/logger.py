@@ -1,0 +1,74 @@
+"""日志模块：记录 LLM 调用和系统调试信息。"""
+
+import logging
+from pathlib import Path
+from typing import Any
+
+
+class SimLogger:
+    """模拟日志记录器"""
+
+    def __init__(self, log_file: str = "logs/simulation.log", level: int = logging.INFO):
+        Path(log_file).parent.mkdir(parents=True, exist_ok=True)
+
+        self.logger = logging.getLogger("simulation")
+        self.logger.setLevel(level)
+
+        self.logger.handlers.clear()
+
+        file_handler = logging.FileHandler(log_file, mode="w", encoding="utf-8")
+        file_handler.setLevel(level)
+
+        formatter = logging.Formatter(
+            "[%(asctime)s] [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+        )
+        file_handler.setFormatter(formatter)
+
+        self.logger.addHandler(file_handler)
+
+    def log_llm_call(
+        self,
+        agent_name: str,
+        tick: int,
+        mode: str,
+        system_prompt: str,
+        messages: list[dict],
+        schema_or_guide: str,
+        raw_response: str,
+        parsed_action: dict | None,
+    ):
+        """记录 LLM 调用的完整信息"""
+        self.logger.info(
+            f"=== LLM CALL: {agent_name} | Tick: {tick} | Mode: {mode} ==="
+        )
+        self.logger.debug(f"=== SYSTEM PROMPT ===\n{system_prompt}")
+        self.logger.debug(f"=== USER MESSAGES ===\n{messages}")
+        self.logger.debug(f"=== TOOL SCHEMA / TEXT GUIDE ===\n{schema_or_guide}")
+        self.logger.debug(f"=== RAW RESPONSE ===\n{raw_response}")
+        self.logger.info(f"=== PARSED ACTION ===\n{parsed_action}")
+
+    def log_tick_start(self, tick: int):
+        """记录 tick 开始"""
+        self.logger.info(f"=== TICK {tick} START ===")
+
+    def log_tick_end(self, tick: int):
+        """记录 tick 结束"""
+        self.logger.info(f"=== TICK {tick} END ===")
+
+    def log_agent_action(self, agent_name: str, tick: int, action: dict):
+        """记录 agent 执行的 action"""
+        self.logger.info(f"ACTION: {agent_name} | Tick: {tick} | {action}")
+
+    def log_message(self, message: dict):
+        """记录消息"""
+        self.logger.debug(f"MESSAGE: {message}")
+
+    def log_system_event(self, event: str, level: int = logging.INFO):
+        """记录系统事件"""
+        self.logger.log(level, f"SYSTEM: {event}")
+
+    def close(self):
+        """关闭日志"""
+        for handler in self.logger.handlers:
+            handler.close()
+            self.logger.removeHandler(handler)

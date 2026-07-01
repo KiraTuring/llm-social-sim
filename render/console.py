@@ -28,7 +28,8 @@ class ConsoleRenderer:
             content = event.replace(f"[tick {world.tick}] ", "")
             self.console.print(f"[bold yellow]🎲 GM: {content}[/bold yellow]")
 
-        for name, agent in world.agents.items():
+        for name in world.action_order:
+            agent = world.agents[name]
             action = actions.get(name) if actions else None
             panel = self._render_agent(agent, world, action)
             self.console.print(panel)
@@ -70,7 +71,8 @@ class ConsoleRenderer:
         self.console.print("[bold green]模拟完成[/bold green]")
         self.console.print("=" * 50 + "\n")
 
-        for name, agent in world.agents.items():
+        for name in world.action_order:
+            agent = world.agents[name]
             trust_text = "\n".join([f"  {k}: {v.get('trust', 0)}" for k, v in agent.relationships.items()])
             self.console.print(f"[bold]{name}[/bold]")
             if trust_text:

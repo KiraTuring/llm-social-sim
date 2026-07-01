@@ -34,7 +34,10 @@ async def test_model():
     registry = ActionRegistry()
     registry.register(TestSpeakAction())
 
-    client = LLMClient(test_config)
+    from core.logger import SimLogger
+    logger = SimLogger(log_file="logs/test.log", level=10)
+
+    client = LLMClient(test_config, logger)
 
     if not client.api_key:
         print("❌ 请先设置 DEEPSEEK_API_KEY")
@@ -49,6 +52,8 @@ async def test_model():
         system_prompt="你是一个测试 Agent。",
         messages=test_messages,
         action_registry=registry,
+        agent_name="TestAgent",
+        tick=1,
     )
 
     print(f"原始输出: {text[:100] if text else 'N/A'}...")
@@ -67,6 +72,8 @@ async def test_model():
             system_prompt=f"你是一个测试 Agent {i}。",
             messages=test_messages,
             action_registry=registry,
+            agent_name=f"TestAgent{i}",
+            tick=i+2,
         )
         for i in range(3)
     ]
@@ -82,6 +89,8 @@ async def test_model():
             print(f"   原始输出: {text[:100] if text else 'N/A'}...")
 
     print(f"\n并发调用耗时: {elapsed:.2f}s")
+
+    logger.close()
 
 
 if __name__ == "__main__":

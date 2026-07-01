@@ -83,7 +83,15 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
 
     scene.setup(registry := ActionRegistry())
 
-    llm = LLMClient(config["llm"])
+    from core.logger import SimLogger
+
+    log_level = getattr(__import__("logging"), config["logging"].get("level", "INFO"))
+    logger = SimLogger(
+        log_file=config["logging"].get("file", "logs/simulation.log"),
+        level=log_level,
+    )
+
+    llm = LLMClient(config["llm"], logger)
 
     rule_engine = RuleEngine()
     rule_engine.setup_default_rules()
@@ -130,6 +138,8 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
     for tick in range(1, actual_max_ticks + 1):
         world.tick = tick
 
+        logger.log_tick_start(tick)
+
         await gm.check_and_inject(world)
 
         agent_actions = {}
@@ -137,12 +147,27 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
             agent = world.agents[agent_name]
 
             context = await agent.perceive(world)
-            action = await agent.think(llm, registry, context)
+            action = await agent.think(llm, registry, context, tick)
             messages = await agent.act(action, world, registry)
 
             agent_actions[agent_name] = action
 
+            action_dict = {
+                "action_type": action.action_type,
+                "target": action.target,
+                "content": action.content,
+                "internal_monologue": action.internal_monologue,
+            } if action else {}
+            logger.log_agent_action(agent_name, tick, action_dict)
+
             for msg in messages:
+                logger.log_message({
+                    "sender": msg.sender,
+                    "recipients": msg.recipients,
+                    "content": msg.content,
+                    "msg_type": msg.msg_type,
+                    "tick": msg.tick,
+                })
                 rule_engine.trigger(msg.msg_type, msg, world)
 
         world.message_bus.get_all()
@@ -155,12 +180,16 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
         if config["simulation"]["rotate_order"]:
             world.rotate_order()
 
+        logger.log_tick_end(tick)
+
         if actual_mode == "interactive":
             input("按回车继续下一个 tick...")
         else:
             await asyncio.sleep(config["simulation"]["auto_delay"])
 
     renderer.render_summary(world)
+
+    logger.close()
 
 
 def main():

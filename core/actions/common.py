@@ -73,6 +73,9 @@ class ObserveAction(ActionSpec):
     text_format = "[ACTION]observe[/ACTION]\n[CONTENT]{观察内容}[/CONTENT]\n[THOUGHT]{内心独白}[/THOUGHT]"
 
     def execute(self, agent_name, params, world):
+        content = params.get("content", "")
+        if content and agent_name in world.agents:
+            world.agents[agent_name].memory.add(f"观察到: {content}")
         return []
 
 

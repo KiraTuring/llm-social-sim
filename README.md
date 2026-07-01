@@ -84,9 +84,23 @@ python3 run.py --scene myscene
 
 编辑 `config.yaml` 调整 LLM、模拟、Agent、GM 设置。
 
+### 日志配置
+
+日志默认写入 `logs/simulation.log`，每次运行覆盖。可通过 `config.yaml` 调整：
+
+```yaml
+logging:
+  file: "logs/simulation.log"  # 日志文件路径
+  level: "INFO"                # 日志级别: DEBUG, INFO, WARNING, ERROR
+```
+
+日志记录内容：
+- LLM 完整交互（提示词、原始回复、解析结果）
+- 模拟流程（tick 边界、agent 行动、消息流）
+
 ## 文档
 
-- `core/` — 核心逻辑（世界、Agent、Action、规则）
+- `core/` — 核心逻辑（世界、Agent、Action、规则、日志）
 - `llm/` — LLM 调用层
 - `memory/` — 记忆系统
 - `render/` — 控制台渲染

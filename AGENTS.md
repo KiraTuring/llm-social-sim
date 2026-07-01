@@ -97,3 +97,44 @@ def _on_insult(msg, world):
 测试文件: `test/*.py`
 
 运行需要 `.env` 文件中的 `DEEPSEEK_API_KEY`
+
+## 日志系统
+
+### 日志配置
+
+日志文件: `logs/simulation.log`（每次运行覆盖）
+
+配置: `config.yaml` 中的 `logging` 段:
+
+```yaml
+logging:
+  file: "logs/simulation.log"
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+```
+
+### 日志记录内容
+
+- **LLM 调用**（INFO + DEBUG）:
+  - System Prompt（DEBUG）
+  - User Messages（DEBUG）
+  - Tool Schema / Text Guide（DEBUG）
+  - Raw Response（DEBUG）
+  - Parsed Action（INFO）
+
+- **模拟流程**（INFO）:
+  - Tick 开始/结束
+  - Agent 执行的行动
+  - 消息流（DEBUG）
+
+### 日志级别说明
+
+- **DEBUG**: 完整的 LLM 交互细节（提示词、回复、schema）
+- **INFO**: 关键事件（tick 边界、action 执行、解析结果）
+- **WARNING**: 非致命问题
+- **ERROR**: 致命错误
+
+### 日志格式
+
+```
+[时间戳] [级别] 消息内容
+```
