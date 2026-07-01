@@ -59,48 +59,74 @@ class LLMClient:
 
         tool_schemas = action_registry.get_tool_schemas(locations)
 
-        for attempt in range(3):
-            try:
-                response = await litellm.acompletion(
-                    model="deepseek/deepseek-chat",
-                    messages=[{"role": "system", "content": system_prompt}] + messages,
-                    tools=tool_schemas,
-                    temperature=temperature,
-                    api_key=self.api_key,
-                    api_base=self.base_url,
-                    drop_params=True,
-                )
-                break
-            except Exception as e:
-                if attempt == 2:
-                    print(f"[LLM] 调用失败: {e}")
-                    return None, None
-                await asyncio.sleep(1)
+        for no_tool_retry in range(3):
+            full_messages = [{"role": "system", "content": system_prompt}] + messages
 
-        choice = response.choices[0]
-        raw_response = response.model_dump_json() if hasattr(response, "model_dump_json") else str(response)
-        parsed_action = None
+            response = None
+            for api_attempt in range(3):
+                try:
+                    response = await litellm.acompletion(
+                        model="deepseek/deepseek-chat",
+                        messages=full_messages,
+                        tools=tool_schemas,
+                        temperature=temperature,
+                        api_key=self.api_key,
+                        api_base=self.base_url,
+                        drop_params=True,
+                    )
+                    break
+                except Exception as e:
+                    if api_attempt == 2:
+                        print(f"[LLM] 调用失败: {e}")
+                        return None, None
+                    await asyncio.sleep(1)
 
-        if hasattr(choice.message, "tool_calls") and choice.message.tool_calls:
-            tool_call = choice.message.tool_calls[0]
-            try:
-                args = tool_call.function.arguments
-                import json
+            choice = response.choices[0]
+            raw_response = response.model_dump_json() if hasattr(response, "model_dump_json") else str(response)
+            parsed_action = None
 
-                params = json.loads(args)
+            if hasattr(choice.message, "tool_calls") and choice.message.tool_calls:
+                tool_call = choice.message.tool_calls[0]
+                try:
+                    args = tool_call.function.arguments
+                    import json
 
-                action = Action(
-                    action_type=tool_call.function.name,
-                    target=params.get("target"),
-                    content=params.get("content", ""),
-                    internal_monologue=params.get("internal_monologue", ""),
-                )
-                parsed_action = {
-                    "action_type": action.action_type,
-                    "target": action.target,
-                    "content": action.content,
-                    "internal_monologue": action.internal_monologue,
-                }
+                    params = json.loads(args)
+
+                    action = Action(
+                        action_type=tool_call.function.name,
+                        target=params.get("target"),
+                        content=params.get("content", ""),
+                        internal_monologue=params.get("internal_monologue", ""),
+                    )
+                    parsed_action = {
+                        "action_type": action.action_type,
+                        "target": action.target,
+                        "content": action.content,
+                        "internal_monologue": action.internal_monologue,
+                    }
+                    if self.logger:
+                        self.logger.log_llm_call(
+                            agent_name=agent_name,
+                            tick=tick,
+                            mode="tool_call",
+                            system_prompt=system_prompt,
+                            messages=messages,
+                            schema_or_guide=str(tool_schemas),
+                            raw_response=raw_response,
+                            parsed_action=parsed_action,
+                        )
+                    return choice.message.content, action
+                except Exception as e:
+                    print(f"[LLM] 解析 tool call 失败: {e}")
+
+            if no_tool_retry < 2:
+                print(f"[LLM] {agent_name} 未调用工具，重试中 ({no_tool_retry + 1}/2)")
+                messages = messages + [
+                    {"role": "assistant", "content": choice.message.content or ""},
+                    {"role": "user", "content": "请选择一个可用的工具来行动，不要只输出文字。"},
+                ]
+            else:
                 if self.logger:
                     self.logger.log_llm_call(
                         agent_name=agent_name,
@@ -112,21 +138,9 @@ class LLMClient:
                         raw_response=raw_response,
                         parsed_action=parsed_action,
                     )
-                return choice.message.content, action
-            except Exception as e:
-                print(f"[LLM] 解析 tool call 失败: {e}")
 
-        if self.logger:
-            self.logger.log_llm_call(
-                agent_name=agent_name,
-                tick=tick,
-                mode="tool_call",
-                system_prompt=system_prompt,
-                messages=messages,
-                schema_or_guide=str(tool_schemas),
-                raw_response=raw_response,
-                parsed_action=parsed_action,
-            )
+                print(f"[LLM] {agent_name} 重试耗尽，使用 fallback")
+                return choice.message.content, None
 
         return choice.message.content, None
 
