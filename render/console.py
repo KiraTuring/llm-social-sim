@@ -62,11 +62,12 @@ class ConsoleRenderer:
                 content += f"[dim](收到: {sender}: {recent['content'][:30]}...)[/dim]\n"
 
         if action:
+            action_line = action.action_type
+            if action.target:
+                action_line += f" -> {action.target}"
             if action.content and action.content != "N/A":
-                action_text = f"{action.action_type}: {action.content}"
-            else:
-                action_text = action.action_type
-            content += f"[cyan]→ {action_text}[/cyan]\n"
+                action_line += f": {action.content}"
+            content += f"[cyan]→ {action_line}[/cyan]\n"
 
         if action and action.internal_monologue:
             if self.show_full_monologue:
