@@ -12,6 +12,7 @@ class Scene:
     agents: list[dict]
     gm_events: list[tuple[int, str]]
     gm_random_events: list[str]
+    visibility: dict[str, list[str]] | None = None
 
     def setup(self, registry: ActionRegistry) -> None:
         """注册场景特定的 actions"""
@@ -23,6 +24,9 @@ class Scene:
 
         world = WorldState(locations=self.locations)
         world.message_bus = MessageBus()
+
+        if self.visibility:
+            world.visibility = self.visibility
 
         for agent_cfg in self.agents:
             world.message_bus.register_agent(agent_cfg["name"])

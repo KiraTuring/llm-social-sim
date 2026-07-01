@@ -14,6 +14,7 @@ class WorldState:
 
     tick: int = 0
     locations: list[str] = field(default_factory=list)
+    visibility: dict[str, list[str]] = field(default_factory=dict)
     agents: dict[str, "Agent"] = field(default_factory=dict)
     event_log: list[str] = field(default_factory=list)
     action_order: list[str] = field(default_factory=list)

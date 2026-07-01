@@ -77,7 +77,45 @@ api_key: "${DEEPSEEK_API_KEY}"
 
 - `perceive()`: 拼接 inbox + 环境 + 记忆
 - `think()`: 调用 LLM 生成 Action
-- `act()`: 通过 ActionRegistry 查找并执行
+- `act()`: 通过 ActionRegistry 查找并执行，**自动将行动摘要写入短期记忆**
+
+## 记忆系统
+
+### 写入时机
+
+- **`agent.act()`**: 每次执行 action 后写入 `{action_type}: {content[:80]} (目标: {target})`
+- **`ObserveAction.execute()`**: 从可见范围收集事实，写入 `观察到: 你在{位置} | 看到: {人名}({角色})在{位置} - 情绪:{情绪}，...`
+
+### 读取方式
+
+`perceive()` → `memory.get_context()` → `【你最近记得的事】`（最近 10 条）
+
+### 存储结构
+
+| 仓库 | 用途 | 限制 |
+|------|------|------|
+| `_short_term` | 最近事件列表 | `short_limit`（config，默认 10） |
+| `_summary` | LLM 压缩摘要 | 超出 `compress_threshold`（默认 15）时触发 |
+| `_relations` | 对其他 agent 的印象 | 无限制 |
+
+## 可见性系统（Visibility）
+
+观察范围大于交互范围。场景通过 `visibility` 定义每个位置能看到的其他位置：
+
+```python
+class TavernScene(Scene):
+    visibility = {
+        "主厅": ["吧台", "角落", "壁炉旁", "后厨"],
+        "吧台": ["主厅", "壁炉旁"],
+        "角落": ["主厅", "壁炉旁"],
+        "壁炉旁": ["主厅", "吧台"],
+        "后厨": ["主厅"],
+    }
+```
+
+- 未定义 `visibility` = 只能看到同位置的 agent（向前兼容）
+- 空列表 `[]` = 同位置也看不到其他人（如暗室）
+- `ObserveAction` 自动从所有可见位置收集 agent 信息并存入记忆
 
 ## 规则引擎
 

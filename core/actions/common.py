@@ -73,9 +73,26 @@ class ObserveAction(ActionSpec):
     text_format = "[ACTION]observe[/ACTION]\n[CONTENT]{观察内容}[/CONTENT]\n[THOUGHT]{内心独白}[/THOUGHT]"
 
     def execute(self, agent_name, params, world):
-        content = params.get("content", "")
-        if content and agent_name in world.agents:
-            world.agents[agent_name].memory.add(f"观察到: {content}")
+        agent = world.agents[agent_name]
+
+        visible_locs = [agent.location]
+        visible_locs += world.visibility.get(agent.location, [])
+
+        seen = []
+        for loc in visible_locs:
+            for name in world.get_agents_in_location(loc):
+                if name == agent_name:
+                    continue
+                other = world.agents[name]
+                seen.append(f"{name}({other.role})在{loc} - 情绪:{other.mood}")
+
+        parts = [f"你在{agent.location}"]
+        if seen:
+            parts.append("看到: " + "，".join(seen))
+        else:
+            parts.append("没有看到其他人")
+
+        agent.memory.add(f"观察到: {' | '.join(parts)}")
         return []
 
 
