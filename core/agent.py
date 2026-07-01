@@ -73,13 +73,6 @@ class Agent:
         inbox = world.message_bus.get_inbox(self.name)
         max_len = self.content_max_length
 
-        if inbox:
-            msgs_text_lines = []
-            for msg in inbox[-5:]:
-                truncated = msg.content[:max_len]
-                msgs_text_lines.append(f"- [{msg.msg_type}] {msg.sender}: {truncated}")
-            parts.append(f"【你收到的消息】\n" + "\n".join(msgs_text_lines))
-
         location_agents = world.get_agents_in_location(self.location)
         if self.name in location_agents:
             location_agents.remove(self.name)
@@ -95,6 +88,13 @@ class Agent:
         memory_context = self.memory.get_context()
         if memory_context:
             parts.append(memory_context)
+
+        if inbox:
+            msgs_text_lines = []
+            for msg in inbox[-5:]:
+                truncated = msg.content[:max_len]
+                msgs_text_lines.append(f"- [{msg.msg_type}] {msg.sender}: {truncated}")
+            parts.append(f"【你收到的消息】\n" + "\n".join(msgs_text_lines))
 
         if inbox:
             for msg in inbox[-5:]:
