@@ -35,6 +35,8 @@ class MessageBus:
 
         if "all" in msg.recipients:
             for agent_name in self._known_agents:
+                if agent_name == msg.sender:
+                    continue
                 if agent_name not in self._inboxes:
                     self._inboxes[agent_name] = []
                 self._inboxes[agent_name].append(msg)
