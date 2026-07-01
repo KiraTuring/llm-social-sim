@@ -155,7 +155,7 @@ class Agent:
                     for key, value in result.items():
                         self.memory.add(f"{key}: {value}")
                 else:
-                    summary = f"{action.action_type}: {action.content[:self.content_max_length]}"
+                    summary = f"[{action.action_type}] {self.name}: {action.content[:self.content_max_length]}"
                     if action.target:
                         summary += f" (目标: {action.target})"
                     self.memory.add(summary)
