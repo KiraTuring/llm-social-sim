@@ -81,6 +81,9 @@ class Agent:
             )
             parts.append(f"【你收到的消息】\n{msgs_text}")
 
+            for msg in inbox[-5:]:
+                self.memory.add(f"[{msg.msg_type}] {msg.sender}: {msg.content[:80]}")
+
         location_agents = world.get_agents_in_location(self.location)
         if self.name in location_agents:
             location_agents.remove(self.name)
