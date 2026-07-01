@@ -11,13 +11,14 @@ simulation:
   auto_delay: 2
   rotate_order: true
   manual_agents: []  # 手动控制的 Agent 名称列表
-  show_full_inbox: false  # 是否完整显示收件箱内容
+  show_full_inbox: true  # 是否完整显示收件箱内容
   show_full_monologue: true  # 是否完整显示内心独白
 
 agent:
   memory_short_limit: 10
   memory_compress_threshold: 15
   max_energy: 100
+  content_max_length: 200
 
 gm:
   use_llm: false

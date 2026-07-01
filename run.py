@@ -105,26 +105,20 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
             short_limit=config["agent"]["memory_short_limit"],
             compress_threshold=config["agent"]["memory_compress_threshold"],
         )
+        agent_kwargs = dict(
+            name=cfg["name"],
+            role=cfg["role"],
+            personality=cfg["personality"],
+            goal=cfg["goal"],
+            location=cfg["location"],
+            relationships=cfg["relationships"],
+            memory=memory,
+            content_max_length=config["agent"].get("content_max_length", 200),
+        )
         if cfg["name"] in manual_names:
-            agent = ManualAgent(
-                name=cfg["name"],
-                role=cfg["role"],
-                personality=cfg["personality"],
-                goal=cfg["goal"],
-                location=cfg["location"],
-                relationships=cfg["relationships"],
-                memory=memory,
-            )
+            agent = ManualAgent(**agent_kwargs)
         else:
-            agent = Agent(
-                name=cfg["name"],
-                role=cfg["role"],
-                personality=cfg["personality"],
-                goal=cfg["goal"],
-                location=cfg["location"],
-                relationships=cfg["relationships"],
-                memory=memory,
-            )
+            agent = Agent(**agent_kwargs)
         world.agents[agent.name] = agent
 
     world.action_order = list(world.agents.keys())

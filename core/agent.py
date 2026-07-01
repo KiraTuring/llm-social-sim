@@ -21,6 +21,7 @@ class Agent:
         location: str,
         relationships: dict,
         memory: "AgentMemory",
+        content_max_length: int = 200,
     ):
         self.name = name
         self.role = role
@@ -29,6 +30,7 @@ class Agent:
         self.location = location
         self.relationships = relationships
         self.memory = memory
+        self.content_max_length = content_max_length
 
         self.mood = "平静"
         self.energy = 100
@@ -69,17 +71,14 @@ class Agent:
         parts = []
 
         inbox = world.message_bus.get_inbox(self.name)
-        self._perceived_inbox = [{"sender": msg.sender, "content": msg.content}
-                                  for msg in inbox]
+        max_len = self.content_max_length
 
         if inbox:
-            msgs_text = "\n".join(
-                [
-                    f"- [{msg.msg_type}] {msg.sender}: {msg.content[:50]}"
-                    for msg in inbox[-5:]
-                ]
-            )
-            parts.append(f"【你收到的消息】\n{msgs_text}")
+            msgs_text_lines = []
+            for msg in inbox[-5:]:
+                truncated = msg.content[:max_len]
+                msgs_text_lines.append(f"- [{msg.msg_type}] {msg.sender}: {truncated}")
+            parts.append(f"【你收到的消息】\n" + "\n".join(msgs_text_lines))
 
         location_agents = world.get_agents_in_location(self.location)
         if self.name in location_agents:
@@ -99,7 +98,11 @@ class Agent:
 
         if inbox:
             for msg in inbox[-5:]:
-                self.memory.add(f"[{msg.msg_type}] {msg.sender}: {msg.content[:80]}")
+                truncated = msg.content[:max_len]
+                self.memory.add(f"[{msg.msg_type}] {msg.sender}: {truncated}")
+
+        self._perceived_inbox = [{"sender": msg.sender, "content": msg.content[:max_len]}
+                                  for msg in inbox]
 
         world.message_bus.clear_inbox(self.name)
 
@@ -152,7 +155,7 @@ class Agent:
                     for key, value in result.items():
                         self.memory.add(f"{key}: {value}")
                 else:
-                    summary = f"{action.action_type}: {action.content[:80]}"
+                    summary = f"{action.action_type}: {action.content[:self.content_max_length]}"
                     if action.target:
                         summary += f" (目标: {action.target})"
                     self.memory.add(summary)
