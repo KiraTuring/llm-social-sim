@@ -33,6 +33,17 @@ class SpeakAction(ActionSpec):
         content = params.get("content", "")
         recipients = ["all"] if target == "all" or not target else [target]
 
+        if recipients != ["all"]:
+            agent = world.agents[agent_name]
+            visible_locs = [agent.location] + world.visibility.get(agent.location, [])
+            bystanders = set()
+            for loc in visible_locs:
+                for name in world.get_agents_in_location(loc):
+                    bystanders.add(name)
+            bystanders.discard(agent_name)
+            bystanders.discard(target)
+            recipients = list({target} | bystanders)
+
         msg = Message(sender=agent_name, recipients=recipients, content=content, msg_type="speech", tick=world.tick)
         world.message_bus.send(msg)
         return [msg], None
