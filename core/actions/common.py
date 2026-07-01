@@ -176,7 +176,7 @@ class ObserveAction(ActionSpec):
         else:
             parts.append("没有看到其他人")
 
-        return [], {"observed": " | ".join(parts)}
+        return [], {"[observed]": " | ".join(parts)}
 
 
 class InteractAction(ActionSpec):
