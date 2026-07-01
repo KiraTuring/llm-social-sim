@@ -44,13 +44,13 @@ class ConsoleRenderer:
         content = f"[bold]{location_emoji} {agent.name}[/bold] [{agent.location}]\n"
         content += f"[dim]情绪: {agent.mood} | 精力: {agent.energy}[/dim]\n"
 
-        inbox = world.message_bus.get_inbox(agent.name)
+        inbox = getattr(agent, '_perceived_inbox', [])
         if inbox:
             recent = inbox[-1]
             if self.show_full_inbox:
-                content += f"[dim](收到: {recent.sender}: {recent.content})[/dim]\n"
+                content += f"[dim](收到: {recent['sender']}: {recent['content']})[/dim]\n"
             else:
-                content += f"[dim](收到: {recent.sender}: {recent.content[:30]}...)[/dim]\n"
+                content += f"[dim](收到: {recent['sender']}: {recent['content'][:30]}...)[/dim]\n"
 
         if action and action.content and action.content != "N/A":
             action_text = f"{action.action_type}: {action.content}"

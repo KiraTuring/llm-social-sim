@@ -70,6 +70,8 @@ class Agent:
         parts = []
 
         inbox = world.message_bus.get_inbox(self.name)
+        self._perceived_inbox = [{"sender": msg.sender, "content": msg.content}
+                                  for msg in inbox]
 
         if inbox:
             msgs_text = "\n".join(
