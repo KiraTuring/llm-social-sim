@@ -13,6 +13,7 @@ class Message:
     content: str
     msg_type: Literal["speech", "whisper", "emote", "system_event", "trade_offer", "trade_accepted", "action"]
     tick: int
+    target: str | None = None
 
 
 class MessageBus:

@@ -47,11 +47,19 @@ class ConsoleRenderer:
         inbox = getattr(agent, '_perceived_inbox', [])
         if inbox:
             if self.show_full_inbox:
-                lines = "\n".join(f"  [{m['sender']}] {m['content']}" for m in inbox)
-                content += f"[dim](收到:\n{lines})[/dim]\n"
+                lines = []
+                for m in inbox:
+                    sender = m['sender']
+                    if m.get('target'):
+                        sender += f" -> {m['target']}"
+                    lines.append(f"  [{sender}] {m['content']}")
+                content += f"[dim](收到:\n" + "\n".join(lines) + ")[/dim]\n"
             else:
                 recent = inbox[-1]
-                content += f"[dim](收到: {recent['sender']}: {recent['content'][:30]}...)[/dim]\n"
+                sender = recent['sender']
+                if recent.get('target'):
+                    sender += f" -> {recent['target']}"
+                content += f"[dim](收到: {sender}: {recent['content'][:30]}...)[/dim]\n"
 
         if action:
             if action.content and action.content != "N/A":

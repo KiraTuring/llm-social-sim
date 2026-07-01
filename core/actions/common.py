@@ -44,7 +44,8 @@ class SpeakAction(ActionSpec):
             bystanders.discard(target)
             recipients = list({target} | bystanders)
 
-        msg = Message(sender=agent_name, recipients=recipients, content=content, msg_type="speech", tick=world.tick)
+        msg_target = None if recipients == ["all"] else target
+        msg = Message(sender=agent_name, recipients=recipients, target=msg_target, content=content, msg_type="speech", tick=world.tick)
         world.message_bus.send(msg)
         return [msg], None
 
@@ -80,7 +81,7 @@ class WhisperAction(ActionSpec):
         if not target:
             return [], None
 
-        msg = Message(sender=agent_name, recipients=[target], content=content, msg_type="whisper", tick=world.tick)
+        msg = Message(sender=agent_name, recipients=[target], target=target, content=content, msg_type="whisper", tick=world.tick)
         world.message_bus.send(msg)
         return [msg], None
 
@@ -176,7 +177,7 @@ class ObserveAction(ActionSpec):
         else:
             parts.append("没有看到其他人")
 
-        return [], {"[observed]": " | ".join(parts)}
+        return [], {"observed": " | ".join(parts)}
 
 
 class InteractAction(ActionSpec):

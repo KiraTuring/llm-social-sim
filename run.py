@@ -173,6 +173,7 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
                 logger.log_message({
                     "sender": msg.sender,
                     "recipients": msg.recipients,
+                    "target": msg.target,
                     "content": msg.content,
                     "msg_type": msg.msg_type,
                     "tick": msg.tick,
