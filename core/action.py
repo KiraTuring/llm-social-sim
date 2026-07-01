@@ -15,6 +15,7 @@ class Action(BaseModel):
     content: str
     params: dict = Field(default_factory=dict)
     internal_monologue: str = ""
+    result: dict | None = None
 
 
 class ActionSpec(ABC):
@@ -26,8 +27,8 @@ class ActionSpec(ABC):
     text_format: str
 
     @abstractmethod
-    def execute(self, agent_name: str, params: dict, world: "WorldState") -> list["Message"]:
-        """执行 action，返回产生的消息"""
+    def execute(self, agent_name: str, params: dict, world: "WorldState") -> tuple[list["Message"], dict | None]:
+        """执行 action，返回 (产生的消息, 结果数据)"""
         pass
 
 

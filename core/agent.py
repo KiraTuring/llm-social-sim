@@ -131,12 +131,18 @@ class Agent:
 
         if action_spec:
             try:
-                messages = action_spec.execute(self.name, {"target": action.target, "content": action.content, **action.params}, world)
+                messages, result = action_spec.execute(self.name, {"target": action.target, "content": action.content, **action.params}, world)
 
-                action_summary = f"{action.action_type}: {action.content[:80]}"
-                if action.target:
-                    action_summary += f" (目标: {action.target})"
-                self.memory.add(action_summary)
+                action.result = result
+
+                if result:
+                    for key, value in result.items():
+                        self.memory.add(f"{key}: {value}")
+                else:
+                    summary = f"{action.action_type}: {action.content[:80]}"
+                    if action.target:
+                        summary += f" (目标: {action.target})"
+                    self.memory.add(summary)
 
                 return messages
             except Exception as e:

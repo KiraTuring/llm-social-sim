@@ -17,7 +17,7 @@ class SpeakAction(ActionSpec):
 
         msg = Message(sender=agent_name, recipients=recipients, content=content, msg_type="speech", tick=world.tick)
         world.message_bus.send(msg)
-        return [msg]
+        return [msg], None
 
 
 class WhisperAction(ActionSpec):
@@ -31,11 +31,11 @@ class WhisperAction(ActionSpec):
         content = params.get("content", "")
 
         if not target:
-            return []
+            return [], None
 
         msg = Message(sender=agent_name, recipients=[target], content=content, msg_type="whisper", tick=world.tick)
         world.message_bus.send(msg)
-        return [msg]
+        return [msg], None
 
 
 class MoveAction(ActionSpec):
@@ -49,7 +49,7 @@ class MoveAction(ActionSpec):
         content = params.get("content", "")
 
         if not target or target not in world.locations:
-            return []
+            return [], None
 
         agent = world.agents[agent_name]
         old_loc = agent.location
@@ -63,7 +63,7 @@ class MoveAction(ActionSpec):
             tick=world.tick,
         )
         world.message_bus.send(msg)
-        return [msg]
+        return [msg], None
 
 
 class ObserveAction(ActionSpec):
@@ -92,8 +92,7 @@ class ObserveAction(ActionSpec):
         else:
             parts.append("没有看到其他人")
 
-        agent.memory.add(f"观察到: {' | '.join(parts)}")
-        return []
+        return [], {"observed": " | ".join(parts)}
 
 
 class InteractAction(ActionSpec):
@@ -107,4 +106,4 @@ class InteractAction(ActionSpec):
 
         msg = Message(sender=agent_name, recipients=["all"], content=content, msg_type="action", tick=world.tick)
         world.message_bus.send(msg)
-        return [msg]
+        return [msg], None
