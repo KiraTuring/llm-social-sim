@@ -188,9 +188,6 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
 
         renderer.render_tick(world, agent_actions)
 
-        for agent in world.agents.values():
-            world.message_bus.clear_inbox(agent.name)
-
         if config["simulation"]["rotate_order"]:
             world.rotate_order()
 

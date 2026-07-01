@@ -97,6 +97,8 @@ class Agent:
             for msg in inbox[-5:]:
                 self.memory.add(f"[{msg.msg_type}] {msg.sender}: {msg.content[:80]}")
 
+        world.message_bus.clear_inbox(self.name)
+
         return "\n\n".join(parts)
 
     async def think(
