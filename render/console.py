@@ -52,8 +52,11 @@ class ConsoleRenderer:
             else:
                 content += f"[dim](收到: {recent['sender']}: {recent['content'][:30]}...)[/dim]\n"
 
-        if action and action.content and action.content != "N/A":
-            action_text = f"{action.action_type}: {action.content}"
+        if action:
+            if action.content and action.content != "N/A":
+                action_text = f"{action.action_type}: {action.content}"
+            else:
+                action_text = action.action_type
             content += f"[cyan]→ {action_text}[/cyan]\n"
 
         if action and action.internal_monologue:
