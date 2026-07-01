@@ -7,6 +7,7 @@ from llm.client import LLMClient
 from core.rules import RuleEngine
 from core.gm import GMAgent
 from core.agent import Agent
+from core.manual_agent import ManualAgent
 from core.action import ActionRegistry
 import argparse
 import asyncio
@@ -74,7 +75,7 @@ def list_available_scenes():
     return sorted(scenes)
 
 
-async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = None, mode: str | None = None):
+async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = None, mode: str | None = None, manual_agents: list[str] | None = None):
     """运行模拟"""
 
     scene = load_scene(scene_name)
@@ -96,21 +97,34 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
     rule_engine = RuleEngine()
     rule_engine.setup_default_rules()
 
+    manual_names = set(manual_agents or config["simulation"].get("manual_agents", []))
+
     for cfg in scene.agents:
         memory = AgentMemory(
             name=cfg["name"],
             short_limit=config["agent"]["memory_short_limit"],
             compress_threshold=config["agent"]["memory_compress_threshold"],
         )
-        agent = Agent(
-            name=cfg["name"],
-            role=cfg["role"],
-            personality=cfg["personality"],
-            goal=cfg["goal"],
-            location=cfg["location"],
-            relationships=cfg["relationships"],
-            memory=memory,
-        )
+        if cfg["name"] in manual_names:
+            agent = ManualAgent(
+                name=cfg["name"],
+                role=cfg["role"],
+                personality=cfg["personality"],
+                goal=cfg["goal"],
+                location=cfg["location"],
+                relationships=cfg["relationships"],
+                memory=memory,
+            )
+        else:
+            agent = Agent(
+                name=cfg["name"],
+                role=cfg["role"],
+                personality=cfg["personality"],
+                goal=cfg["goal"],
+                location=cfg["location"],
+                relationships=cfg["relationships"],
+                memory=memory,
+            )
         world.agents[agent.name] = agent
 
     world.action_order = list(world.agents.keys())
@@ -200,6 +214,7 @@ def main():
     parser.add_argument("--mode", "-m", type=str, choices=["interactive", "auto"], help="运行模式", default=None)
     parser.add_argument("--list-scenes", "-l", action="store_true", help="列出所有可用场景")
     parser.add_argument("--config", "-c", type=str, help="配置文件路径", default=None)
+    parser.add_argument("--manual", nargs="*", help="手动控制的 Agent 名称，多个用空格分隔", default=None)
 
     args = parser.parse_args()
 
@@ -212,7 +227,7 @@ def main():
             print(f"  - {scene}")
         return
 
-    asyncio.run(run_simulation(config, args.scene, args.ticks, args.mode))
+    asyncio.run(run_simulation(config, args.scene, args.ticks, args.mode, args.manual))
 
 
 if __name__ == "__main__":
