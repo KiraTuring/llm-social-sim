@@ -15,7 +15,7 @@ MANUAL_FILE = Path(__file__).parent.parent / "manual_actions.json"
 class ManualAgent(Agent):
     """手动控制的 Agent，行动从 manual_actions.json 读取"""
 
-    async def think(self, llm, registry: "ActionRegistry", context: str, tick: int = 0):
+    async def think(self, llm, registry: "ActionRegistry", context: str, tick: int = 0, locations: list[str] | None = None):
         from core.action import Action
 
         action = self._read_action(tick, registry)

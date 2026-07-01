@@ -100,6 +100,7 @@ class Agent:
         registry: "ActionRegistry",
         context: str,
         tick: int = 0,
+        locations: list[str] | None = None,
     ) -> "Action":
         """思考：调用 LLM 决策"""
 
@@ -114,6 +115,7 @@ class Agent:
             temperature=0.7,
             agent_name=self.name,
             tick=tick,
+            locations=locations,
         )
 
         if not action:

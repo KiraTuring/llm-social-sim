@@ -31,6 +31,22 @@ class ActionSpec(ABC):
         """执行 action，返回 (产生的消息, 结果数据)"""
         pass
 
+    def get_tool_schema(self, locations: list[str] | None = None) -> dict:
+        """返回该 action 的 tool calling schema"""
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "internal_monologue": {"type": "string", "description": "内心独白"},
+                    },
+                },
+            },
+        }
+
 
 class ActionRegistry:
     """管理当前场景所有可用的 Action"""
@@ -50,31 +66,9 @@ class ActionRegistry:
         """获取所有注册的 Action 名称"""
         return list(self._actions.keys())
 
-    def get_tool_schema(self) -> dict:
-        """动态生成 tool calling schema，包含所有 action 作为 enum"""
-        action_names = self.get_action_names()
-        return {
-            "type": "function",
-            "function": {
-                "name": "act",
-                "description": "执行一个行动",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "action_type": {
-                            "type": "string",
-                            "enum": action_names,
-                            "description": "行动类型",
-                        },
-                        "target": {"type": "string", "description": "目标（可选）"},
-                        "content": {"type": "string", "description": "行动内容"},
-                        "params": {"type": "object", "description": "额外参数"},
-                        "internal_monologue": {"type": "string", "description": "内心独白"},
-                    },
-                    "required": ["action_type", "content"],
-                },
-            },
-        }
+    def get_tool_schemas(self, locations: list[str] | None = None) -> list[dict]:
+        """返回所有 action 的 tool schema 列表"""
+        return [act.get_tool_schema(locations) for act in self._actions.values()]
 
     def get_text_guide(self) -> str:
         """动态生成文本格式说明"""

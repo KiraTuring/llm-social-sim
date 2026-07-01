@@ -30,12 +30,13 @@ class LLMClient:
         temperature: float = 0.7,
         agent_name: str = "unknown",
         tick: int = 0,
+        locations: list[str] | None = None,
     ) -> tuple[str | None, Action | None]:
         """调用 LLM，返回 (文本输出, 解析后的 Action)"""
 
         if self.response_mode == "tool_call":
             return await self._call_with_tools(
-                system_prompt, messages, action_registry, temperature, agent_name, tick
+                system_prompt, messages, action_registry, temperature, agent_name, tick, locations
             )
         else:
             return await self._call_with_text(
@@ -50,19 +51,20 @@ class LLMClient:
         temperature: float,
         agent_name: str,
         tick: int,
+        locations: list[str] | None = None,
     ) -> tuple[str | None, Action | None]:
         """Tool calling 模式"""
 
         import litellm
 
-        tool_schema = action_registry.get_tool_schema()
+        tool_schemas = action_registry.get_tool_schemas(locations)
 
         for attempt in range(3):
             try:
                 response = await litellm.acompletion(
                     model="deepseek/deepseek-chat",
                     messages=[{"role": "system", "content": system_prompt}] + messages,
-                    tools=[tool_schema],
+                    tools=tool_schemas,
                     temperature=temperature,
                     api_key=self.api_key,
                     api_base=self.base_url,
@@ -88,10 +90,9 @@ class LLMClient:
                 params = json.loads(args)
 
                 action = Action(
-                    action_type=params.get("action_type", "speak"),
+                    action_type=tool_call.function.name,
                     target=params.get("target"),
                     content=params.get("content", ""),
-                    params=params.get("params", {}),
                     internal_monologue=params.get("internal_monologue", ""),
                 )
                 parsed_action = {
@@ -107,7 +108,7 @@ class LLMClient:
                         mode="tool_call",
                         system_prompt=system_prompt,
                         messages=messages,
-                        schema_or_guide=str(tool_schema),
+                        schema_or_guide=str(tool_schemas),
                         raw_response=raw_response,
                         parsed_action=parsed_action,
                     )
@@ -122,7 +123,7 @@ class LLMClient:
                 mode="tool_call",
                 system_prompt=system_prompt,
                 messages=messages,
-                schema_or_guide=str(tool_schema),
+                schema_or_guide=str(tool_schemas),
                 raw_response=raw_response,
                 parsed_action=parsed_action,
             )
