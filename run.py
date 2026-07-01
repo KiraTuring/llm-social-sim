@@ -171,6 +171,7 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
                 "target": action.target,
                 "content": action.content,
                 "internal_monologue": action.internal_monologue,
+                "result": action.result,
             } if action else {}
             logger.log_agent_action(agent_name, tick, action_dict)
 

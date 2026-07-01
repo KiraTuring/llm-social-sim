@@ -45,7 +45,7 @@ class SimLogger:
         self.logger.debug(f"=== USER MESSAGES ===\n{messages}")
         self.logger.debug(f"=== TOOL SCHEMA / TEXT GUIDE ===\n{schema_or_guide}")
         self.logger.debug(f"=== RAW RESPONSE ===\n{raw_response}")
-        self.logger.info(f"=== PARSED ACTION ===\n{parsed_action}")
+        # self.logger.info(f"=== PARSED ACTION ===\n{parsed_action}")
 
     def log_tick_start(self, tick: int):
         """记录 tick 开始"""
