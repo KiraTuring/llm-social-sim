@@ -178,22 +178,14 @@ class Agent:
         return []
 
     def _build_last_action(self, action: "Action", world: "WorldState"):
-        """构建上一步行动的自然语言描述"""
-        t = action.action_type
+        """构建上一步行动的简单描述"""
+        parts = [f"[{action.action_type}]"]
+        if action.target:
+            parts.append(f"-> {action.target}")
         c = action.content[:self.content_max_length]
-        target = action.target
-
-        if t == "speak":
-            who = target if target else '所有人'
-            self._last_action = f'你对{who}说："{c}"'
-        elif t == "whisper":
-            self._last_action = f"你对{target}窃窃私语"
-        elif t == "move":
-            self._last_action = f"你移动到了{target}"
-        elif t == "observe":
-            self._last_action = f"你观察了四周" if not c else f"你观察：{c}"
-        else:
-            self._last_action = c or f"你执行了{t}"
+        if c:
+            parts.append(f": {c}")
+        self._last_action = "你 " + " ".join(parts)
 
     def modify_trust(self, other: str, delta: int):
         """修改对某人的信任度"""
