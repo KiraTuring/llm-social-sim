@@ -9,11 +9,15 @@ from core.agent import Agent
 if TYPE_CHECKING:
     from core.action import ActionRegistry
 
-MANUAL_FILE = Path(__file__).parent.parent / "manual_actions.json"
+_DEFAULT_MANUAL_FILE = Path(__file__).parent.parent / "manual_actions.json"
 
 
 class ManualAgent(Agent):
     """手动控制的 Agent，行动从 manual_actions.json 读取"""
+
+    def __init__(self, **kwargs):
+        self._manual_file = Path(kwargs.pop("file_path", None)) if kwargs.get("file_path") else _DEFAULT_MANUAL_FILE
+        super().__init__(**kwargs)
 
     async def think(self, llm, registry: "ActionRegistry", context: str, tick: int = 0, locations: list[str] | None = None):
         from core.action import Action
@@ -26,11 +30,11 @@ class ManualAgent(Agent):
 
     def _read_action(self, tick: int, registry: "ActionRegistry"):
         """从 JSON 文件读取指定 tick 的行动"""
-        if not MANUAL_FILE.exists():
+        if not self._manual_file.exists():
             return None
 
         try:
-            data = json.loads(MANUAL_FILE.read_text())
+            data = json.loads(self._manual_file.read_text())
         except (json.JSONDecodeError, Exception):
             return None
 

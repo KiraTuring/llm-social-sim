@@ -15,6 +15,16 @@ def load_scene(scene_name: str):
         sys.exit(1)
 
 
+REQUIRED_AGENT_KEYS = {"name", "role", "personality", "goal", "location", "relationships"}
+
+
+def validate_agent_configs(agents: list[dict]):
+    """校验 Agent 配置是否包含所有必需字段"""
+    for i, cfg in enumerate(agents):
+        if missing := REQUIRED_AGENT_KEYS - cfg.keys():
+            raise ValueError(f"Agent #{i} ({cfg.get('name', '?')}) 缺少必需字段: {missing}")
+
+
 def list_available_scenes():
     """列出所有可用场景"""
     scenes_dir = Path(__file__).parent

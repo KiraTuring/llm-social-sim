@@ -3,61 +3,15 @@
 import json
 from pathlib import Path
 
-from core.message import Message, MessageBus
+from core.message import MessageBus
 from core.agent import Agent
 from core.manual_agent import ManualAgent
 from memory.memory import AgentMemory
 from scenarios.utils import load_scene
 
 
-def serialize_message(msg: Message) -> dict:
-    return {
-        "sender": msg.sender,
-        "recipients": msg.recipients,
-        "content": msg.content,
-        "msg_type": msg.msg_type,
-        "tick": msg.tick,
-        "target": msg.target,
-    }
-
-
-def deserialize_message(data: dict) -> Message:
-    return Message(
-        sender=data["sender"],
-        recipients=data["recipients"],
-        content=data["content"],
-        msg_type=data["msg_type"],
-        tick=data["tick"],
-        target=data.get("target"),
-    )
-
-
-def serialize_message_bus(bus: MessageBus) -> dict:
-    return {
-        "known_agents": list(bus._known_agents),
-        "messages": [serialize_message(m) for m in bus._messages],
-        "inboxes": {
-            name: [serialize_message(m) for m in msgs]
-            for name, msgs in bus._inboxes.items()
-        },
-    }
-
-
-def deserialize_message_bus(data: dict, bus: MessageBus):
-    bus._known_agents = set(data["known_agents"])
-    bus._messages = [deserialize_message(m) for m in data["messages"]]
-    bus._inboxes = {
-        name: [deserialize_message(m) for m in msgs]
-        for name, msgs in data["inboxes"].items()
-    }
-
-
 def serialize_memory(memory: AgentMemory) -> dict:
-    return {
-        "short_term": memory._short_term,
-        "summary": memory._summary,
-        "relations": memory._relations,
-    }
+    return memory.to_dict()
 
 
 def serialize_agent(agent: Agent) -> dict:
@@ -84,7 +38,7 @@ def save_simulation_state(world, gm, scene_module: str, scene_display: str, path
         "locations": world.locations,
         "action_order": world.action_order,
         "event_log": world.event_log,
-        "message_bus": serialize_message_bus(world.message_bus),
+        "message_bus": world.message_bus.to_dict(),
         "gm": {
             "scheduled_events": [[t, e] for t, e in gm.scheduled_events],
             "random_events": gm.random_events,
@@ -118,19 +72,16 @@ def load_simulation_state(path: str, config: dict):
     world.action_order = data["action_order"]
     world.visibility = scene.visibility or {}
 
-    world.message_bus = MessageBus()
-    deserialize_message_bus(data["message_bus"], world.message_bus)
+    world.message_bus = MessageBus.from_dict(data["message_bus"])
 
     for name, agent_data in data["agents"].items():
-        memory = AgentMemory(
+        memory = AgentMemory.from_dict(
+            agent_data["memory"],
             name=name,
             short_limit=config["agent"]["memory_short_limit"],
             compress_threshold=config["agent"]["memory_compress_threshold"],
             relation_limit=config["agent"].get("relation_display_limit", 3),
         )
-        memory._short_term = agent_data["memory"]["short_term"]
-        memory._summary = agent_data["memory"]["summary"]
-        memory._relations = agent_data["memory"]["relations"]
 
         agent_kwargs = dict(
             name=name,

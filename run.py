@@ -15,7 +15,7 @@ import os
 import sys
 from pathlib import Path
 
-from scenarios.utils import load_scene, list_available_scenes
+from scenarios.utils import load_scene, list_available_scenes, validate_agent_configs
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -61,6 +61,7 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
     else:
         scene = load_scene(scene_name)
         world = scene.init_world()
+        validate_agent_configs(scene.agents)
         scene.setup(registry := ActionRegistry())
         manual_names = set(manual_agents or config["simulation"].get("manual_agents", []))
 
@@ -84,7 +85,8 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
                 inbox_limit=config["agent"].get("inbox_limit", 5),
             )
             if cfg["name"] in manual_names:
-                agent = ManualAgent(**agent_kwargs)
+                manual_file = config["simulation"].get("manual_file")
+                agent = ManualAgent(**agent_kwargs, file_path=manual_file)
             else:
                 agent = Agent(**agent_kwargs)
             world.agents[agent.name] = agent
@@ -199,6 +201,7 @@ def main():
     parser.add_argument("--list-scenes", "-l", action="store_true", help="列出所有可用场景")
     parser.add_argument("--config", "-c", type=str, help="配置文件路径", default=None)
     parser.add_argument("--manual", nargs="*", help="手动控制的 Agent 名称，多个用空格分隔", default=None)
+    parser.add_argument("--manual-file", type=str, help="手动控制 JSON 文件路径", default=None)
     parser.add_argument("--save", type=str, help="运行结束后保存状态到文件", default=None)
     parser.add_argument("--load", type=str, help="从存档文件继续运行", default=None)
 
@@ -212,6 +215,9 @@ def main():
         args.scene = "tavern"
 
     config = load_config(args.config)
+
+    if args.manual_file:
+        config.setdefault("simulation", {})["manual_file"] = args.manual_file
 
     if args.list_scenes:
         scenes = list_available_scenes()

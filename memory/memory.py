@@ -19,6 +19,23 @@ class AgentMemory:
         self._summary: str = ""
         self._relations: dict[str, list[str]] = {}
 
+    def to_dict(self) -> dict:
+        """序列化为可保存的 dict"""
+        return {
+            "short_term": self._short_term,
+            "summary": self._summary,
+            "relations": self._relations,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict, name: str, short_limit: int, compress_threshold: int, relation_limit: int = 3) -> "AgentMemory":
+        """从 dict 恢复 AgentMemory"""
+        memory = cls(name=name, short_limit=short_limit, compress_threshold=compress_threshold, relation_limit=relation_limit)
+        memory._short_term = data.get("short_term", [])
+        memory._summary = data.get("summary", "")
+        memory._relations = data.get("relations", {})
+        return memory
+
     def add(self, event: str, agent_name: str | None = None):
         """添加记忆事件"""
         if agent_name:
