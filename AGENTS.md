@@ -49,7 +49,7 @@ class MyAction(ActionSpec):
     name = "myaction"
     description = "自定义行动"
 
-    def get_tool_schema(self, locations=None):
+    def get_tool_schema(self):
         return {
             "type": "function",
             "function": {
@@ -58,7 +58,7 @@ class MyAction(ActionSpec):
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "target": {"type": "string", "enum": locations},
+                        "target": {"type": "string"},
                         "content": {"type": "string"},
                         "internal_monologue": {"type": "string", "description": "内心独白"},
                     },
@@ -68,7 +68,33 @@ class MyAction(ActionSpec):
         }
 ```
 
-`locations` 参数由系统传入（`world.locations`），可用于 `move` 等行动的 target enum。
+`get_tool_schema()` 不接收 `locations` 参数（schema 不编译 enum）。参数合法性由 `validate_params()` 运行时校验。
+
+### 参数校验（validate_params）
+
+每个 Action 可以覆盖 `validate_params(params, context)` 方法对参数做运行时校验。`context` 包含 `agent_name`、`agent_location`、`agent_names`、`locations`、`agents_by_location`。
+
+返回 `None`=合法，`str`=错误信息：
+
+```python
+class MyAction(ActionSpec):
+    def validate_params(self, params, context):
+        target = params.get("target", "")
+        locations = context.get("locations", [])
+        if target and target not in locations:
+            return f"'{target}' 不是有效位置，可选: {', '.join(locations)}"
+        return None
+```
+
+内置 Action 的校验规则：
+
+| Action | 规则 |
+|--------|------|
+| `speak` | target 不能是自己；target 必须在 `agent_names` 中 |
+| `whisper` | target 不能为空/自己；必须在 `agent_names` 且与说话者在同一位置 |
+| `move` | target 不能是当前位置；必须在 `locations` 中 |
+
+校验失败时 LLM 会收到错误提示并重试（最多 2 次），超限 fallback 到 `observe`。
 
 ### 规则注册
 
@@ -153,6 +179,10 @@ user: 请选择一个可用的工具来行动，不要只输出文字。
 ```
 
 仍不调用工具则 fallback 到 `observe`，控制台提示 `[LLM] {name} 重试耗尽，使用 fallback`。
+
+### 参数校验重试
+
+LLM 调用了不合法工具或参数时（如 target 不存在、位置不对），`validate_params()` 返回错误信息，自动追加到 messages 重试（最多 2 次）。参数校验和「无 tool call」共享同一个重试计数器，超限统一 fallback。
 
 ## 配置加载
 
@@ -301,7 +331,7 @@ def _on_insult(msg, world):
 | `test_model.py` | LLM 基础调用和并发测试 |
 | `test_agent.py` | Agent 基本流程 |
 | `test_gm.py` | GM 事件注入 |
-| `test_retry.py` | LLM 无 tool call 重试机制 |
+| `test_retry.py` | LLM 重试机制（无 tool call、不合法工具名、不合法参数） |
 | `test_bugs.py` | Bug 修复验证（model 配置、compress 空返回、visibility 安全、message_bus 字段） |
 
 ## 日志系统
