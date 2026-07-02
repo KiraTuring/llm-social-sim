@@ -19,7 +19,7 @@ class SpeakAction(ActionSpec):
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "target": {"type": "string", "description": "说话对象（留空=对所有人）"},
+                        "target": {"type": "string", "description": "说话对象（留空=对所有人，不要填入任何文字）"},
                         "content": {"type": "string", "description": "说话内容"},
                         "internal_monologue": {"type": "string", "description": "内心独白"},
                     },
@@ -36,7 +36,7 @@ class SpeakAction(ActionSpec):
             return "不能对自己说话"
         others = [n for n in agent_names if n != agent_name]
         if target and target != BROADCAST and target not in agent_names:
-            return f"'{target}' 不存在，可用的说话对象: {', '.join(others)}"
+            return f"'{target}' 不存在，可用的说话对象: {', '.join(others)}（要对所有人说话请将 target 留空）"
         return None
 
     def execute(self, agent_name, params, world):
