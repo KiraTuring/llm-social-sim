@@ -1,5 +1,6 @@
 """酒馆场景：角色定义、初始状态、GM事件表。"""
 
+from core.message import BROADCAST
 from core.rules import RuleEngine
 from scenarios.base import Scene
 
@@ -74,7 +75,7 @@ class TavernScene(Scene):
 
         @engine.on("speech")
         def _on_speech(msg, world):
-            if not msg.recipients or msg.recipients == ["all"]:
+            if not msg.recipients or msg.recipients == [BROADCAST]:
                 return
 
             target = msg.recipients[0]

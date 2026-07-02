@@ -3,6 +3,10 @@
 from dataclasses import dataclass
 
 
+BROADCAST = "all"
+"""发送给 \"all\" 表示广播给所有已知 Agent"""
+
+
 @dataclass
 class Message:
     """单条消息"""
@@ -33,7 +37,7 @@ class MessageBus:
         """发送消息"""
         self._messages.append(msg)
 
-        if "all" in msg.recipients:
+        if BROADCAST in msg.recipients:
             for agent_name in self._known_agents:
                 if agent_name == msg.sender:
                     continue

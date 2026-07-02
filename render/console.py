@@ -8,6 +8,8 @@ from rich.text import Text
 class ConsoleRenderer:
     """控制台渲染器"""
 
+    _PREVIEW_LEN = 60  # 收件箱/独白预览截断长度
+
     def __init__(self, render_config=None, show_full_inbox=False, show_full_monologue=True):
         self.console = Console()
         self.render_config = render_config or {}
@@ -60,7 +62,7 @@ class ConsoleRenderer:
                 sender = recent['sender']
                 if recent.get('target'):
                     sender += f" -> {recent['target']}"
-                content += f"[dim](收到: {sender}: {recent['content'][:30]}...)[/dim]\n"
+                content += f"[dim](收到: {sender}: {recent['content'][:self._PREVIEW_LEN]}...)[/dim]\n"
 
         if action:
             action_line = action.action_type
@@ -74,7 +76,7 @@ class ConsoleRenderer:
             if self.show_full_monologue:
                 content += f"[dim](内心: {action.internal_monologue})[/dim]\n"
             else:
-                content += f"[dim](内心: {action.internal_monologue[:60]}...)[/dim]\n"
+                content += f"[dim](内心: {action.internal_monologue[:self._PREVIEW_LEN]}...)[/dim]\n"
 
         return Panel(content.expandtabs(), border_style="bright_black", expand=False)
 

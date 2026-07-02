@@ -1,7 +1,7 @@
 """通用 Action 实现：speak, whisper, move, observe, interact。"""
 
 from core.action import ActionSpec
-from core.message import Message
+from core.message import Message, BROADCAST
 
 
 class SpeakAction(ActionSpec):
@@ -29,11 +29,11 @@ class SpeakAction(ActionSpec):
         }
 
     def execute(self, agent_name, params, world):
-        target = params.get("target", "all")
+        target = params.get("target", BROADCAST)
         content = params.get("content", "")
-        recipients = ["all"] if target == "all" or not target else [target]
+        recipients = [BROADCAST] if target == BROADCAST or not target else [target]
 
-        if recipients != ["all"]:
+        if recipients != [BROADCAST]:
             agent = world.agents[agent_name]
             visible_locs = [agent.location] + world.visibility.get(agent.location, [])
             bystanders = set()
@@ -44,7 +44,7 @@ class SpeakAction(ActionSpec):
             bystanders.discard(target)
             recipients = list({target} | bystanders)
 
-        msg_target = None if recipients == ["all"] else target
+        msg_target = None if recipients == [BROADCAST] else target
         msg = Message(sender=agent_name, recipients=recipients, target=msg_target, content=content, msg_type="speech", tick=world.tick)
         world.message_bus.send(msg)
         return [msg], None
@@ -126,7 +126,7 @@ class MoveAction(ActionSpec):
 
         msg = Message(
             sender=agent_name,
-            recipients=["all"],
+            recipients=[BROADCAST],
             content=f"从{old_loc}移动到了{target}",
             msg_type="action",
             tick=world.tick,
@@ -206,6 +206,6 @@ class InteractAction(ActionSpec):
     def execute(self, agent_name, params, world):
         content = params.get("content", "")
 
-        msg = Message(sender=agent_name, recipients=["all"], content=content, msg_type="action", tick=world.tick)
+        msg = Message(sender=agent_name, recipients=[BROADCAST], content=content, msg_type="action", tick=world.tick)
         world.message_bus.send(msg)
         return [msg], None

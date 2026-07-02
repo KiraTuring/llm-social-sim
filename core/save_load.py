@@ -126,6 +126,7 @@ def load_simulation_state(path: str, config: dict):
             name=name,
             short_limit=config["agent"]["memory_short_limit"],
             compress_threshold=config["agent"]["memory_compress_threshold"],
+            relation_limit=config["agent"].get("relation_display_limit", 3),
         )
         memory._short_term = agent_data["memory"]["short_term"]
         memory._summary = agent_data["memory"]["summary"]
@@ -140,6 +141,8 @@ def load_simulation_state(path: str, config: dict):
             relationships=agent_data["relationships"],
             memory=memory,
             content_max_length=agent_data.get("content_max_length", 200),
+            max_energy=config["agent"].get("max_energy", 100),
+            inbox_limit=config["agent"].get("inbox_limit", 5),
         )
 
         agent_type = agent_data.get("agent_type", "Agent")

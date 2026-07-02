@@ -49,9 +49,9 @@ class GMAgent:
 
     def _broadcast_event(self, event: str, world: "WorldState"):
         """广播事件给所有 Agent"""
-        from core.message import Message
+        from core.message import Message, BROADCAST
 
-        msg = Message(sender="GM", recipients=["all"], content=event, msg_type="system_event", tick=world.tick)
+        msg = Message(sender="GM", recipients=[BROADCAST], content=event, msg_type="system_event", tick=world.tick)
         world.message_bus.send(msg)
 
     # TODO: 实现 LLM 动态事件生成

@@ -9,10 +9,11 @@ if TYPE_CHECKING:
 class AgentMemory:
     """Agent 记忆系统"""
 
-    def __init__(self, name: str, short_limit: int, compress_threshold: int):
+    def __init__(self, name: str, short_limit: int, compress_threshold: int, relation_limit: int = 3):
         self.name = name
         self.short_limit = short_limit
         self.compress_threshold = compress_threshold
+        self.relation_limit = relation_limit
 
         self._short_term: list[dict] = []
         self._summary: str = ""
@@ -45,7 +46,7 @@ class AgentMemory:
             rel_parts = []
             for other, events in self._relations.items():
                 if events:
-                    rel_parts.append(f"{other}: {'; '.join(events[-3:])}")
+                    rel_parts.append(f"{other}: {'; '.join(events[-self.relation_limit:])}")
             if rel_parts:
                 parts.append(f"【你对其他人的印象】\n" + "\n".join(rel_parts))
 

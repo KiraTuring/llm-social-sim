@@ -22,6 +22,8 @@ class Agent:
         relationships: dict,
         memory: "AgentMemory",
         content_max_length: int = 200,
+        max_energy: int = 100,
+        inbox_limit: int = 5,
     ):
         self.name = name
         self.role = role
@@ -31,9 +33,10 @@ class Agent:
         self.relationships = relationships
         self.memory = memory
         self.content_max_length = content_max_length
+        self.inbox_limit = inbox_limit
 
         self.mood = "平静"
-        self.energy = 100
+        self.energy = max_energy
 
     def build_system_prompt(self, registry: "ActionRegistry") -> str:
         """构建 System Prompt"""
@@ -91,14 +94,15 @@ class Agent:
 
         if inbox:
             msgs_text_lines = []
-            for msg in inbox[-5:]:
+            recent_inbox = inbox[-self.inbox_limit:]
+            for msg in recent_inbox:
                 truncated = msg.content[:max_len]
                 sender_part = f"{msg.sender}" + (f" -> {msg.target}" if msg.target else "")
                 msgs_text_lines.append(f"- [{msg.msg_type}] {sender_part}: {truncated}")
             parts.append(f"【你收到的消息】\n" + "\n".join(msgs_text_lines))
 
         if inbox:
-            for msg in inbox[-5:]:
+            for msg in recent_inbox:
                 truncated = msg.content[:max_len]
                 sender_part = f"{msg.sender}" + (f" -> {msg.target}" if msg.target else "")
                 self.memory.add(f"[{msg.msg_type}] {sender_part}: {truncated}")

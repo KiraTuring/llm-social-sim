@@ -69,6 +69,7 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
                 name=cfg["name"],
                 short_limit=config["agent"]["memory_short_limit"],
                 compress_threshold=config["agent"]["memory_compress_threshold"],
+                relation_limit=config["agent"].get("relation_display_limit", 3),
             )
             agent_kwargs = dict(
                 name=cfg["name"],
@@ -79,6 +80,8 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
                 relationships=cfg["relationships"],
                 memory=memory,
                 content_max_length=config["agent"].get("content_max_length", 200),
+                max_energy=config["agent"].get("max_energy", 100),
+                inbox_limit=config["agent"].get("inbox_limit", 5),
             )
             if cfg["name"] in manual_names:
                 agent = ManualAgent(**agent_kwargs)
