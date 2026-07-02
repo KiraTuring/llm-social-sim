@@ -52,7 +52,13 @@ class Agent:
             [f"- {name}: {rel.get('impression', '')}" for name, rel in self.relationships.items()]
         )
 
-        return f"""## 你是谁
+        return f"""## 模拟规则
+你在扮演 {self.name}（{self.role}），在一个持续运行的社交模拟世界中进行角色扮演。
+模拟以 tick 为单位推进，每个 tick 你可以执行一次行动。
+
+注意：你在调用工具之前输出的任何对话文字都不会被其他角色看到，也不会对模拟产生任何影响。只有工具调用本身会改变环境和其他角色。
+
+## 你是谁
 你是 {self.name}（{self.role}）。{self.personality}
 
 ## 你的目标
@@ -66,8 +72,8 @@ class Agent:
 {relations_text if relations_text else "暂无"}
 
 ## 输出要求
-选择要执行的行动工具: {action_names}
-所有工具都包含可选的 internal_monologue 字段（内心独白，别人看不到）"""
+每次必须选择一个工具来行动。
+所有工具都包含可选的 internal_monologue 字段（内心独白，别人看不到）。"""
 
     async def perceive(self, world: "WorldState") -> str:
         """感知：收集消息 + 环境 + 记忆"""
@@ -109,12 +115,12 @@ class Agent:
                 self.memory.add(f"[{msg.msg_type}] {sender_part}: {truncated}")
 
         self._perceived_inbox = [{"sender": msg.sender, "content": msg.content[:max_len], "target": msg.target}
-                                  for msg in inbox]
+                                 for msg in inbox]
 
         world.message_bus.clear_inbox(self.name)
 
         if self._last_action:
-            parts.append(f"【你刚才的行动】\n{self._last_action}，不要重复刚才的行动。")
+            parts.append(f"【你刚才的行动】\n{self._last_action} \n不要重复刚才的行动。")
 
         return "\n\n".join(parts)
 
