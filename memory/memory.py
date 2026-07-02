@@ -87,7 +87,7 @@ class AgentMemory:
 
         events_text = "\n".join(f"- {e['event']}" for e in to_compress)
 
-        system_prompt = f"你正在为角色{self.name}整理记忆摘要。请用2-3句话概括以下经历，保留关键人物和重要事件。只输出摘要本身，不要添加任何格式标记。"
+        system_prompt = f"你正在为角色{self.name}整理记忆摘要。请用3-5句话概括以下经历，保留关键人物和重要事件。只输出摘要本身，不要添加任何格式标记。经历中的\"你\"指代角色{self.name}。你的输出也要使用第二人称，以角色的视角展开描述，比如\"你遇到了……\"。"
         user_content = ""
         if self._summary:
             user_content += f"已有摘要：{self._summary}\n\n"

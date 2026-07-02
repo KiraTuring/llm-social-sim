@@ -111,14 +111,13 @@ class Agent:
             for msg in recent_inbox:
                 truncated = msg.content[:max_len]
                 sender_part = f"{msg.sender}" + (f" -> {msg.target}" if msg.target else "")
-                msgs_text_lines.append(f"- [{msg.msg_type}] {sender_part}: {truncated}")
-            parts.append(f"【你收到的消息】\n" + "\n".join(msgs_text_lines))
+                sender_part = sender_part.replace(self.name, "你")
+                msgs_text = f"[{msg.msg_type}] {sender_part}: {truncated}"
+                msgs_text_lines.append(f"- {msgs_text}")
 
-        if inbox:
-            for msg in recent_inbox:
-                truncated = msg.content[:max_len]
-                sender_part = f"{msg.sender}" + (f" -> {msg.target}" if msg.target else "")
-                self.memory.add(f"[{msg.msg_type}] {sender_part}: {truncated}", tick=world.tick)
+                self.memory.add(msgs_text, tick=world.tick)
+
+            parts.append(f"【你收到的消息】\n" + "\n".join(msgs_text_lines))
 
         self._perceived_inbox = [{"sender": msg.sender, "content": msg.content[:max_len], "target": msg.target}
                                  for msg in inbox]
@@ -189,7 +188,7 @@ class Agent:
                     for key, value in result.items():
                         self.memory.add(f"[{key}] {value}", tick=world.tick)
                 else:
-                    summary = f"[{action.action_type}] {self.name}: {action.content[:self.content_max_length]}"
+                    summary = f"[{action.action_type}] 你: {action.content[:self.content_max_length]}"
                     if action.target:
                         summary += f" (目标: {action.target})"
                     self.memory.add(summary, tick=world.tick)
