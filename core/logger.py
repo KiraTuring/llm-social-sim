@@ -67,6 +67,22 @@ class SimLogger:
         """记录系统事件"""
         self.logger.log(level, f"SYSTEM: {event}")
 
+    def debug(self, message: str):
+        """记录 DEBUG 级别日志"""
+        self.logger.debug(message)
+
+    def info(self, message: str):
+        """记录 INFO 级别日志"""
+        self.logger.info(message)
+
+    def warning(self, message: str):
+        """记录 WARNING 级别日志"""
+        self.logger.warning(message)
+
+    def error(self, message: str):
+        """记录 ERROR 级别日志"""
+        self.logger.error(message)
+
     def close(self):
         """关闭日志"""
         for handler in self.logger.handlers:
