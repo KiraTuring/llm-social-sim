@@ -81,9 +81,25 @@ class WhisperAction(ActionSpec):
         if not target:
             return [], None
 
-        msg = Message(sender=agent_name, recipients=[target], target=target, content=content, msg_type="whisper", tick=world.tick)
-        world.message_bus.send(msg)
-        return [msg], None
+        whisper_msg = Message(sender=agent_name, recipients=[target], target=target, content=content, msg_type="whisper", tick=world.tick)
+        world.message_bus.send(whisper_msg)
+        messages = [whisper_msg]
+
+        agent = world.agents[agent_name]
+        visible_locs = [agent.location] + world.visibility.get(agent.location, [])
+        bystanders = set()
+        for loc in visible_locs:
+            for name in world.get_agents_in_location(loc):
+                bystanders.add(name)
+        bystanders.discard(agent_name)
+        bystanders.discard(target)
+
+        if bystanders:
+            notice = Message(sender=agent_name, recipients=list(bystanders), content=f"{agent_name} 对 {target} 窃窃私语", msg_type="action", tick=world.tick)
+            world.message_bus.send(notice)
+            messages.append(notice)
+
+        return messages, None
 
 
 class MoveAction(ActionSpec):
