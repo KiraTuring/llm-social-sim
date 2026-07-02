@@ -72,7 +72,7 @@ class MyAction(ActionSpec):
 
 ### 参数校验（validate_params）
 
-每个 Action 可以覆盖 `validate_params(params, context)` 方法对参数做运行时校验。`context` 包含 `agent_name`、`agent_location`、`agent_names`、`locations`、`agents_by_location`。
+每个 Action 可以覆盖 `validate_params(params, context)` 方法对参数做运行时校验。`context` 包含 `agent_name`、`agent_location`、`agent_names`、`locations`、`agents_by_location`、`hearable_agents`。
 
 返回 `None`=合法，`str`=错误信息：
 
@@ -90,7 +90,7 @@ class MyAction(ActionSpec):
 
 | Action | 规则 |
 |--------|------|
-| `speak` | target 不能是自己；target 必须在 `agent_names` 中 |
+| `speak` | target 不能是自己；必须在 `agent_names` 且在 `hearable_agents` 中 |
 | `whisper` | target 不能为空/自己；必须在 `agent_names` 且与说话者在同一位置 |
 | `move` | target 不能是当前位置；必须在 `locations` 中 |
 
@@ -205,7 +205,7 @@ logging:
 ```yaml
 agent:
   memory_short_limit: 10
-  memory_compress_threshold: 15
+  memory_compress_threshold: 30
   content_max_length: 200  # 记忆和消息的统一截断长度
   max_energy: 100          # Agent 初始精力值
   inbox_limit: 5           # 每次 perceive 看到的收件箱消息数
@@ -271,9 +271,9 @@ python3 run.py --scene tavern --ticks 5 --mode auto --manual 老巴克 --manual-
 
 ### 写入时机
 
-- **`agent.act()`**: 每次执行 action 后写入 `[{action_type}] {name}: {content[:content_max_length]} (目标: {target})`
+- **`agent.act()`**: 每次执行 action 后写入 `[{action_type}] 你: {content[:content_max_length]} (目标: {target})`
 - **`ObserveAction.execute()`**: 通过 `action.result` 写入 `[observed] 你在{位置} | 看到: {人名}({角色})在{位置} - 情绪:{情绪}，...`
-- **`perceive()`**: 将收到的 inbox 消息写入记忆，格式 `[{msg_type}] {sender} -> {target}: {content[:content_max_length]}`
+- **`perceive()`**: 将收到的 inbox 消息写入记忆，格式 `[{msg_type}] 你: {content[:content_max_length]}`（`你` 替换了 sender/target 中的自身名字）
 
 所有截断长度由 `content_max_length`（config，默认 200）统一控制。
 
@@ -281,7 +281,7 @@ python3 run.py --scene tavern --ticks 5 --mode auto --manual 老巴克 --manual-
 
 `perceive()` → `memory.get_context()` → 依次输出：
 - `【你的过去】`：压缩摘要（如有）
-- `【你最近记得的事】`：最近 `short_limit` 条短期记忆
+- `【你最近记得的事】`：短期记忆（全部，压缩后 `_short_term` 被物理截断）
 
 ### 存储结构
 
@@ -296,7 +296,7 @@ python3 run.py --scene tavern --ticks 5 --mode auto --manual 老巴克 --manual-
 `_short_term` 达到 `compress_threshold`（config，默认 30）条时，`perceive()` 末尾自动触发 `compress()`：
 
 1. 取前 `threshold - short_limit` 条旧事件（默认 20 条）
-2. 调用 LLM 将其与现有 `_summary` 合并压缩为 2-3 句新摘要
+2. 调用 LLM 将其与现有 `_summary` 合并压缩为 3-5 句新摘要（第二人称视角）
 3. `_short_term` 截断为最后 `short_limit` 条（默认 10 条）
 4. LLM 调用失败时静默跳过，不丢失数据
 
@@ -317,8 +317,8 @@ class TavernScene(Scene):
 
 - 未定义 `visibility` = 只能看到同位置的 agent（向前兼容）
 - 空列表 `[]` = 同位置也看不到其他人（如暗室）
-- `ObserveAction` 自动从所有可见位置收集 agent 信息并存入记忆
-- `SpeakAction` 对特定目标说话时，可见范围内的旁观者也会收到消息
+- `ObserveAction` 自动从所有可见位置收集 agent 信息并存入记忆（**正向**：我能看到的位置）
+- `SpeakAction` 对特定目标说话时，能看到说话者的旁观者也会收到消息（**反向**：谁能看到我）
 
 ## 规则引擎
 
