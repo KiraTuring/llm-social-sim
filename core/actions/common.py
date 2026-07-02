@@ -188,7 +188,7 @@ class MoveAction(ActionSpec):
 
 class ObserveAction(ActionSpec):
     name = "observe"
-    description = "观察四周（了解当前和相邻位置的人和环境）"
+    description = "观察四周（了解当前和可见位置的人与环境。并非所有位置都能看到，有些位置从当前位置不可见）"
     parameters = {}
     text_format = "[ACTION]observe[/ACTION]\n[CONTENT]{观察内容}[/CONTENT]\n[THOUGHT]{内心独白}[/THOUGHT]"
 
