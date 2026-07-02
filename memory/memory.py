@@ -59,7 +59,7 @@ class AgentMemory:
             parts.append(f"【你的过去】\n{self._summary}")
 
         if self._short_term:
-            recent = "\n".join([f"- {e['event']}" for e in self._short_term[-self.short_limit :]])
+            recent = "\n".join([f"- {e['event']}" for e in self._short_term])
             parts.append(f"【你最近记得的事】\n{recent}")
 
         if self._relations:
