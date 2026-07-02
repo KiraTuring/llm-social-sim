@@ -107,6 +107,10 @@ class AgentMemory:
                 drop_params=True,
             )
             new_summary = response.choices[0].message.content.strip()
+            if not new_summary:
+                if llm_client.logger:
+                    llm_client.logger.warning(f"记忆压缩返回空: {self.name}")
+                return
 
             self._summary = new_summary
             self._short_term = self._short_term[-self.short_limit:]
