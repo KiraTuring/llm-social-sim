@@ -52,6 +52,14 @@ class TestLLMRetry(unittest.TestCase):
         self.registry.register(MoveAction())
         self.agent_names = ["张三", "李四"]
         self.locations = ["主厅", "吧台"]
+        self.agents_by_location = {"主厅": ["张三", "李四"], "吧台": []}
+        self.base_context = {
+            "agent_name": "TestAgent",
+            "agent_location": "吧台",
+            "agent_names": self.agent_names,
+            "locations": self.locations,
+            "agents_by_location": self.agents_by_location,
+        }
 
     async def _run(self, text_first, text_second, text_third, validation_context=None):
         responses = [text_first, text_second, text_third]
@@ -120,11 +128,45 @@ class TestLLMRetry(unittest.TestCase):
                 _make_response("", tool_call=True, func_name="fly"),
                 _make_response("", tool_call=True, func_name="observe"),
                 None,
-                validation_context={"agent_names": self.agent_names, "locations": self.locations},
+                validation_context=self.base_context,
             )
         )
         self.assertIsNotNone(action)
         self.assertEqual(action.action_type, "observe")
+        self.assertEqual(calls, 2)
+
+    def test_speak_to_self_rejected(self):
+        """对自己说话 → 重试"""
+        action, calls = asyncio.run(
+            self._run(
+                _make_response("", tool_call=True, func_name="speak",
+                               func_args='{"target": "TestAgent", "content": "hi"}'),
+                _make_response("", tool_call=True, func_name="speak",
+                               func_args='{"target": "张三", "content": "hi"}'),
+                None,
+                validation_context=self.base_context,
+            )
+        )
+        self.assertIsNotNone(action)
+        self.assertEqual(action.action_type, "speak")
+        self.assertEqual(action.target, "张三")
+        self.assertEqual(calls, 2)
+
+    def test_move_to_same_location_rejected(self):
+        """移到当前位置 → 重试"""
+        action, calls = asyncio.run(
+            self._run(
+                _make_response("", tool_call=True, func_name="move",
+                               func_args='{"target": "吧台", "content": "go"}'),
+                _make_response("", tool_call=True, func_name="move",
+                               func_args='{"target": "主厅", "content": "go"}'),
+                None,
+                validation_context=self.base_context,
+            )
+        )
+        self.assertIsNotNone(action)
+        self.assertEqual(action.action_type, "move")
+        self.assertEqual(action.target, "主厅")
         self.assertEqual(calls, 2)
 
     def test_invalid_speak_target_then_success(self):
@@ -136,7 +178,7 @@ class TestLLMRetry(unittest.TestCase):
                 _make_response("", tool_call=True, func_name="speak",
                                func_args='{"target": "张三", "content": "hi"}'),
                 None,
-                validation_context={"agent_names": self.agent_names, "locations": self.locations},
+                validation_context=self.base_context,
             )
         )
         self.assertIsNotNone(action)
@@ -153,7 +195,7 @@ class TestLLMRetry(unittest.TestCase):
                 _make_response("", tool_call=True, func_name="move",
                                func_args='{"target": "主厅", "content": "go"}'),
                 None,
-                validation_context={"agent_names": self.agent_names, "locations": self.locations},
+                validation_context=self.base_context,
             )
         )
         self.assertIsNotNone(action)
@@ -171,7 +213,7 @@ class TestLLMRetry(unittest.TestCase):
                                func_args='{"target": "赵六", "content": "hi"}'),
                 _make_response("", tool_call=True, func_name="speak",
                                func_args='{"target": "钱七", "content": "hi"}'),
-                validation_context={"agent_names": self.agent_names, "locations": self.locations},
+                validation_context=self.base_context,
             )
         )
         self.assertIsNone(action)

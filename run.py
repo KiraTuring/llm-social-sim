@@ -142,9 +142,15 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
             agent = world.agents[agent_name]
 
             context = await agent.perceive(world)
+            agents_by_location = {}
+            for loc in world.locations:
+                agents_by_location[loc] = world.get_agents_in_location(loc)
             validation_context = {
+                "agent_name": agent_name,
+                "agent_location": world.agents[agent_name].location,
                 "agent_names": list(world.agents.keys()),
                 "locations": world.locations,
+                "agents_by_location": agents_by_location,
             }
             action = await agent.think(llm, registry, context, tick, validation_context)
             messages = await agent.act(action, world, registry)
