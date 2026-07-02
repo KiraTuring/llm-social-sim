@@ -53,12 +53,18 @@ class TestLLMRetry(unittest.TestCase):
         self.agent_names = ["张三", "李四"]
         self.locations = ["主厅", "吧台"]
         self.agents_by_location = {"主厅": ["张三", "李四"], "吧台": []}
+        _hearable = []
+        for loc in ["吧台", "主厅"]:
+            for n in self.agents_by_location.get(loc, []):
+                if n != "TestAgent":
+                    _hearable.append(n)
         self.base_context = {
             "agent_name": "TestAgent",
             "agent_location": "吧台",
             "agent_names": self.agent_names,
             "locations": self.locations,
             "agents_by_location": self.agents_by_location,
+            "hearable_agents": _hearable,
         }
 
     async def _run(self, text_first, text_second, text_third, validation_context=None):

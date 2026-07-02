@@ -35,8 +35,13 @@ class SpeakAction(ActionSpec):
         if target == agent_name:
             return "不能对自己说话"
         others = [n for n in agent_names if n != agent_name]
-        if target and target != BROADCAST and target not in agent_names:
+        if not target or target == BROADCAST:
+            return None
+        if target not in agent_names:
             return f"'{target}' 不存在，可用的说话对象: {', '.join(others)}（要对所有人说话请将 target 留空）"
+        hearable_agents = context.get("hearable_agents", agent_names)
+        if target not in hearable_agents:
+            return f"'{target}' 离你太远，听不到。当前能对话的人: {', '.join(hearable_agents)}"
         return None
 
     def execute(self, agent_name, params, world):

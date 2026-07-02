@@ -145,12 +145,20 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
             agents_by_location = {}
             for loc in world.locations:
                 agents_by_location[loc] = world.get_agents_in_location(loc)
+            agent_location = world.agents[agent_name].location
+            hearable_locs = [agent_location] + world.reverse_visibility.get(agent_location, [])
+            hearable_agents = []
+            for loc in hearable_locs:
+                for name in world.get_agents_in_location(loc):
+                    if name != agent_name:
+                        hearable_agents.append(name)
             validation_context = {
                 "agent_name": agent_name,
-                "agent_location": world.agents[agent_name].location,
+                "agent_location": agent_location,
                 "agent_names": list(world.agents.keys()),
                 "locations": world.locations,
                 "agents_by_location": agents_by_location,
+                "hearable_agents": hearable_agents,
             }
             action = await agent.think(llm, registry, context, tick, validation_context)
             messages = await agent.act(action, world, registry)
