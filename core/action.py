@@ -88,18 +88,10 @@ class ActionRegistry:
         action_match = re.search(r"\[ACTION\](.*?)\[/ACTION\]", text, re.DOTALL)
         target_match = re.search(r"\[TARGET\](.*?)\[/TARGET\]", text, re.DOTALL)
         content_match = re.search(r"\[CONTENT\](.*?)\[/CONTENT\]", text, re.DOTALL)
-        offer_match = re.search(r"\[OFFER\](.*?)\[/OFFER\]", text, re.DOTALL)
-        request_match = re.search(r"\[REQUEST\](.*?)\[/REQUEST\]", text, re.DOTALL)
-
         action_type = action_match.group(1).strip() if action_match else "speak"
         content = content_match.group(1).strip() if content_match else ""
         target = target_match.group(1).strip() if target_match else None
         internal_monologue = thought_match.group(1).strip() if thought_match else ""
-
-        params = {}
-        if offer_match and request_match:
-            params["offer"] = offer_match.group(1).strip()
-            params["request"] = request_match.group(1).strip()
 
         return Action(
             action_type=action_type,

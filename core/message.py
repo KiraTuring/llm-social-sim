@@ -1,7 +1,6 @@
 """消息系统和消息路由。"""
 
 from dataclasses import dataclass
-from typing import Literal
 
 
 @dataclass
@@ -11,7 +10,7 @@ class Message:
     sender: str
     recipients: list[str]
     content: str
-    msg_type: Literal["speech", "whisper", "emote", "system_event", "trade_offer", "trade_accepted", "action"]
+    msg_type: str
     tick: int
     target: str | None = None
 
