@@ -1,0 +1,237 @@
+#!/usr/bin/env python3
+"""测试 Bug 1-4 修复: model 硬编码 / compress 空返回 / visibility 安全 / message_bus 字段"""
+
+import unittest
+from unittest.mock import patch, MagicMock, AsyncMock
+
+from core.world import WorldState
+from core.message import MessageBus
+from core.action import ActionRegistry
+from memory.memory import AgentMemory
+from scenarios.base import Scene
+
+
+class TestBug1ModelConfig(unittest.TestCase):
+    """Bug 1: llm/client.py model 应从 config 读取，而非硬编码"""
+
+    def setUp(self):
+        config = {
+            "provider": "openai",
+            "model": "gpt-4o",
+            "base_url": "https://api.openai.com/v1",
+            "api_key": "test_key",
+            "response_mode": "tool_call",
+        }
+        from llm.client import LLMClient
+        self.client = LLMClient(config, logger=None)
+
+    def test_model_from_config(self):
+        """llm 构造时使用 config 中的 model"""
+        self.assertEqual(self.client.model, "gpt-4o")
+        self.assertEqual(self.client.provider, "openai")
+        self.assertEqual(self.client._model_str, "openai/gpt-4o")
+
+    def test_model_passed_to_acompletion(self):
+        """_call_with_tools 应把 provider/model 传给 litellm.acompletion"""
+        async_mock = AsyncMock(return_value=MagicMock(
+            choices=[MagicMock(
+                message=MagicMock(content="", tool_calls=[
+                    MagicMock(function=MagicMock(
+                        name="observe",
+                        arguments='{"internal_monologue": "test"}'
+                    ))
+                ])
+            )]
+        ))
+
+        registry = ActionRegistry()
+
+        with patch("litellm.acompletion", async_mock):
+            import asyncio
+            asyncio.run(self.client.call(
+                system_prompt="test",
+                messages=[{"role": "user", "content": "hi"}],
+                action_registry=registry,
+                agent_name="Test",
+                tick=1,
+            ))
+
+            _, kwargs = async_mock.call_args
+            self.assertEqual(kwargs["model"], "openai/gpt-4o")
+
+
+class TestBug2CompressNoop(unittest.TestCase):
+    """Bug 2: memory.compress() 暂不调用 LLM"""
+
+    def test_compress_returns_without_calling(self):
+        """compress() 不应调用任何外部方法，直接返回"""
+        memory = AgentMemory(name="测试", short_limit=10, compress_threshold=15)
+        memory.add("事件1")
+
+        import asyncio
+        result = asyncio.run(memory.compress(None))
+        self.assertIsNone(result)
+
+        self.assertEqual(len(memory._short_term), 1)
+
+    def test_compress_empty_memory(self):
+        """compress() 空记忆时也不应报错"""
+        memory = AgentMemory(name="测试", short_limit=10, compress_threshold=15)
+
+        import asyncio
+        result = asyncio.run(memory.compress(None))
+        self.assertIsNone(result)
+
+
+class TestBug3VisibilitySafe(unittest.TestCase):
+    """Bug 3: WorldState.visibility 始终为 dict"""
+
+    def test_world_default_visibility(self):
+        """WorldState 默认 visibility 应为 {}"""
+        w = WorldState()
+        self.assertEqual(w.visibility, {})
+
+    def test_scene_none_visibility(self):
+        """Scene 设 visibility=None 时 init_world 应产出 {}"""
+        class TestScene(Scene):
+            name = "test"
+            locations = ["a"]
+            agents = []
+            gm_events = []
+            gm_random_events = []
+            visibility = None
+
+        world = TestScene().init_world()
+        self.assertIsInstance(world.visibility, dict)
+        self.assertEqual(world.visibility, {})
+
+    def test_scene_empty_visibility(self):
+        """Scene 设 visibility={} 时 init_world 仍为 {}"""
+        class TestScene(Scene):
+            name = "test"
+            locations = ["a"]
+            agents = []
+            gm_events = []
+            gm_random_events = []
+            visibility = {}
+
+        world = TestScene().init_world()
+        self.assertEqual(world.visibility, {})
+
+    def test_scene_with_visibility(self):
+        """Scene 有 visibility 数据时正确传递"""
+        class TestScene(Scene):
+            name = "test"
+            locations = ["a", "b"]
+            agents = []
+            gm_events = []
+            gm_random_events = []
+            visibility = {"a": ["b"]}
+
+        world = TestScene().init_world()
+        self.assertEqual(world.visibility, {"a": ["b"]})
+
+    def test_visibility_get_never_crash(self):
+        """visibility.get() 在各种场景下都不应 AttributeError"""
+        w = WorldState()
+        self.assertEqual(w.visibility.get("不存在", []), [])
+
+        w.visibility = {}
+        self.assertEqual(w.visibility.get("不存在", []), [])
+
+
+class TestBug4MessageBusField(unittest.TestCase):
+    """Bug 4: message_bus 是 WorldState 的 dataclass 字段"""
+
+    def test_message_bus_default_none(self):
+        """WorldState 默认 message_bus = None"""
+        w = WorldState()
+        self.assertIsNone(w.message_bus)
+
+    def test_message_bus_can_be_set(self):
+        """message_bus 可赋值为 MessageBus 实例"""
+        w = WorldState()
+        bus = MessageBus()
+        w.message_bus = bus
+        self.assertIs(w.message_bus, bus)
+
+    def test_message_bus_from_init_world(self):
+        """Scene.init_world() 设置 message_bus"""
+        class TestScene(Scene):
+            name = "test"
+            locations = ["a"]
+            agents = []
+            gm_events = []
+            gm_random_events = []
+
+        world = TestScene().init_world()
+        self.assertIsNotNone(world.message_bus)
+        self.assertIsInstance(world.message_bus, MessageBus)
+
+
+    def test_model_with_slash_used_as_is(self):
+        """model 已包含 / 时不做拼接"""
+        config = {
+            "provider": "deepseek",
+            "model": "deepseek/deepseek-chat",
+            "base_url": "https://api.deepseek.com/v1",
+            "api_key": "test_key",
+            "response_mode": "tool_call",
+        }
+        from llm.client import LLMClient
+        client = LLMClient(config, logger=None)
+        self.assertEqual(client._model_str, "deepseek/deepseek-chat")
+
+
+class TestActionRegistryNoneGuard(unittest.TestCase):
+    """llm/client.py 中 action_registry=None 的防护"""
+
+    def test_call_with_none_registry_returns_none(self):
+        """action_registry=None 时 call 应返回 (None, None)"""
+        config = {
+            "provider": "deepseek",
+            "model": "deepseek-chat",
+            "base_url": "https://api.deepseek.com/v1",
+            "api_key": "test_key",
+            "response_mode": "tool_call",
+        }
+        from llm.client import LLMClient
+        client = LLMClient(config, logger=None)
+
+        import asyncio
+        text, action = asyncio.run(client.call(
+            system_prompt="test",
+            messages=[{"role": "user", "content": "hi"}],
+            action_registry=None,
+            agent_name="Test",
+            tick=1,
+        ))
+        self.assertIsNone(text)
+        self.assertIsNone(action)
+
+    def test_call_with_none_in_text_mode(self):
+        """text_parse 模式下 action_registry=None 也应防护"""
+        config = {
+            "provider": "deepseek",
+            "model": "deepseek-chat",
+            "base_url": "https://api.deepseek.com/v1",
+            "api_key": "test_key",
+            "response_mode": "text_parse",
+        }
+        from llm.client import LLMClient
+        client = LLMClient(config, logger=None)
+
+        import asyncio
+        text, action = asyncio.run(client.call(
+            system_prompt="test",
+            messages=[{"role": "user", "content": "hi"}],
+            action_registry=None,
+            agent_name="Test",
+            tick=1,
+        ))
+        self.assertIsNone(text)
+        self.assertIsNone(action)
+
+
+if __name__ == "__main__":
+    unittest.main()

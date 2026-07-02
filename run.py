@@ -75,14 +75,55 @@ def list_available_scenes():
     return sorted(scenes)
 
 
-async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = None, mode: str | None = None, manual_agents: list[str] | None = None):
+async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = None, mode: str | None = None, manual_agents: list[str] | None = None, load_path: str | None = None, save_path: str | None = None):
     """运行模拟"""
 
-    scene = load_scene(scene_name)
+    if load_path:
+        from core.save_load import load_simulation_state
+        world, scene, gm = load_simulation_state(load_path, config)
+        scene.setup(registry := ActionRegistry())
+        start_tick = world.tick + 1
+        remaining = max_ticks or config["simulation"]["max_ticks"]
+        print(f"从存档恢复 [{scene.name}]，当前 tick={world.tick}，继续运行 {remaining} 个 tick\n")
+    else:
+        scene = load_scene(scene_name)
+        world = scene.init_world()
+        scene.setup(registry := ActionRegistry())
+        manual_names = set(manual_agents or config["simulation"].get("manual_agents", []))
 
-    world = scene.init_world()
+        for cfg in scene.agents:
+            memory = AgentMemory(
+                name=cfg["name"],
+                short_limit=config["agent"]["memory_short_limit"],
+                compress_threshold=config["agent"]["memory_compress_threshold"],
+            )
+            agent_kwargs = dict(
+                name=cfg["name"],
+                role=cfg["role"],
+                personality=cfg["personality"],
+                goal=cfg["goal"],
+                location=cfg["location"],
+                relationships=cfg["relationships"],
+                memory=memory,
+                content_max_length=config["agent"].get("content_max_length", 200),
+            )
+            if cfg["name"] in manual_names:
+                agent = ManualAgent(**agent_kwargs)
+            else:
+                agent = Agent(**agent_kwargs)
+            world.agents[agent.name] = agent
 
-    scene.setup(registry := ActionRegistry())
+        world.action_order = list(world.agents.keys())
+
+        gm_cfg = scene.get_gm_config()
+        gm = GMAgent(
+            events=gm_cfg["events"],
+            random_events=gm_cfg["random_events"],
+            chance=config["gm"]["random_event_chance"],
+        )
+
+        start_tick = 1
+        remaining = max_ticks or config["simulation"]["max_ticks"]
 
     from core.logger import SimLogger
 
@@ -97,53 +138,21 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
     rule_engine = RuleEngine()
     rule_engine.setup_default_rules()
 
-    manual_names = set(manual_agents or config["simulation"].get("manual_agents", []))
-
-    for cfg in scene.agents:
-        memory = AgentMemory(
-            name=cfg["name"],
-            short_limit=config["agent"]["memory_short_limit"],
-            compress_threshold=config["agent"]["memory_compress_threshold"],
-        )
-        agent_kwargs = dict(
-            name=cfg["name"],
-            role=cfg["role"],
-            personality=cfg["personality"],
-            goal=cfg["goal"],
-            location=cfg["location"],
-            relationships=cfg["relationships"],
-            memory=memory,
-            content_max_length=config["agent"].get("content_max_length", 200),
-        )
-        if cfg["name"] in manual_names:
-            agent = ManualAgent(**agent_kwargs)
-        else:
-            agent = Agent(**agent_kwargs)
-        world.agents[agent.name] = agent
-
-    world.action_order = list(world.agents.keys())
-
-    gm_cfg = scene.get_gm_config()
-    gm = GMAgent(
-        events=gm_cfg["events"],
-        random_events=gm_cfg["random_events"],
-        chance=config["gm"]["random_event_chance"],
-    )
-
     renderer = ConsoleRenderer(
+        render_config=scene.render_config,
         show_full_inbox=config["simulation"].get("show_full_inbox", False),
         show_full_monologue=config["simulation"].get("show_full_monologue", True),
     )
 
-    print(f"\n{'='*50}")
-    print(f"场景: {scene.name}")
-    print(f"角色: {', '.join([a['name'] for a in scene.agents])}")
-    print(f"{'='*50}\n")
+    if not load_path:
+        print(f"\n{'='*50}")
+        print(f"场景: {scene.name}")
+        print(f"角色: {', '.join([a['name'] for a in scene.agents])}")
+        print(f"{'='*50}\n")
 
     actual_mode = mode or config["simulation"]["mode"]
-    actual_max_ticks = max_ticks or config["simulation"]["max_ticks"]
 
-    for tick in range(1, actual_max_ticks + 1):
+    for tick in range(start_tick, start_tick + remaining):
         world.tick = tick
 
         logger.log_tick_start(tick)
@@ -196,20 +205,35 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
 
     renderer.render_summary(world)
 
+    if save_path:
+        from core.save_load import save_simulation_state
+        scene_module = scene.__class__.__module__.split(".")[-1]
+        save_simulation_state(world, gm, scene_module, scene.name, save_path)
+        print(f"状态已保存到 {save_path}")
+
     logger.close()
 
 
 def main():
     parser = argparse.ArgumentParser(description="LLM 社会模拟引擎", formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument("--scene", "-s", type=str, help="场景名称（如: tavern）", default="tavern")
+    parser.add_argument("--scene", "-s", type=str, help="场景名称（如: tavern）", default=None)
     parser.add_argument("--ticks", "-t", type=int, help="运行 tick 数", default=None)
     parser.add_argument("--mode", "-m", type=str, choices=["interactive", "auto"], help="运行模式", default=None)
     parser.add_argument("--list-scenes", "-l", action="store_true", help="列出所有可用场景")
     parser.add_argument("--config", "-c", type=str, help="配置文件路径", default=None)
     parser.add_argument("--manual", nargs="*", help="手动控制的 Agent 名称，多个用空格分隔", default=None)
+    parser.add_argument("--save", type=str, help="运行结束后保存状态到文件", default=None)
+    parser.add_argument("--load", type=str, help="从存档文件继续运行", default=None)
 
     args = parser.parse_args()
+
+    if args.load and args.scene is not None:
+        print("❌ --load 和 --scene 不能同时使用（存档中已包含场景信息）")
+        sys.exit(1)
+
+    if args.scene is None:
+        args.scene = "tavern"
 
     config = load_config(args.config)
 
@@ -220,7 +244,7 @@ def main():
             print(f"  - {scene}")
         return
 
-    asyncio.run(run_simulation(config, args.scene, args.ticks, args.mode, args.manual))
+    asyncio.run(run_simulation(config, args.scene, args.ticks, args.mode, args.manual, load_path=args.load, save_path=args.save))
 
 
 if __name__ == "__main__":

@@ -1,11 +1,11 @@
 """世界状态管理。"""
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .agent import Agent
-    from .message import Message
+    from .message import Message, MessageBus
 
 
 @dataclass
@@ -18,6 +18,7 @@ class WorldState:
     agents: dict[str, "Agent"] = field(default_factory=dict)
     event_log: list[str] = field(default_factory=list)
     action_order: list[str] = field(default_factory=list)
+    message_bus: Any = None
 
     def advance_tick(self):
         """推进一个 tick"""

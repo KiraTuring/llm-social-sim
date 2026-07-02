@@ -53,30 +53,5 @@ class AgentMemory:
 
     async def compress(self, llm_client: "LLMClient"):
         """压缩短期记忆为摘要"""
-        if not self._short_term:
-            return
-
-        events_text = "\n".join([e["event"] for e in self._short_term])
-
-        prompt = f"""以下是 {self.name} 最近的记忆事件，请用 2-3 句话总结关键信息：
-
-{events_text}
-
-输出简洁的摘要，不要包含格式标记。"""
-
-        messages = [{"role": "user", "content": prompt}]
-
-        try:
-            summary, _ = await llm_client.call(
-                system_prompt="你是记忆助手，负责总结记忆。",
-                messages=messages,
-                action_registry=None,
-            )
-            if summary:
-                if self._summary:
-                    self._summary = f"{self._summary}\n\n{summary}"
-                else:
-                    self._summary = summary
-                self._short_term = []
-        except Exception as e:
-            print(f"[{self.name}] 记忆压缩失败: {e}")
+        # TODO: 记忆压缩尚未实现，暂不调用 LLM
+        pass

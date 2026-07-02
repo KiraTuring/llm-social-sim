@@ -8,8 +8,9 @@ from rich.text import Text
 class ConsoleRenderer:
     """控制台渲染器"""
 
-    def __init__(self, show_full_inbox=False, show_full_monologue=True):
+    def __init__(self, render_config=None, show_full_inbox=False, show_full_monologue=True):
         self.console = Console()
+        self.render_config = render_config or {}
         self.show_full_inbox = show_full_inbox
         self.show_full_monologue = show_full_monologue
 
@@ -39,7 +40,7 @@ class ConsoleRenderer:
     def _render_agent(self, agent, world, action=None):
         """渲染单个 Agent 的行动"""
 
-        location_emoji = {"主厅": "🏠", "吧台": "🍺", "角落": "🪑", "壁炉旁": "🔥", "后厨": "🍳"}.get(agent.location, "📍")
+        location_emoji = self.render_config.get("location_icons", {}).get(agent.location, "📍")
 
         content = f"[bold]{location_emoji} {agent.name}[/bold] [{agent.location}]\n"
         content += f"[dim]情绪: {agent.mood} | 精力: {agent.energy}[/dim]\n"

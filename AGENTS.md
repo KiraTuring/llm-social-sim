@@ -5,6 +5,8 @@
 - **唯一入口**: `run.py`（main.py 和 run_tavern.py 已删除）
 - 运行: `python3 run.py --scene tavern --ticks 10 --mode interactive`
 - 列出场景: `python3 run.py --list-scenes`
+- 保存状态: `python3 run.py --scene tavern --ticks 10 --mode auto --save saves/run.json`
+- 继续运行: `python3 run.py --load saves/run.json --ticks 5 --mode auto`（`--scene` 会和 `--load` 冲突）
 
 ## 场景系统
 
@@ -262,6 +264,7 @@ def _on_insult(msg, world):
 | `test_agent.py` | Agent 基本流程 |
 | `test_gm.py` | GM 事件注入 |
 | `test_retry.py` | LLM 无 tool call 重试机制 |
+| `test_bugs.py` | Bug 修复验证（model 配置、compress 空返回、visibility 安全、message_bus 字段） |
 
 ## 日志系统
 

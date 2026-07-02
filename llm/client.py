@@ -21,6 +21,7 @@ class LLMClient:
         self.api_key = config["api_key"]
         self.response_mode = config["response_mode"]
         self.logger = logger
+        self._model_str = f"{self.provider}/{self.model}" if "/" not in self.model else self.model
 
     async def call(
         self,
@@ -57,6 +58,8 @@ class LLMClient:
 
         import litellm
 
+        if action_registry is None:
+            return None, None
         tool_schemas = action_registry.get_tool_schemas(locations)
 
         for no_tool_retry in range(3):
@@ -66,7 +69,7 @@ class LLMClient:
             for api_attempt in range(3):
                 try:
                     response = await litellm.acompletion(
-                        model="deepseek/deepseek-chat",
+                        model=self._model_str,
                         messages=full_messages,
                         tools=tool_schemas,
                         temperature=temperature,
@@ -157,13 +160,15 @@ class LLMClient:
 
         import litellm
 
+        if action_registry is None:
+            return None, None
         text_guide = action_registry.get_text_guide()
         system_prompt = f"{system_prompt}\n\n{text_guide}"
 
         for attempt in range(3):
             try:
                 response = await litellm.acompletion(
-                    model="deepseek/deepseek-chat",
+                    model=self.model,
                     messages=[{"role": "system", "content": system_prompt}] + messages,
                     temperature=temperature,
                     api_key=self.api_key,
