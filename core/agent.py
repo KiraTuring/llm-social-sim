@@ -128,7 +128,6 @@ class Agent:
 
         messages = [{"role": "user", "content": context}]
 
-        vc = validation_context or {}
         _, action = await llm.call(
             system_prompt=system_prompt,
             messages=messages,
@@ -136,8 +135,7 @@ class Agent:
             temperature=0.7,
             agent_name=self.name,
             tick=tick,
-            locations=vc.get("locations"),
-            agent_names=vc.get("agent_names"),
+            validation_context=validation_context,
         )
 
         if not action:

@@ -3,8 +3,6 @@
 import asyncio
 import logging
 import os
-from typing import Any
-
 os.environ["LITELLM_LOG"] = "ERROR"
 logging.getLogger("litellm").setLevel(logging.ERROR)
 
@@ -31,15 +29,9 @@ class LLMClient:
         temperature: float = 0.7,
         agent_name: str = "unknown",
         tick: int = 0,
-        locations: list[str] | None = None,
-        agent_names: list[str] | None = None,
+        validation_context: dict | None = None,
     ) -> tuple[str | None, Action | None]:
         """调用 LLM，返回 (文本输出, 解析后的 Action)"""
-
-        validation_context = {
-            "agent_names": agent_names or [],
-            "locations": locations or [],
-        }
 
         if self.response_mode == "tool_call":
             return await self._call_with_tools(

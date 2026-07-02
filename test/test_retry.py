@@ -53,7 +53,7 @@ class TestLLMRetry(unittest.TestCase):
         self.agent_names = ["张三", "李四"]
         self.locations = ["主厅", "吧台"]
 
-    async def _run(self, text_first, text_second, text_third, agent_names=None, locations=None):
+    async def _run(self, text_first, text_second, text_third, validation_context=None):
         responses = [text_first, text_second, text_third]
         call_count = 0
 
@@ -70,8 +70,7 @@ class TestLLMRetry(unittest.TestCase):
                 action_registry=self.registry,
                 agent_name="TestAgent",
                 tick=1,
-                locations=locations,
-                agent_names=agent_names,
+                validation_context=validation_context,
             )
             return action, call_count
 
@@ -121,8 +120,7 @@ class TestLLMRetry(unittest.TestCase):
                 _make_response("", tool_call=True, func_name="fly"),
                 _make_response("", tool_call=True, func_name="observe"),
                 None,
-                agent_names=self.agent_names,
-                locations=self.locations,
+                validation_context={"agent_names": self.agent_names, "locations": self.locations},
             )
         )
         self.assertIsNotNone(action)
@@ -138,8 +136,7 @@ class TestLLMRetry(unittest.TestCase):
                 _make_response("", tool_call=True, func_name="speak",
                                func_args='{"target": "张三", "content": "hi"}'),
                 None,
-                agent_names=self.agent_names,
-                locations=self.locations,
+                validation_context={"agent_names": self.agent_names, "locations": self.locations},
             )
         )
         self.assertIsNotNone(action)
@@ -156,8 +153,7 @@ class TestLLMRetry(unittest.TestCase):
                 _make_response("", tool_call=True, func_name="move",
                                func_args='{"target": "主厅", "content": "go"}'),
                 None,
-                agent_names=self.agent_names,
-                locations=self.locations,
+                validation_context={"agent_names": self.agent_names, "locations": self.locations},
             )
         )
         self.assertIsNotNone(action)
@@ -175,8 +171,7 @@ class TestLLMRetry(unittest.TestCase):
                                func_args='{"target": "赵六", "content": "hi"}'),
                 _make_response("", tool_call=True, func_name="speak",
                                func_args='{"target": "钱七", "content": "hi"}'),
-                agent_names=self.agent_names,
-                locations=self.locations,
+                validation_context={"agent_names": self.agent_names, "locations": self.locations},
             )
         )
         self.assertIsNone(action)
