@@ -79,6 +79,8 @@ class LLMClient:
                     break
                 except Exception as e:
                     if api_attempt == 2:
+                        if self.logger:
+                            self.logger.error(f"API 调用失败: {agent_name} | Tick: {tick} | {e}")
                         print(f"[LLM] 调用失败: {e}")
                         return None, None
                     await asyncio.sleep(1)
@@ -106,6 +108,17 @@ class LLMClient:
 
                     if error:
                         if retry < 2:
+                            if self.logger:
+                                self.logger.log_llm_call(
+                                    agent_name=agent_name,
+                                    tick=tick,
+                                    mode="tool_call",
+                                    system_prompt=system_prompt,
+                                    messages=messages,
+                                    schema_or_guide=str(tool_schemas),
+                                    raw_response=raw_response,
+                                    parsed_action=parsed_action,
+                                )
                             print(f"[LLM] {agent_name} 参数错误，重试中 ({retry + 1}/2): {error}")
                             messages.append({"role": "assistant", "content": choice.message.content or ""})
                             messages.append({"role": "user", "content": error})
@@ -150,9 +163,22 @@ class LLMClient:
                         )
                     return choice.message.content, action
                 except Exception as e:
+                    if self.logger:
+                        self.logger.warning(f"解析 tool call 失败: {agent_name} | Tick: {tick} | {e}")
                     print(f"[LLM] 解析 tool call 失败: {e}")
 
             if retry < 2:
+                if self.logger:
+                    self.logger.log_llm_call(
+                        agent_name=agent_name,
+                        tick=tick,
+                        mode="tool_call",
+                        system_prompt=system_prompt,
+                        messages=messages,
+                        schema_or_guide=str(tool_schemas),
+                        raw_response=raw_response,
+                        parsed_action=parsed_action,
+                    )
                 print(f"[LLM] {agent_name} 未调用工具，重试中 ({retry + 1}/2)")
                 messages.append({"role": "assistant", "content": choice.message.content or ""})
                 messages.append({"role": "user", "content": "请选择一个可用的工具来行动，不要只输出文字。"})
@@ -208,6 +234,8 @@ class LLMClient:
                     break
                 except Exception as e:
                     if attempt == 2:
+                        if self.logger:
+                            self.logger.error(f"API 调用失败: {agent_name} | Tick: {tick} | {e}")
                         print(f"[LLM] 调用失败: {e}")
                         return None, None
                     await asyncio.sleep(1)
@@ -232,6 +260,17 @@ class LLMClient:
 
             if error:
                 if retry < 2:
+                    if self.logger:
+                        self.logger.log_llm_call(
+                            agent_name=agent_name,
+                            tick=tick,
+                            mode="text_parse",
+                            system_prompt=system_prompt,
+                            messages=messages,
+                            schema_or_guide=text_guide,
+                            raw_response=raw_response,
+                            parsed_action=None,
+                        )
                     print(f"[LLM] {agent_name} 输出错误，重试中 ({retry + 1}/2): {error}")
                     messages.append({"role": "assistant", "content": text})
                     messages.append({"role": "user", "content": error})
