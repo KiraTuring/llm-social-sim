@@ -279,15 +279,26 @@ python3 run.py --scene tavern --ticks 5 --mode auto --manual 老巴克 --manual-
 
 ### 读取方式
 
-`perceive()` → `memory.get_context()` → `【你最近记得的事】`（最近 10 条）
+`perceive()` → `memory.get_context()` → 依次输出：
+- `【你的过去】`：压缩摘要（如有）
+- `【你最近记得的事】`：最近 `short_limit` 条短期记忆
 
 ### 存储结构
 
 | 仓库 | 用途 | 限制 |
 |------|------|------|
 | `_short_term` | 最近事件列表 | `short_limit`（config，默认 10） |
-| `_summary` | LLM 压缩摘要 | 超出 `compress_threshold`（默认 15）时触发 |
+| `_summary` | LLM 压缩摘要 | 超出 `compress_threshold`（默认 30）时触发 |
 | `_relations` | 对其他 agent 的印象 | 无限制 |
+
+### 记忆压缩
+
+`_short_term` 达到 `compress_threshold`（config，默认 30）条时，`perceive()` 末尾自动触发 `compress()`：
+
+1. 取前 `threshold - short_limit` 条旧事件（默认 20 条）
+2. 调用 LLM 将其与现有 `_summary` 合并压缩为 2-3 句新摘要
+3. `_short_term` 截断为最后 `short_limit` 条（默认 10 条）
+4. LLM 调用失败时静默跳过，不丢失数据
 
 ## 可见性系统（Visibility）
 

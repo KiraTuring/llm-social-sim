@@ -141,7 +141,7 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
         for agent_name in world.action_order:
             agent = world.agents[agent_name]
 
-            context = await agent.perceive(world)
+            context = await agent.perceive(world, llm_client=llm)
             agents_by_location = {}
             for loc in world.locations:
                 agents_by_location[loc] = world.get_agents_in_location(loc)

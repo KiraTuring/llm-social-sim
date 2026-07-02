@@ -183,6 +183,98 @@ class TestBug4MessageBusField(unittest.TestCase):
         self.assertEqual(client._model_str, "deepseek/deepseek-chat")
 
 
+class TestMemoryCompression(unittest.TestCase):
+    """验证记忆压缩机制的 LLM 调用和状态更新"""
+
+    def setUp(self):
+        self.memory = AgentMemory(name="测试", short_limit=3, compress_threshold=5)
+
+    def add_events(self, n: int):
+        for i in range(n):
+            self.memory.add(f"事件{i+1}")
+
+    def test_compress_not_triggered_below_threshold(self):
+        """short_term 长度低于 threshold 时不触发压缩"""
+        self.add_events(4)
+        self.assertFalse(self.memory._compress_needed)
+
+    def test_compress_flag_set_at_threshold(self):
+        """达到 threshold 时设置压缩标志"""
+        self.add_events(5)
+        self.assertTrue(self.memory._compress_needed)
+
+    def test_compress_noop_without_llm_client(self):
+        """llm_client=None 时 compress 不报错"""
+        self.add_events(6)
+        import asyncio
+        result = asyncio.run(self.memory.compress(None))
+        self.assertIsNone(result)
+
+    def test_compress_truncates_and_updates_summary(self):
+        """compress 成功后 short_term 截断、summary 更新、标志清除"""
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content=" 测试摘要文本  "))]
+
+        async_mock = AsyncMock(return_value=mock_response)
+
+        self.add_events(7)
+
+        with patch("litellm.acompletion", async_mock):
+            mock_client = MagicMock()
+            mock_client._model_str = "openai/gpt-4o"
+            mock_client.api_key = "test_key"
+            mock_client.base_url = "https://test.com"
+
+            import asyncio
+            asyncio.run(self.memory.compress(mock_client))
+
+            self.assertEqual(len(self.memory._short_term), 3)
+            self.assertEqual(self.memory._summary, "测试摘要文本")
+            self.assertFalse(self.memory._compress_needed)
+
+    def test_compress_merge_with_existing_summary(self):
+        """多次压缩时，已有摘要和新经历一起发给 LLM"""
+        self.memory._summary = "旧摘要"
+        self.add_events(6)
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="新摘要"))]
+
+        async_mock = AsyncMock(return_value=mock_response)
+
+        with patch("litellm.acompletion", async_mock) as mocked:
+            mock_client = MagicMock()
+            mock_client._model_str = "openai/gpt-4o"
+            mock_client.api_key = "test_key"
+            mock_client.base_url = "https://test.com"
+
+            import asyncio
+            asyncio.run(self.memory.compress(mock_client))
+
+            user_msg = mocked.call_args[1]["messages"][1]["content"]
+            self.assertIn("旧摘要", user_msg)
+
+    def test_compress_failure_preserves_state(self):
+        """LLM 调用失败时原有状态不变"""
+        self.add_events(6)
+        original_summary = self.memory._summary
+        original_len = len(self.memory._short_term)
+
+        async_mock = AsyncMock(side_effect=Exception("API error"))
+
+        with patch("litellm.acompletion", async_mock):
+            mock_client = MagicMock()
+            mock_client._model_str = "openai/gpt-4o"
+            mock_client.api_key = "test_key"
+            mock_client.base_url = "https://test.com"
+
+            import asyncio
+            asyncio.run(self.memory.compress(mock_client))
+
+            self.assertEqual(self.memory._summary, original_summary)
+            self.assertEqual(len(self.memory._short_term), original_len)
+
+
 class TestActionRegistryNoneGuard(unittest.TestCase):
     """llm/client.py 中 action_registry=None 的防护"""
 

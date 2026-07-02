@@ -81,7 +81,7 @@ class Agent:
 每次必须选择一个工具来行动。
 所有工具都包含可选的 internal_monologue 字段（内心独白，别人看不到）。"""
 
-    async def perceive(self, world: "WorldState") -> str:
+    async def perceive(self, world: "WorldState", llm_client: "LLMClient | None" = None) -> str:
         """感知：收集消息 + 环境 + 记忆"""
 
         parts = []
@@ -128,7 +128,15 @@ class Agent:
         if self._last_action:
             parts.append(f"【你刚才的行动】\n{self._last_action} \n不要重复刚才的行动。")
 
-        return "\n\n".join(parts)
+        result = "\n\n".join(parts)
+
+        if self.memory._compress_needed and llm_client:
+            try:
+                await self.memory.compress(llm_client)
+            except Exception:
+                pass
+
+        return result
 
     async def think(
         self,
