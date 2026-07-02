@@ -32,16 +32,22 @@ class LLMClient:
         agent_name: str = "unknown",
         tick: int = 0,
         locations: list[str] | None = None,
+        agent_names: list[str] | None = None,
     ) -> tuple[str | None, Action | None]:
         """调用 LLM，返回 (文本输出, 解析后的 Action)"""
 
+        validation_context = {
+            "agent_names": agent_names or [],
+            "locations": locations or [],
+        }
+
         if self.response_mode == "tool_call":
             return await self._call_with_tools(
-                system_prompt, messages, action_registry, temperature, agent_name, tick, locations
+                system_prompt, messages, action_registry, temperature, agent_name, tick, locations, validation_context
             )
         else:
             return await self._call_with_text(
-                system_prompt, messages, action_registry, temperature, agent_name, tick
+                system_prompt, messages, action_registry, temperature, agent_name, tick, validation_context
             )
 
     async def _call_with_tools(
@@ -53,6 +59,7 @@ class LLMClient:
         agent_name: str,
         tick: int,
         locations: list[str] | None = None,
+        validation_context: dict | None = None,
     ) -> tuple[str | None, Action | None]:
         """Tool calling 模式"""
 
@@ -61,8 +68,9 @@ class LLMClient:
         if action_registry is None:
             return None, None
         tool_schemas = action_registry.get_tool_schemas(locations)
+        validation_context = validation_context or {}
 
-        for no_tool_retry in range(3):
+        for retry in range(3):
             full_messages = [{"role": "system", "content": system_prompt}] + messages
 
             response = None
@@ -96,6 +104,36 @@ class LLMClient:
 
                     params = json.loads(args)
 
+                    # --- 校验 action_type ---
+                    action_spec = action_registry.get(tool_call.function.name)
+                    error = None
+                    if not action_spec:
+                        valid_names = ", ".join(action_registry.get_action_names())
+                        error = f"工具 '{tool_call.function.name}' 不存在，可用工具: {valid_names}"
+                    else:
+                        error = action_spec.validate_params(params, validation_context)
+
+                    if error:
+                        if retry < 2:
+                            print(f"[LLM] {agent_name} 参数错误，重试中 ({retry + 1}/2): {error}")
+                            messages.append({"role": "assistant", "content": choice.message.content or ""})
+                            messages.append({"role": "user", "content": error})
+                            continue
+                        else:
+                            if self.logger:
+                                self.logger.log_llm_call(
+                                    agent_name=agent_name,
+                                    tick=tick,
+                                    mode="tool_call",
+                                    system_prompt=system_prompt,
+                                    messages=messages,
+                                    schema_or_guide=str(tool_schemas),
+                                    raw_response=raw_response,
+                                    parsed_action=parsed_action,
+                                )
+                            print(f"[LLM] {agent_name} 重试耗尽，使用 fallback")
+                            return choice.message.content, None
+
                     action = Action(
                         action_type=tool_call.function.name,
                         target=params.get("target"),
@@ -123,12 +161,10 @@ class LLMClient:
                 except Exception as e:
                     print(f"[LLM] 解析 tool call 失败: {e}")
 
-            if no_tool_retry < 2:
-                print(f"[LLM] {agent_name} 未调用工具，重试中 ({no_tool_retry + 1}/2)")
-                messages = messages + [
-                    {"role": "assistant", "content": choice.message.content or ""},
-                    {"role": "user", "content": "请选择一个可用的工具来行动，不要只输出文字。"},
-                ]
+            if retry < 2:
+                print(f"[LLM] {agent_name} 未调用工具，重试中 ({retry + 1}/2)")
+                messages.append({"role": "assistant", "content": choice.message.content or ""})
+                messages.append({"role": "user", "content": "请选择一个可用的工具来行动，不要只输出文字。"})
             else:
                 if self.logger:
                     self.logger.log_llm_call(
@@ -155,6 +191,7 @@ class LLMClient:
         temperature: float,
         agent_name: str,
         tick: int,
+        validation_context: dict | None = None,
     ) -> tuple[str | None, Action | None]:
         """文本解析模式"""
 
@@ -164,47 +201,84 @@ class LLMClient:
             return None, None
         text_guide = action_registry.get_text_guide()
         system_prompt = f"{system_prompt}\n\n{text_guide}"
+        validation_context = validation_context or {}
 
-        for attempt in range(3):
-            try:
-                response = await litellm.acompletion(
-                    model=self.model,
-                    messages=[{"role": "system", "content": system_prompt}] + messages,
-                    temperature=temperature,
-                    api_key=self.api_key,
-                    api_base=self.base_url,
-                    drop_params=True,
+        for retry in range(3):
+            for attempt in range(3):
+                try:
+                    response = await litellm.acompletion(
+                        model=self.model,
+                        messages=[{"role": "system", "content": system_prompt}] + messages,
+                        temperature=temperature,
+                        api_key=self.api_key,
+                        api_base=self.base_url,
+                        drop_params=True,
+                    )
+                    break
+                except Exception as e:
+                    if attempt == 2:
+                        print(f"[LLM] 调用失败: {e}")
+                        return None, None
+                    await asyncio.sleep(1)
+
+            choice = response.choices[0]
+            text = choice.message.content or ""
+            raw_response = response.model_dump_json() if hasattr(response, "model_dump_json") else str(response)
+            action = action_registry.parse_text(text)
+
+            # --- 校验 ---
+            error = None
+            if not action:
+                error = "无法解析你的输出，请严格按格式输出。"
+            else:
+                action_spec = action_registry.get(action.action_type)
+                if not action_spec:
+                    valid_names = ", ".join(action_registry.get_action_names())
+                    error = f"行动类型 '{action.action_type}' 不存在，可用: {valid_names}"
+                else:
+                    params = {"target": action.target, "content": action.content, **action.params}
+                    error = action_spec.validate_params(params, validation_context)
+
+            if error:
+                if retry < 2:
+                    print(f"[LLM] {agent_name} 输出错误，重试中 ({retry + 1}/2): {error}")
+                    messages.append({"role": "assistant", "content": text})
+                    messages.append({"role": "user", "content": error})
+                    continue
+                else:
+                    if self.logger:
+                        self.logger.log_llm_call(
+                            agent_name=agent_name,
+                            tick=tick,
+                            mode="text_parse",
+                            system_prompt=system_prompt,
+                            messages=messages,
+                            schema_or_guide=text_guide,
+                            raw_response=raw_response,
+                            parsed_action=None,
+                        )
+                    print(f"[LLM] {agent_name} 重试耗尽，使用 fallback")
+                    return text, None
+
+            parsed_action = {
+                "action_type": action.action_type,
+                "target": action.target,
+                "content": action.content,
+                "internal_monologue": action.internal_monologue,
+            }
+
+            if self.logger:
+                self.logger.log_llm_call(
+                    agent_name=agent_name,
+                    tick=tick,
+                    mode="text_parse",
+                    system_prompt=system_prompt,
+                    messages=messages,
+                    schema_or_guide=text_guide,
+                    raw_response=raw_response,
+                    parsed_action=parsed_action,
                 )
-                break
-            except Exception as e:
-                if attempt == 2:
-                    print(f"[LLM] 调用失败: {e}")
-                    return None, None
-                await asyncio.sleep(1)
 
-        choice = response.choices[0]
-        text = choice.message.content or ""
+            return text, action
 
-        raw_response = response.model_dump_json() if hasattr(response, "model_dump_json") else str(response)
-        action = action_registry.parse_text(text)
-
-        parsed_action = {
-            "action_type": action.action_type,
-            "target": action.target,
-            "content": action.content,
-            "internal_monologue": action.internal_monologue,
-        } if action else None
-
-        if self.logger:
-            self.logger.log_llm_call(
-                agent_name=agent_name,
-                tick=tick,
-                mode="text_parse",
-                system_prompt=system_prompt,
-                messages=messages,
-                schema_or_guide=text_guide,
-                raw_response=raw_response,
-                parsed_action=parsed_action,
-            )
-
-        return text, action
+        return None, None

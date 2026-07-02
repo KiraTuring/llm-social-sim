@@ -31,6 +31,10 @@ class ActionSpec(ABC):
         """执行 action，返回 (产生的消息, 结果数据)"""
         pass
 
+    def validate_params(self, params: dict, context: dict) -> str | None:
+        """校验参数，返回 None=合法, str=错误信息。context 包含 agent_names, locations 等"""
+        return None
+
     def get_tool_schema(self, locations: list[str] | None = None) -> dict:
         """返回该 action 的 tool calling schema"""
         return {

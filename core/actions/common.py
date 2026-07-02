@@ -28,6 +28,13 @@ class SpeakAction(ActionSpec):
             },
         }
 
+    def validate_params(self, params, context):
+        target = params.get("target", "")
+        agent_names = context.get("agent_names", [])
+        if target and target != BROADCAST and target not in agent_names:
+            return f"'{target}' 不存在，可用的说话对象: {', '.join(agent_names)}"
+        return None
+
     def execute(self, agent_name, params, world):
         target = params.get("target", BROADCAST)
         content = params.get("content", "")
@@ -73,6 +80,13 @@ class WhisperAction(ActionSpec):
                 },
             },
         }
+
+    def validate_params(self, params, context):
+        target = params.get("target", "")
+        agent_names = context.get("agent_names", [])
+        if target and target not in agent_names:
+            return f"'{target}' 不存在，可用的说话对象: {', '.join(agent_names)}"
+        return None
 
     def execute(self, agent_name, params, world):
         target = params.get("target")
@@ -128,6 +142,13 @@ class MoveAction(ActionSpec):
                 },
             },
         }
+
+    def validate_params(self, params, context):
+        target = params.get("target", "")
+        locations = context.get("locations", [])
+        if target and target not in locations:
+            return f"'{target}' 不是有效位置，可选: {', '.join(locations)}"
+        return None
 
     def execute(self, agent_name, params, world):
         target = params.get("target")

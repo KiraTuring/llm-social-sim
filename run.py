@@ -142,7 +142,7 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
             agent = world.agents[agent_name]
 
             context = await agent.perceive(world)
-            action = await agent.think(llm, registry, context, tick, world.locations)
+            action = await agent.think(llm, registry, context, tick, world.locations, list(world.agents.keys()))
             messages = await agent.act(action, world, registry)
 
             agent_actions[agent_name] = action
