@@ -1,5 +1,6 @@
 """酒馆场景：角色定义、初始状态、GM事件表。"""
 
+from core.rules import RuleEngine
 from scenarios.base import Scene
 
 
@@ -67,6 +68,45 @@ class TavernScene(Scene):
         "有人不小心打翻了酒杯，声音清脆",
         "一只流浪猫从后厨溜了出来",
     ]
+
+    def setup_rules(self, engine: RuleEngine):
+        """酒馆场景的规则：辱骂/称赞影响信任，恐怖事件影响情绪"""
+
+        @engine.on("speech")
+        def _on_speech(msg, world):
+            if not msg.recipients or msg.recipients == ["all"]:
+                return
+
+            target = msg.recipients[0]
+            if target in world.agents:
+                agent = world.agents[target]
+                sender = msg.sender
+                if sender in agent.relationships:
+                    trust = agent.relationships[sender].get("trust", 0)
+
+                    lower_words = ["笨", "蠢", "滚", "闭嘴"]
+                    if any(word in msg.content for word in lower_words):
+                        agent.relationships[sender]["trust"] = max(-5, trust - 2)
+                        agent.mood = "愤怒"
+
+                    praise_words = ["不错", "好", "谢谢", "佩服"]
+                    if any(word in msg.content for word in praise_words):
+                        agent.relationships[sender]["trust"] = min(5, trust + 1)
+
+        @engine.on("trade_offer")
+        def _on_trade_offer(msg, world):
+            if msg.recipients and msg.recipients[0] in world.agents:
+                target = world.agents[msg.recipients[0]]
+                sender = msg.sender
+                if sender in target.relationships:
+                    target.relationships[sender]["trust"] = min(5, target.relationships[sender].get("trust", 0) + 1)
+
+        @engine.on("system_event")
+        def _on_system_event(msg, world):
+            scary_words = ["危险", "杀", "威胁", "追杀"]
+            if any(word in msg.content for word in scary_words):
+                for agent in world.agents.values():
+                    agent.mood = "紧张"
 
     def setup(self, registry):
         """注册酒馆场景特定的 actions"""

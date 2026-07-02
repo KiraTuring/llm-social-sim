@@ -1,6 +1,7 @@
 """场景基类：定义场景接口和通用逻辑。"""
 
 from core.action import ActionRegistry
+from core.rules import RuleEngine
 from core.world import WorldState
 
 
@@ -17,6 +18,10 @@ class Scene:
 
     def setup(self, registry: ActionRegistry) -> None:
         """注册场景特定的 actions"""
+        pass
+
+    def setup_rules(self, engine: RuleEngine) -> None:
+        """注册场景特定的规则"""
         pass
 
     def init_world(self) -> WorldState:
