@@ -6,7 +6,7 @@ from core.message import Message, BROADCAST
 
 class SpeakAction(ActionSpec):
     name = "speak"
-    description = "对某人或所有人说话"
+    description = "对某人或所有人说话（同位置和相邻位置的人都能听到）"
     parameters = {"content": {"type": "string"}}
     text_format = "[ACTION]speak[/ACTION]\n[TARGET]{目标}[/TARGET]\n[CONTENT]{内容}[/CONTENT]\n[THOUGHT]{内心独白}[/THOUGHT]"
 
@@ -63,7 +63,7 @@ class SpeakAction(ActionSpec):
 
 class WhisperAction(ActionSpec):
     name = "whisper"
-    description = "悄悄话（只有目标听到）"
+    description = "悄悄话（只有目标能听到内容，周围的人会注意到你在窃窃私语）"
     parameters = {"content": {"type": "string"}}
     text_format = "[ACTION]whisper[/ACTION]\n[TARGET]{目标}[/TARGET]\n[CONTENT]{内容}[/CONTENT]\n[THOUGHT]{内心独白}[/THOUGHT]"
 
@@ -188,7 +188,7 @@ class MoveAction(ActionSpec):
 
 class ObserveAction(ActionSpec):
     name = "observe"
-    description = "观察 surroundings（不做其他事）"
+    description = "观察四周（了解当前和相邻位置的人和环境）"
     parameters = {}
     text_format = "[ACTION]observe[/ACTION]\n[CONTENT]{观察内容}[/CONTENT]\n[THOUGHT]{内心独白}[/THOUGHT]"
 
