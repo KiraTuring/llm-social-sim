@@ -109,6 +109,7 @@ class LLMClient:
                     if error:
                         if retry < 2:
                             if self.logger:
+                                self.logger.warning(f"{agent_name} 参数错误，重试中 ({retry + 1}/2): {error}")
                                 self.logger.log_llm_call(
                                     agent_name=agent_name,
                                     tick=tick,
@@ -169,6 +170,7 @@ class LLMClient:
 
             if retry < 2:
                 if self.logger:
+                    self.logger.warning(f"{agent_name} 未调用工具，重试中 ({retry + 1}/2)")
                     self.logger.log_llm_call(
                         agent_name=agent_name,
                         tick=tick,
@@ -261,6 +263,7 @@ class LLMClient:
             if error:
                 if retry < 2:
                     if self.logger:
+                        self.logger.warning(f"{agent_name} 输出错误，重试中 ({retry + 1}/2): {error}")
                         self.logger.log_llm_call(
                             agent_name=agent_name,
                             tick=tick,
