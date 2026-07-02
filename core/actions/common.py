@@ -46,9 +46,9 @@ class SpeakAction(ActionSpec):
 
         if recipients != [BROADCAST]:
             agent = world.agents[agent_name]
-            visible_locs = [agent.location] + world.visibility.get(agent.location, [])
+            hearable_locs = [agent.location] + world.reverse_visibility.get(agent.location, [])
             bystanders = set()
-            for loc in visible_locs:
+            for loc in hearable_locs:
                 for name in world.get_agents_in_location(loc):
                     bystanders.add(name)
             bystanders.discard(agent_name)
@@ -113,9 +113,9 @@ class WhisperAction(ActionSpec):
         messages = [whisper_msg]
 
         agent = world.agents[agent_name]
-        visible_locs = [agent.location] + world.visibility.get(agent.location, [])
+        hearable_locs = [agent.location] + world.reverse_visibility.get(agent.location, [])
         bystanders = set()
-        for loc in visible_locs:
+        for loc in hearable_locs:
             for name in world.get_agents_in_location(loc):
                 bystanders.add(name)
         bystanders.discard(agent_name)

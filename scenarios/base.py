@@ -32,6 +32,7 @@ class Scene:
         world.message_bus = MessageBus()
 
         world.visibility = self.visibility or {}
+        world.reverse_visibility = WorldState.compute_reverse_visibility(world.visibility)
 
         for agent_cfg in self.agents:
             world.message_bus.register_agent(agent_cfg["name"])

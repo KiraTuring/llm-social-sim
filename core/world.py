@@ -15,10 +15,20 @@ class WorldState:
     tick: int = 0
     locations: list[str] = field(default_factory=list)
     visibility: dict[str, list[str]] = field(default_factory=dict)
+    reverse_visibility: dict[str, list[str]] = field(default_factory=dict)
     agents: dict[str, "Agent"] = field(default_factory=dict)
     event_log: list[str] = field(default_factory=list)
     action_order: list[str] = field(default_factory=list)
     message_bus: Any = None
+
+    @staticmethod
+    def compute_reverse_visibility(visibility: dict[str, list[str]]) -> dict[str, list[str]]:
+        """从正向可见性计算反向可见性：哪些位置能看到给定位置"""
+        reverse = {}
+        for loc, visible in visibility.items():
+            for vloc in visible:
+                reverse.setdefault(vloc, []).append(loc)
+        return reverse
 
     def advance_tick(self):
         """推进一个 tick"""

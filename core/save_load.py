@@ -71,6 +71,7 @@ def load_simulation_state(path: str, config: dict):
     world.event_log = data["event_log"]
     world.action_order = data["action_order"]
     world.visibility = scene.visibility or {}
+    world.reverse_visibility = WorldState.compute_reverse_visibility(world.visibility)
 
     world.message_bus = MessageBus.from_dict(data["message_bus"])
 
