@@ -15,6 +15,7 @@ import os
 import sys
 from pathlib import Path
 
+from scenarios.utils import load_scene, list_available_scenes
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -45,34 +46,6 @@ def _expand_env_vars(obj: any) -> any:
     elif isinstance(obj, list):
         return [_expand_env_vars(item) for item in obj]
     return obj
-
-
-def load_scene(scene_name: str):
-    """动态加载场景类"""
-    try:
-        module = __import__(f"scenarios.{scene_name}", fromlist=[scene_name.title()])
-        scene_class = getattr(module, f"{scene_name.title()}Scene")
-        return scene_class()
-    except (ImportError, AttributeError) as e:
-        print(f"❌ 无法加载场景 '{scene_name}': {e}")
-        sys.exit(1)
-
-
-def list_available_scenes():
-    """列出所有可用场景"""
-    scenes_dir = Path(__file__).parent / "scenarios"
-    scene_files = list(scenes_dir.glob("*_scene.py")) + list(scenes_dir.glob("[!_]*.py"))
-
-    scenes = []
-    for f in scene_files:
-        if f.name.startswith("_"):
-            continue
-        if f.name == "base.py":
-            continue
-        scene_name = f.stem.replace("_scene", "")
-        scenes.append(scene_name)
-
-    return sorted(scenes)
 
 
 async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = None, mode: str | None = None, manual_agents: list[str] | None = None, load_path: str | None = None, save_path: str | None = None):

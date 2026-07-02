@@ -1,24 +1,13 @@
 """模拟状态保存与加载"""
 
 import json
-import sys
 from pathlib import Path
 
 from core.message import Message, MessageBus
 from core.agent import Agent
 from core.manual_agent import ManualAgent
 from memory.memory import AgentMemory
-
-
-def _load_scene(scene_name: str):
-    """加载场景类（内部使用，避免从 run.py 导入）"""
-    try:
-        module = __import__(f"scenarios.{scene_name}", fromlist=[scene_name.title()])
-        scene_class = getattr(module, f"{scene_name.title()}Scene")
-        return scene_class()
-    except (ImportError, AttributeError) as e:
-        print(f"无法加载场景 '{scene_name}': {e}")
-        sys.exit(1)
+from scenarios.utils import load_scene
 
 
 def serialize_message(msg: Message) -> dict:
@@ -120,7 +109,7 @@ def load_simulation_state(path: str, config: dict):
     if data.get("version") != 1:
         raise ValueError(f"不支持的存档版本: {data.get('version')}")
 
-    scene = _load_scene(data["scene"])
+    scene = load_scene(data["scene"])
 
     world = WorldState()
     world.tick = data["tick"]
