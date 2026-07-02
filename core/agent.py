@@ -37,6 +37,7 @@ class Agent:
 
         self.mood = "平静"
         self.energy = max_energy
+        self._last_action = None
 
     def build_system_prompt(self, registry: "ActionRegistry") -> str:
         """构建 System Prompt"""
@@ -112,6 +113,9 @@ class Agent:
 
         world.message_bus.clear_inbox(self.name)
 
+        if self._last_action:
+            parts.append(f"【你刚才的行动】\n{self._last_action}")
+
         return "\n\n".join(parts)
 
     async def think(
@@ -166,11 +170,30 @@ class Agent:
                         summary += f" (目标: {action.target})"
                     self.memory.add(summary)
 
+                self._build_last_action(action, world)
                 return messages
             except Exception as e:
                 print(f"[{self.name}] 执行 action 失败: {e}")
 
         return []
+
+    def _build_last_action(self, action: "Action", world: "WorldState"):
+        """构建上一步行动的自然语言描述"""
+        t = action.action_type
+        c = action.content[:self.content_max_length]
+        target = action.target
+
+        if t == "speak":
+            who = target if target else '所有人'
+            self._last_action = f'你对{who}说："{c}"'
+        elif t == "whisper":
+            self._last_action = f"你对{target}窃窃私语"
+        elif t == "move":
+            self._last_action = f"你移动到了{target}"
+        elif t == "observe":
+            self._last_action = f"你观察了四周" if not c else f"你观察：{c}"
+        else:
+            self._last_action = c or f"你执行了{t}"
 
     def modify_trust(self, other: str, delta: int):
         """修改对某人的信任度"""
