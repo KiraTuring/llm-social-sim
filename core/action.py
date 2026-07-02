@@ -35,7 +35,7 @@ class ActionSpec(ABC):
         """校验参数，返回 None=合法, str=错误信息。context 包含 agent_names, locations 等"""
         return None
 
-    def get_tool_schema(self, locations: list[str] | None = None) -> dict:
+    def get_tool_schema(self) -> dict:
         """返回该 action 的 tool calling schema"""
         return {
             "type": "function",
@@ -70,9 +70,9 @@ class ActionRegistry:
         """获取所有注册的 Action 名称"""
         return list(self._actions.keys())
 
-    def get_tool_schemas(self, locations: list[str] | None = None) -> list[dict]:
+    def get_tool_schemas(self) -> list[dict]:
         """返回所有 action 的 tool schema 列表"""
-        return [act.get_tool_schema(locations) for act in self._actions.values()]
+        return [act.get_tool_schema() for act in self._actions.values()]
 
     def get_text_guide(self) -> str:
         """动态生成文本格式说明"""

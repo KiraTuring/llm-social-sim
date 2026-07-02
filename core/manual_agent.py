@@ -19,7 +19,7 @@ class ManualAgent(Agent):
         self._manual_file = Path(kwargs.pop("file_path", None)) if kwargs.get("file_path") else _DEFAULT_MANUAL_FILE
         super().__init__(**kwargs)
 
-    async def think(self, llm, registry: "ActionRegistry", context: str, tick: int = 0, locations: list[str] | None = None):
+    async def think(self, llm, registry: "ActionRegistry", context: str, tick: int = 0, validation_context: dict | None = None):
         from core.action import Action
 
         action = self._read_action(tick, registry)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""测试 LLM retry 机制：无 tool call 时是否正确重试。"""
+"""测试 LLM retry 机制：无 tool call + 不合法工具/参数时是否正确重试。"""
 
 import asyncio
 import json
@@ -7,13 +7,14 @@ import unittest
 from unittest.mock import patch, MagicMock, AsyncMock
 from llm.client import LLMClient
 from core.action import ActionRegistry
+from core.actions.common import SpeakAction, ObserveAction, MoveAction
 
 
-def _make_response(text_content: str, tool_call: bool):
-    """构造模拟的 litellm 响应"""
+def _make_response(text_content: str, tool_call: bool, func_name: str = "observe", func_args: str = '{"internal_monologue": "测试"}'):
+    """构造模拟的 litellm 响应，可自定义工具名和参数"""
     class FakeFunction:
-        name = "observe"
-        arguments = '{"internal_monologue": "测试"}'
+        name = func_name
+        arguments = func_args
 
     class FakeMessage:
         content = text_content
@@ -46,10 +47,13 @@ class TestLLMRetry(unittest.TestCase):
         }
         self.client = LLMClient(config, logger=None)
         self.registry = ActionRegistry()
+        self.registry.register(ObserveAction())
+        self.registry.register(SpeakAction())
+        self.registry.register(MoveAction())
+        self.agent_names = ["张三", "李四"]
+        self.locations = ["主厅", "吧台"]
 
-    async def _run(self, text_first, text_second, text_third):
-        """mock litellm.acompletion 依次返回三次不同结果"""
-
+    async def _run(self, text_first, text_second, text_third, agent_names=None, locations=None):
         responses = [text_first, text_second, text_third]
         call_count = 0
 
@@ -66,16 +70,19 @@ class TestLLMRetry(unittest.TestCase):
                 action_registry=self.registry,
                 agent_name="TestAgent",
                 tick=1,
+                locations=locations,
+                agent_names=agent_names,
             )
             return action, call_count
+
+    # ── 原有用例：无 tool call ──
 
     def test_first_try_success(self):
         """第一次就返回 tool call → 不重试"""
         action, calls = asyncio.run(
             self._run(
                 _make_response("", tool_call=True),
-                None,
-                None,
+                None, None,
             )
         )
         self.assertIsNotNone(action)
@@ -100,6 +107,76 @@ class TestLLMRetry(unittest.TestCase):
                 _make_response("聊天1", tool_call=False),
                 _make_response("聊天2", tool_call=False),
                 _make_response("聊天3", tool_call=False),
+            )
+        )
+        self.assertIsNone(action)
+        self.assertEqual(calls, 3)
+
+    # ── 新增：不合法的工具/参数 ──
+
+    def test_invalid_tool_name_then_success(self):
+        """第一次调用不存在的工具，第二次正常 → 重试 1 次"""
+        action, calls = asyncio.run(
+            self._run(
+                _make_response("", tool_call=True, func_name="fly"),
+                _make_response("", tool_call=True, func_name="observe"),
+                None,
+                agent_names=self.agent_names,
+                locations=self.locations,
+            )
+        )
+        self.assertIsNotNone(action)
+        self.assertEqual(action.action_type, "observe")
+        self.assertEqual(calls, 2)
+
+    def test_invalid_speak_target_then_success(self):
+        """第一次对不存在的人说话，第二次对正确的人 → 重试 1 次"""
+        action, calls = asyncio.run(
+            self._run(
+                _make_response("", tool_call=True, func_name="speak",
+                               func_args='{"target": "王五", "content": "hi"}'),
+                _make_response("", tool_call=True, func_name="speak",
+                               func_args='{"target": "张三", "content": "hi"}'),
+                None,
+                agent_names=self.agent_names,
+                locations=self.locations,
+            )
+        )
+        self.assertIsNotNone(action)
+        self.assertEqual(action.action_type, "speak")
+        self.assertEqual(action.target, "张三")
+        self.assertEqual(calls, 2)
+
+    def test_invalid_move_target_then_success(self):
+        """第一次移到不存在的位置，第二次移到正确位置 → 重试 1 次"""
+        action, calls = asyncio.run(
+            self._run(
+                _make_response("", tool_call=True, func_name="move",
+                               func_args='{"target": "后院", "content": "go"}'),
+                _make_response("", tool_call=True, func_name="move",
+                               func_args='{"target": "主厅", "content": "go"}'),
+                None,
+                agent_names=self.agent_names,
+                locations=self.locations,
+            )
+        )
+        self.assertIsNotNone(action)
+        self.assertEqual(action.action_type, "move")
+        self.assertEqual(action.target, "主厅")
+        self.assertEqual(calls, 2)
+
+    def test_invalid_params_exhausted(self):
+        """三次参数都不合法 → 返回 None"""
+        action, calls = asyncio.run(
+            self._run(
+                _make_response("", tool_call=True, func_name="speak",
+                               func_args='{"target": "王五", "content": "hi"}'),
+                _make_response("", tool_call=True, func_name="speak",
+                               func_args='{"target": "赵六", "content": "hi"}'),
+                _make_response("", tool_call=True, func_name="speak",
+                               func_args='{"target": "钱七", "content": "hi"}'),
+                agent_names=self.agent_names,
+                locations=self.locations,
             )
         )
         self.assertIsNone(action)

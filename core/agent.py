@@ -120,8 +120,7 @@ class Agent:
         registry: "ActionRegistry",
         context: str,
         tick: int = 0,
-        locations: list[str] | None = None,
-        agent_names: list[str] | None = None,
+        validation_context: dict | None = None,
     ) -> "Action":
         """思考：调用 LLM 决策"""
 
@@ -129,6 +128,7 @@ class Agent:
 
         messages = [{"role": "user", "content": context}]
 
+        vc = validation_context or {}
         _, action = await llm.call(
             system_prompt=system_prompt,
             messages=messages,
@@ -136,8 +136,8 @@ class Agent:
             temperature=0.7,
             agent_name=self.name,
             tick=tick,
-            locations=locations,
-            agent_names=agent_names,
+            locations=vc.get("locations"),
+            agent_names=vc.get("agent_names"),
         )
 
         if not action:

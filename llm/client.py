@@ -43,7 +43,7 @@ class LLMClient:
 
         if self.response_mode == "tool_call":
             return await self._call_with_tools(
-                system_prompt, messages, action_registry, temperature, agent_name, tick, locations, validation_context
+                system_prompt, messages, action_registry, temperature, agent_name, tick, validation_context
             )
         else:
             return await self._call_with_text(
@@ -58,7 +58,6 @@ class LLMClient:
         temperature: float,
         agent_name: str,
         tick: int,
-        locations: list[str] | None = None,
         validation_context: dict | None = None,
     ) -> tuple[str | None, Action | None]:
         """Tool calling 模式"""
@@ -67,7 +66,7 @@ class LLMClient:
 
         if action_registry is None:
             return None, None
-        tool_schemas = action_registry.get_tool_schemas(locations)
+        tool_schemas = action_registry.get_tool_schemas()
         validation_context = validation_context or {}
 
         for retry in range(3):
