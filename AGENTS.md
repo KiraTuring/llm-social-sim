@@ -24,9 +24,11 @@ class MyScene(Scene):
     agents: list[dict]
     gm_events: list[tuple[int, str]]
     gm_random_events: list[str]
+    render_config: dict = {}
 ```
+Agent 配置 `<list[dict]>` 每个元素必须包含: `name`, `role`, `personality`, `goal`, `location`, `relationships`（启动时自动校验，缺字段立即报错）。
 
-场景类自动被 `--list-scenes` 识别（排除 `_` 开头和 `base.py`）
+场景类自动被 `--list-scenes` 识别（排除 `_` 开头和 `base.py`、`utils.py`）
 
 ### Action 注册
 
@@ -68,6 +70,33 @@ class MyAction(ActionSpec):
 
 `locations` 参数由系统传入（`world.locations`），可用于 `move` 等行动的 target enum。
 
+### 规则注册
+
+场景通过 `setup_rules()` 方法注册规则引擎的事件处理：
+
+```python
+def setup_rules(self, engine: RuleEngine):
+    @engine.on("speech")
+    def _on_speech(msg, world):
+        # 处理对话情绪影响
+        ...
+```
+
+规则不注册则对应事件静默忽略。通用规则引擎不包含任何场景数据。
+
+### 渲染配置
+
+场景通过 `render_config` 定义展示信息：
+
+```python
+class MyScene(Scene):
+    render_config = {
+        "location_icons": {"前线": "⚔️", "营地": "🏕️", "哨塔": "🏰"},
+    }
+```
+
+`ConsoleRenderer` 自动读取 `location_icons`，不存在的位置用 `📍` 兜底。
+
 ## MessageBus 关键细节
 
 **Agents 必须先注册才能接收消息:**
@@ -102,8 +131,9 @@ class Message:
 
 ### DeepSeek 配置
 
-- **模型格式**: `deepseek/deepseek-chat`（不是 `deepseek-chat`）
+- **模型格式**: `deepseek/deepseek-chat`（litellm 格式 `provider/model`）
 - **API**: litellm，使用 `api_base` 参数（不是 `base_url`）
+- 模型名从 config 读取（`config.yaml` 的 `provider` + `model`），不再硬编码
 
 ### 双模式 Action 解析
 
@@ -147,6 +177,9 @@ agent:
   memory_short_limit: 10
   memory_compress_threshold: 15
   content_max_length: 200  # 记忆和消息的统一截断长度
+  max_energy: 100          # Agent 初始精力值
+  inbox_limit: 5           # 每次 perceive 看到的收件箱消息数
+  relation_display_limit: 3  # 印象中显示的关系事件数
 ```
 
 ## Agent 流程
@@ -184,6 +217,11 @@ act()      → 发送消息到所有 inbox（包括自己）
 
 ```bash
 python3 run.py --scene tavern --ticks 5 --mode auto --manual 老巴克
+```
+
+可指定自定义 JSON 路径：
+```bash
+python3 run.py --scene tavern --ticks 5 --mode auto --manual 老巴克 --manual-file my_actions.json
 ```
 
 ```json
@@ -244,13 +282,13 @@ class TavernScene(Scene):
 事件驱动模式，监听 `message.msg_type`:
 
 ```python
-@on_event("speech")
+@engine.on("speech")
 def _on_insult(msg, world):
     if contains_insult(msg.content):
         world.agents[msg.target].modify_trust(msg.sender, -2)
 ```
 
-可用 msg_type: `speech`, `whisper`, `system_event`, `action`, `trade_offer`...
+规则必须在场景的 `setup_rules()` 中注册，核心引擎不包含任何场景数据。可用 msg_type: `speech`, `whisper`, `system_event`, `action`, `trade_offer`...
 
 ## 测试
 
