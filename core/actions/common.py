@@ -50,8 +50,7 @@ class SpeakAction(ActionSpec):
         recipients = [BROADCAST] if target == BROADCAST or not target else [target]
 
         if recipients != [BROADCAST]:
-            bystanders = world.get_hearable_agents(agent_name, exclude=target)
-            recipients = list({target} | set(bystanders))
+            recipients = world.get_hearable_agents(agent_name)
 
         msg_target = None if recipients == [BROADCAST] else target
         msg = Message(sender=agent_name, recipients=recipients, target=msg_target, content=content, msg_type="speech", tick=world.tick)
