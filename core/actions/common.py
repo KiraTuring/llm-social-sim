@@ -34,8 +34,9 @@ class SpeakAction(ActionSpec):
         agent_name = context.get("agent_name", "")
         if target == agent_name:
             return "不能对自己说话"
+        others = [n for n in agent_names if n != agent_name]
         if target and target != BROADCAST and target not in agent_names:
-            return f"'{target}' 不存在，可用的说话对象: {', '.join(agent_names)}"
+            return f"'{target}' 不存在，可用的说话对象: {', '.join(others)}"
         return None
 
     def execute(self, agent_name, params, world):
@@ -92,8 +93,9 @@ class WhisperAction(ActionSpec):
             return "请指定窃窃私语的对象"
         if target == agent_name:
             return "不能对自己窃窃私语"
+        others = [n for n in agent_names if n != agent_name]
         if target not in agent_names:
-            return f"'{target}' 不存在，可用的说话对象: {', '.join(agent_names)}"
+            return f"'{target}' 不存在，可用的说话对象: {', '.join(others)}"
         agent_loc = context.get("agent_location", "")
         if target not in context.get("agents_by_location", {}).get(agent_loc, []):
             return f"'{target}' 不在你当前的位置"
@@ -157,8 +159,9 @@ class MoveAction(ActionSpec):
         agent_loc = context.get("agent_location", "")
         if target == agent_loc:
             return f"已经在 '{target}'，无需移动"
+        others = [loc for loc in locations if loc != agent_loc]
         if target and target not in locations:
-            return f"'{target}' 不是有效位置，可选: {', '.join(locations)}"
+            return f"'{target}' 不是有效位置，可选: {', '.join(others)}"
         return None
 
     def execute(self, agent_name, params, world):
