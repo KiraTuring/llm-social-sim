@@ -131,6 +131,10 @@ class Agent:
         result = "\n\n".join(parts)
 
         if self.memory._compress_needed and llm_client:
+            if llm_client.logger:
+                llm_client.logger.debug(
+                    f"{self.name} 触发记忆压缩 ({len(self.memory._short_term)} 条)"
+                )
             try:
                 await self.memory.compress(llm_client)
             except Exception:

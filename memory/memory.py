@@ -111,5 +111,12 @@ class AgentMemory:
             self._summary = new_summary
             self._short_term = self._short_term[-self.short_limit:]
             self._compress_needed = False
-        except Exception:
-            pass
+
+            if llm_client.logger:
+                llm_client.logger.info(
+                    f"记忆压缩: {self.name} | {len(to_compress)} 条 → 摘要"
+                )
+                llm_client.logger.debug(f"记忆压缩摘要: {self.name} | {new_summary}")
+        except Exception as e:
+            if llm_client.logger:
+                llm_client.logger.warning(f"记忆压缩失败: {self.name} | {e}")
