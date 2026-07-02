@@ -220,6 +220,8 @@ agent:
 2. **`think()`** → 调用 LLM 生成 Action
 3. **`act()`** → 通过 ActionRegistry 查找并执行，**自动将行动摘要写入短期记忆**
 
+**同 tick 行动可见性**：排在前面的 agent 说话/行动后，排在后面的 agent 能在本 tick 内看到（通过 perceive 读到的 inbox 消息）；反之，排在前面的 agent 要等到下一 tick 才知道后面的人做了什么。
+
 ### 上下文顺序
 
 perceive() 构建的 LLM prompt 顺序：
