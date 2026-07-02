@@ -95,7 +95,7 @@ class WhisperAction(ActionSpec):
         bystanders.discard(target)
 
         if bystanders:
-            notice = Message(sender=agent_name, recipients=list(bystanders), content=f"{agent_name} 对 {target} 窃窃私语", msg_type="action", tick=world.tick)
+            notice = Message(sender=agent_name, recipients=list(bystanders), content=f"对 {target} 窃窃私语", msg_type="action", tick=world.tick)
             world.message_bus.send(notice)
             messages.append(notice)
 
