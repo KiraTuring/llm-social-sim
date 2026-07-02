@@ -114,7 +114,7 @@ class Agent:
         world.message_bus.clear_inbox(self.name)
 
         if self._last_action:
-            parts.append(f"【你刚才的行动】\n{self._last_action}")
+            parts.append(f"【你刚才的行动】\n{self._last_action}，不要重复刚才的行动。")
 
         return "\n\n".join(parts)
 
