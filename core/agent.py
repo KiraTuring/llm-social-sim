@@ -118,7 +118,7 @@ class Agent:
             for msg in recent_inbox:
                 truncated = msg.content[:max_len]
                 sender_part = f"{msg.sender}" + (f" -> {msg.target}" if msg.target else "")
-                self.memory.add(f"[{msg.msg_type}] {sender_part}: {truncated}")
+                self.memory.add(f"[{msg.msg_type}] {sender_part}: {truncated}", tick=world.tick)
 
         self._perceived_inbox = [{"sender": msg.sender, "content": msg.content[:max_len], "target": msg.target}
                                  for msg in inbox]
@@ -187,12 +187,12 @@ class Agent:
 
                 if result:
                     for key, value in result.items():
-                        self.memory.add(f"[{key}] {value}")
+                        self.memory.add(f"[{key}] {value}", tick=world.tick)
                 else:
                     summary = f"[{action.action_type}] {self.name}: {action.content[:self.content_max_length]}"
                     if action.target:
                         summary += f" (目标: {action.target})"
-                    self.memory.add(summary)
+                    self.memory.add(summary, tick=world.tick)
 
                 self._build_last_action(action, world)
                 return messages

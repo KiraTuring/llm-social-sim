@@ -39,14 +39,14 @@ class AgentMemory:
         memory._compress_needed = data.get("compress_needed", False)
         return memory
 
-    def add(self, event: str, agent_name: str | None = None):
+    def add(self, event: str, agent_name: str | None = None, tick: int = 0):
         """添加记忆事件"""
         if agent_name:
             if agent_name not in self._relations:
                 self._relations[agent_name] = []
             self._relations[agent_name].append(event)
         else:
-            self._short_term.append({"tick": 0, "event": event})
+            self._short_term.append({"tick": tick, "event": event})
 
         if len(self._short_term) >= self.compress_threshold:
             self._compress_needed = True
