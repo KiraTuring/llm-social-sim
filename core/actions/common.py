@@ -50,15 +50,8 @@ class SpeakAction(ActionSpec):
         recipients = [BROADCAST] if target == BROADCAST or not target else [target]
 
         if recipients != [BROADCAST]:
-            agent = world.agents[agent_name]
-            hearable_locs = [agent.location] + world.reverse_visibility.get(agent.location, [])
-            bystanders = set()
-            for loc in hearable_locs:
-                for name in world.get_agents_in_location(loc):
-                    bystanders.add(name)
-            bystanders.discard(agent_name)
-            bystanders.discard(target)
-            recipients = list({target} | bystanders)
+            bystanders = world.get_hearable_agents(agent_name, exclude=target)
+            recipients = list({target} | set(bystanders))
 
         msg_target = None if recipients == [BROADCAST] else target
         msg = Message(sender=agent_name, recipients=recipients, target=msg_target, content=content, msg_type="speech", tick=world.tick)
@@ -117,17 +110,9 @@ class WhisperAction(ActionSpec):
         world.message_bus.send(whisper_msg)
         messages = [whisper_msg]
 
-        agent = world.agents[agent_name]
-        hearable_locs = [agent.location] + world.reverse_visibility.get(agent.location, [])
-        bystanders = set()
-        for loc in hearable_locs:
-            for name in world.get_agents_in_location(loc):
-                bystanders.add(name)
-        bystanders.discard(agent_name)
-        bystanders.discard(target)
-
-        if bystanders:
-            notice = Message(sender=agent_name, recipients=list(bystanders), content=f"对 {target} 窃窃私语", msg_type="action", tick=world.tick)
+        notice_recipients = world.get_hearable_agents(agent_name, exclude=target)
+        if notice_recipients:
+            notice = Message(sender=agent_name, recipients=notice_recipients, content=f"对 {target} 窃窃私语", msg_type="action", tick=world.tick)
             world.message_bus.send(notice)
             messages.append(notice)
 

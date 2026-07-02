@@ -42,6 +42,17 @@ class WorldState:
         """获取某个位置的所有 Agent"""
         return [name for name, agent in self.agents.items() if agent.location == location]
 
+    def get_hearable_agents(self, agent_name: str, exclude: str | None = None) -> list[str]:
+        """获取能听到该 agent 说话的所有其他 agent（同位置 + 能看到该位置的人）"""
+        agent = self.agents[agent_name]
+        hearable_locs = [agent.location] + self.reverse_visibility.get(agent.location, [])
+        result = []
+        for loc in hearable_locs:
+            for name in self.get_agents_in_location(loc):
+                if name != agent_name and name != exclude:
+                    result.append(name)
+        return result
+
     def rotate_order(self):
         """轮换行动顺序"""
         if len(self.action_order) > 1:
