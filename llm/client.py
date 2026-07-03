@@ -213,10 +213,12 @@ class LLMClient:
         validation_context: dict | None = None,
         max_retries: int = 2,
         allow_no_tool: bool = False,
+        execute_action=None,
     ) -> tuple[str | None, list[Action]]:
         """调用 LLM 并解析所有 tool calls（支持一次响应多个工具）
 
         allow_no_tool: True 时 LLM 返回纯文本直接返回 (text, []) 不走 retry
+        execute_action: 可选回调，提供时将自动执行 action 并构建 tool 消息追加到 messages
         """
         import json
         import litellm
@@ -319,6 +321,31 @@ class LLMClient:
                             system_prompt=system_prompt, messages=messages,
                             schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=parsed,
                         )
+
+                    if execute_action and actions:
+                        tc_list = []
+                        for tc in choice.message.tool_calls:
+                            tc_list.append({
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments,
+                                },
+                            })
+                        messages.append({
+                            "role": "assistant",
+                            "content": choice.message.content or "",
+                            "tool_calls": tc_list,
+                        })
+                        for i, action in enumerate(actions):
+                            result = execute_action(action)
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tc_list[i]["id"],
+                                "content": result or f"'{action.action_type}' 执行完成",
+                            })
+
                     return choice.message.content, actions
             else:
                 if allow_no_tool:

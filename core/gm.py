@@ -94,6 +94,14 @@ class GMAgent:
 
         all_events: list[str] = []
         for turn in range(self.MAX_TURNS):
+            turn_events: list[str] = []
+
+            def _exec(action):
+                result = self._dispatch(action, world)
+                if result:
+                    turn_events.append(result)
+                return result
+
             _, actions = await llm_client.call_multi(
                 system_prompt=system_prompt,
                 messages=messages,
@@ -102,22 +110,16 @@ class GMAgent:
                 tick=world.tick,
                 validation_context=validation_context,
                 allow_no_tool=True,
+                execute_action=_exec,
             )
             if not actions:
                 break
 
-            turn_results = []
-            for action in actions:
-                result = self._dispatch(action, world)
-                if result:
-                    turn_results.append(result)
-                    all_events.append(result)
+            all_events.extend(turn_events)
 
-            if not turn_results:
+            if not turn_events:
                 break
 
-            text = f"执行完成：{' | '.join(turn_results)}"
-            messages.append({"role": "assistant", "content": text})
             messages.append({"role": "user", "content": "如需继续使用工具请调用，否则直接回复'完成'。"})
 
         return all_events if all_events else None
