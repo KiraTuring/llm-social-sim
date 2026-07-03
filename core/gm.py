@@ -87,6 +87,7 @@ class GMAgent:
                 agent_name="GM",
                 tick=world.tick,
                 validation_context=validation_context,
+                allow_no_tool=True,
             )
             if not actions:
                 break

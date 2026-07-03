@@ -212,8 +212,12 @@ class LLMClient:
         tick: int = 0,
         validation_context: dict | None = None,
         max_retries: int = 2,
+        allow_no_tool: bool = False,
     ) -> tuple[str | None, list[Action]]:
-        """调用 LLM 并解析所有 tool calls（支持一次响应多个工具）"""
+        """调用 LLM 并解析所有 tool calls（支持一次响应多个工具）
+
+        allow_no_tool: True 时 LLM 返回纯文本直接返回 (text, []) 不走 retry
+        """
         import json
         import litellm
 
@@ -317,7 +321,15 @@ class LLMClient:
                         )
                     return choice.message.content, actions
             else:
-                # 未调用工具
+                if allow_no_tool:
+                    if self.logger:
+                        self.logger.log_llm_call(
+                            agent_name=agent_name, tick=tick, mode="tool_call",
+                            system_prompt=system_prompt, messages=messages,
+                            schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
+                        )
+                    return choice.message.content, []
+
                 if retry < max_retries:
                     if self.logger:
                         self.logger.warning(f"{agent_name} 未调用工具，重试中 ({retry + 1}/{max_retries})")
