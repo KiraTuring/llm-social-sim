@@ -357,7 +357,20 @@ GM 拥有自己的 `ActionRegistry`，注册 `core/actions/gm_actions.py` 中的
 | — | — | `modify_weather`, `set_time` |
 | — | — | `npc_speak`, `npc_act` |
 
-GM 使用 `llm_client.call()`（走 tool_call 模式）生成事件，与 agent 共用同一套 retry/logging 机制。
+GM 使用 `llm_client.call_multi()`（走 tool_call 模式）生成事件，支持一次响应多个工具。
+
+### ReAct 循环
+
+`_generate_llm_event()` 运行 `MAX_TURNS=3` 的 ReAct 循环：
+
+```
+call_multi() → dispatch 所有 action → 结果喂回 LLM → 继续或停止
+```
+
+停止条件：
+- LLM 返回纯文本（`allow_no_tool=True`，视为合法停止信号）
+- dispatch 无有效结果
+- 达到 `MAX_TURNS` 上限
 
 ### 场景配置
 
@@ -366,8 +379,8 @@ class MyScene(Scene):
     gm_llm_prompt = "你是这个世界的 GM，请生成..."
 ```
 
-- `gm_llm_prompt` 为空字符串 = 使用空 system prompt（仅工具描述）
-- GM 的 system prompt 自动追加可用工具列表（`_build_gm_prompt()`）
+- `gm_llm_prompt` 为空字符串 = 使用空 system prompt（仅规则 + 工具描述）
+- GM 的 system prompt 自动追加通用规则块 + 可用工具列表（`_build_gm_prompt()`）
 
 ### GM 上下文构建
 
@@ -375,7 +388,10 @@ class MyScene(Scene):
 
 - 当前 tick
 - 各位置的角色分布（含情绪/精力）
-- 最近 5 条事件
+- 最近 5 条事件（`world.event_log`）
+- 最近 8 条对话（从 `MessageBus.get_recent(10)` 过滤 `speech`/`whisper`）
+
+计划/随机事件在 LLM 调用前已写入 `event_log`，GM 可看到它们避免生成冲突内容。
 
 ### 校验上下文
 
@@ -392,7 +408,7 @@ handler = {
 }.get(action.action_type)
 ```
 
-新增 Action 只需注册 + 加一行映射。
+新增 Action 只需注册 + `_dispatch` 加一行映射。
 
 ## 测试
 
