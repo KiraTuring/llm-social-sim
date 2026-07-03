@@ -14,12 +14,23 @@ class WorldState:
 
     tick: int = 0
     locations: list[str] = field(default_factory=list)
+    connections: list[tuple[str, str]] = field(default_factory=list)
+    _adjacency: dict[str, set[str]] = field(default_factory=dict)
     visibility: dict[str, list[str]] = field(default_factory=dict)
     reverse_visibility: dict[str, list[str]] = field(default_factory=dict)
     agents: dict[str, "Agent"] = field(default_factory=dict)
     event_log: list[str] = field(default_factory=list)
     action_order: list[str] = field(default_factory=list)
     message_bus: Any = None
+
+    @staticmethod
+    def compute_adjacency(connections: list[tuple[str, str]]) -> dict[str, set[str]]:
+        """从边列表计算双向邻接表"""
+        adj = {}
+        for a, b in connections:
+            adj.setdefault(a, set()).add(b)
+            adj.setdefault(b, set()).add(a)
+        return adj
 
     @staticmethod
     def compute_reverse_visibility(visibility: dict[str, list[str]]) -> dict[str, list[str]]:
@@ -29,6 +40,12 @@ class WorldState:
             for vloc in visible:
                 reverse.setdefault(vloc, []).append(loc)
         return reverse
+
+    def get_adjacent_locations(self, loc: str) -> list[str]:
+        """获取从某个位置可达的相邻位置"""
+        if not self.connections:
+            return [l for l in self.locations if l != loc]
+        return list(self._adjacency.get(loc, set()))
 
     def advance_tick(self):
         """推进一个 tick"""

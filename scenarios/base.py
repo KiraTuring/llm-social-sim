@@ -14,6 +14,7 @@ class Scene:
     gm_events: list[tuple[int, str]]
     gm_random_events: list[str]
     gm_llm_prompt: str = ""
+    connections: list[tuple[str, str]] = []
     visibility: dict[str, list[str]] | None = None
     render_config: dict = {}
 
@@ -32,6 +33,8 @@ class Scene:
         world = WorldState(locations=self.locations)
         world.message_bus = MessageBus()
 
+        world.connections = self.connections
+        world._adjacency = WorldState.compute_adjacency(self.connections)
         world.visibility = self.visibility or {}
         world.reverse_visibility = WorldState.compute_reverse_visibility(world.visibility)
 

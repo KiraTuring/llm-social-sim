@@ -36,6 +36,7 @@ def save_simulation_state(world, gm, scene_module: str, scene_display: str, path
         "scene_display": scene_display,
         "tick": world.tick,
         "locations": world.locations,
+        "connections": [[a, b] for a, b in world.connections],
         "action_order": world.action_order,
         "event_log": world.event_log,
         "message_bus": world.message_bus.to_dict(),
@@ -69,6 +70,8 @@ def load_simulation_state(path: str, config: dict):
     world = WorldState()
     world.tick = data["tick"]
     world.locations = data["locations"]
+    world.connections = [tuple(p) for p in data.get("connections", [])]
+    world._adjacency = WorldState.compute_adjacency(world.connections)
     world.event_log = data["event_log"]
     world.action_order = data["action_order"]
     world.visibility = scene.visibility or {}

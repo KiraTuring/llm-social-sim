@@ -65,6 +65,7 @@ class TestLLMRetry(unittest.TestCase):
             "locations": self.locations,
             "agents_by_location": self.agents_by_location,
             "hearable_agents": _hearable,
+            "adjacent_locations": [l for l in self.locations if l != "吧台"],
         }
 
     async def _run(self, text_first, text_second, text_third, validation_context=None):

@@ -148,6 +148,11 @@ class MoveAction(ActionSpec):
         others = [loc for loc in locations if loc != agent_loc]
         if target and target not in locations:
             return f"'{target}' 不是有效位置，可选: {', '.join(others)}"
+        adjacent = context.get("adjacent_locations")
+        if adjacent is not None and target and target not in adjacent:
+            if not adjacent:
+                return f"'{target}' 不可达。当前在 {agent_loc}，没有可前往的位置。"
+            return f"'{target}' 不可达。当前在 {agent_loc}，可前往: {', '.join(adjacent)}"
         return None
 
     def execute(self, agent_name, params, world):
@@ -159,6 +164,9 @@ class MoveAction(ActionSpec):
 
         agent = world.agents[agent_name]
         old_loc = agent.location
+        adjacent = world.get_adjacent_locations(old_loc)
+        if target not in adjacent:
+            return [], None
         agent.location = target
 
         msg = Message(
