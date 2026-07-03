@@ -99,6 +99,7 @@ def load_simulation_state(path: str, config: dict):
             content_max_length=agent_data.get("content_max_length", 200),
             max_energy=config["agent"].get("max_energy", 100),
             inbox_limit=config["agent"].get("inbox_limit", 5),
+            world_description=scene.world_description,
         )
 
         agent_type = agent_data.get("agent_type", "Agent")
@@ -120,6 +121,7 @@ def load_simulation_state(path: str, config: dict):
         use_llm=gm_data.get("use_llm", config["gm"]["use_llm"]),
         llm_chance=config["gm"].get("llm_event_chance", 0.3),
         llm_prompt=scene.get_gm_config().get("llm_prompt", ""),
+        world_description=scene.world_description,
     )
 
     return world, scene, gm

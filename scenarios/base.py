@@ -14,6 +14,7 @@ class Scene:
     gm_events: list[tuple[int, str]]
     gm_random_events: list[str]
     gm_llm_prompt: str = ""
+    world_description: str = ""
     connections: list[tuple[str, str]] = []
     visibility: dict[str, list[str]] | None = None
     render_config: dict = {}

@@ -83,6 +83,7 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
                 content_max_length=config["agent"].get("content_max_length", 200),
                 max_energy=config["agent"].get("max_energy", 100),
                 inbox_limit=config["agent"].get("inbox_limit", 5),
+                world_description=scene.world_description,
             )
             if cfg["name"] in manual_names:
                 manual_file = config["simulation"].get("manual_file")
@@ -101,6 +102,7 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
             use_llm=config["gm"]["use_llm"],
             llm_chance=config["gm"].get("llm_event_chance", 0.3),
             llm_prompt=gm_cfg.get("llm_prompt", ""),
+            world_description=scene.world_description,
         )
 
         start_tick = 1

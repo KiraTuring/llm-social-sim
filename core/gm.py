@@ -18,13 +18,14 @@ class GMAgent:
 
     def __init__(self, events: list, random_events: list, chance: float,
                  use_llm: bool = False, llm_chance: float = 0.0, llm_prompt: str = "",
-                 logger=None):
+                 world_description: str = "", logger=None):
         self.scheduled_events = events
         self.random_events = random_events
         self.random_chance = chance
         self.use_llm = use_llm
         self.llm_chance = llm_chance
         self.llm_prompt = llm_prompt
+        self.world_description = world_description
         self.logger = logger
 
         self.registry = ActionRegistry()
@@ -118,6 +119,9 @@ class GMAgent:
         lines = []
         if self.llm_prompt:
             lines.append(self.llm_prompt)
+        if self.world_description:
+            lines.append("")
+            lines.append(self.world_description)
         lines.append("")
         lines.append("规则：")
         lines.append("- 不要生成和近期事件冲突或简单重复的事件")

@@ -24,6 +24,7 @@ class Agent:
         content_max_length: int = 200,
         max_energy: int = 100,
         inbox_limit: int = 5,
+        world_description: str = "",
     ):
         self.name = name
         self.role = role
@@ -34,6 +35,7 @@ class Agent:
         self.memory = memory
         self.content_max_length = content_max_length
         self.inbox_limit = inbox_limit
+        self.world_description = world_description
 
         self.mood = "平静"
         self.energy = max_energy
@@ -52,9 +54,11 @@ class Agent:
             [f"- {name}: {rel.get('impression', '')}" for name, rel in self.relationships.items()]
         )
 
+        world_part = f"\n\n## 世界\n{self.world_description}" if self.world_description else ""
+
         return f"""## 模拟规则
 你在扮演 {self.name}（{self.role}），在一个持续运行的社交模拟世界中进行角色扮演。
-模拟以 tick 为单位推进，每个 tick 你可以执行一次行动。
+模拟以 tick 为单位推进，每个 tick 你可以执行一次行动。{world_part}
 
 注意：你在调用工具之前输出的任何对话文字都不会被其他角色看到，也不会对模拟产生任何影响。只有工具调用本身会改变环境和其他角色。
 
@@ -99,7 +103,7 @@ class Agent:
         adjacent = world.get_adjacent_locations(self.location)
         adjacent_text = ', '.join(adjacent) if adjacent else '无'
 
-        parts.append(f"【当前环境】\n位置: {self.location} | 这里的人: {loc_agents_text} | 你能观察到: {visible_text} | 可前往: {adjacent_text}")
+        parts.append(f"【当前环境】\n你的位置: {self.location}, 这里的人: {loc_agents_text} | 你能观察到: {visible_text} | 可前往: {adjacent_text}")
 
         parts.append(f"【你的状态】\n情绪: {self.mood} | 精力: {self.energy}")
 
@@ -119,7 +123,7 @@ class Agent:
 
                 self.memory.add(msgs_text, tick=world.tick)
 
-            parts.append(f"【你收到的消息】\n" + "\n".join(msgs_text_lines))
+            parts.append(f"【你得到的新信息】\n" + "\n".join(msgs_text_lines))
 
         self._perceived_inbox = [{"sender": msg.sender, "content": msg.content[:max_len], "target": msg.target}
                                  for msg in inbox]
