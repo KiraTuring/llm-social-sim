@@ -16,6 +16,9 @@ class RadioAction(ActionSpec):
                    "[CONTENT]{通话内容}[/CONTENT]\n"
                    "[THOUGHT]{内心独白}[/THOUGHT]")
 
+    # 环境指标中哪些值表示无线电不可用
+    _blocked_values = {"干扰", "故障"}
+
     def get_tool_schema(self):
         return {
             "type": "function",
@@ -48,6 +51,13 @@ class RadioAction(ActionSpec):
     def execute(self, agent_name, params, world):
         target = params.get("target", "")
         content = params.get("content", "")
+
+        # Check for radio interference
+        agent = world.agents[agent_name]
+        env = world.environment.get(agent.location, {})
+        for val in env.values():
+            if val in self._blocked_values:
+                return [], {"summary": "无线电受干扰，无法通信"}
 
         # 1. Send full message to target
         target_msg = Message(
