@@ -42,6 +42,7 @@ def save_simulation_state(world, gm, scene_module: str, scene_display: str, path
         "gm": {
             "scheduled_events": [[t, e] for t, e in gm.scheduled_events],
             "random_events": gm.random_events,
+            "use_llm": gm.use_llm,
         },
         "agents": {
             name: serialize_agent(agent)
@@ -113,6 +114,9 @@ def load_simulation_state(path: str, config: dict):
         events=[(t, e) for t, e in gm_data["scheduled_events"]],
         random_events=gm_data["random_events"],
         chance=config["gm"]["random_event_chance"],
+        use_llm=gm_data.get("use_llm", config["gm"]["use_llm"]),
+        llm_chance=config["gm"].get("llm_event_chance", 0.3),
+        llm_prompt=scene.get_gm_config().get("llm_prompt", ""),
     )
 
     return world, scene, gm

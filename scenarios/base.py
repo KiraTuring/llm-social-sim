@@ -13,6 +13,7 @@ class Scene:
     agents: list[dict]
     gm_events: list[tuple[int, str]]
     gm_random_events: list[str]
+    gm_llm_prompt: str = ""
     visibility: dict[str, list[str]] | None = None
     render_config: dict = {}
 
@@ -41,4 +42,8 @@ class Scene:
 
     def get_gm_config(self) -> dict:
         """获取 GM 配置"""
-        return {"events": self.gm_events, "random_events": self.gm_random_events}
+        return {
+            "events": self.gm_events,
+            "random_events": self.gm_random_events,
+            "llm_prompt": self.gm_llm_prompt,
+        }

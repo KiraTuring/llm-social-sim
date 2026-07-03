@@ -47,12 +47,9 @@ class SpeakAction(ActionSpec):
     def execute(self, agent_name, params, world):
         target = params.get("target", BROADCAST)
         content = params.get("content", "")
-        recipients = [BROADCAST] if target == BROADCAST or not target else [target]
 
-        if recipients != [BROADCAST]:
-            recipients = world.get_hearable_agents(agent_name)
-
-        msg_target = None if recipients == [BROADCAST] else target
+        recipients = world.get_hearable_agents(agent_name)
+        msg_target = None if target == BROADCAST or not target else target
         msg = Message(sender=agent_name, recipients=recipients, target=msg_target, content=content, msg_type="speech", tick=world.tick)
         world.message_bus.send(msg)
         return [msg], None
@@ -95,7 +92,7 @@ class WhisperAction(ActionSpec):
             return f"'{target}' 不存在，可用的说话对象: {', '.join(others)}"
         agent_loc = context.get("agent_location", "")
         if target not in context.get("agents_by_location", {}).get(agent_loc, []):
-            return f"'{target}' 不在你当前的位置"
+            return f"'{target}' 不在你当前的位置({agent_loc})，无法窃窃私语"
         return None
 
     def execute(self, agent_name, params, world):

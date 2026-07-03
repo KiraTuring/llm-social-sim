@@ -26,6 +26,11 @@ class MyScene(Scene):
     gm_random_events: list[str]
     render_config: dict = {}
 ```
+
+可选:
+```python
+    gm_llm_prompt: str = ""          # LLM GM 的 system prompt
+```
 Agent 配置 `<list[dict]>` 每个元素必须包含: `name`, `role`, `personality`, `goal`, `location`, `relationships`（启动时自动校验，缺字段立即报错）。
 
 场景类自动被 `--list-scenes` 识别（排除 `_` 开头和 `base.py`、`utils.py`）
@@ -332,6 +337,62 @@ def _on_insult(msg, world):
 ```
 
 规则必须在场景的 `setup_rules()` 中注册，核心引擎不包含任何场景数据。可用 msg_type: `speech`, `whisper`, `system_event`, `action`, `trade_offer`...
+
+## GM Agent（Game Master）
+
+GM 负责向世界注入外部事件，分三级触发（互不阻塞，各自独立掷骰）：
+
+1. **计划事件**（`gm_events`）：特定 tick 触发
+2. **静态随机事件**（`gm_random_events`）：每 tick 以 `random_event_chance` 概率触发
+3. **LLM 动态事件**（需 `use_llm: true`）：每 tick 以 `llm_event_chance` 概率触发
+
+### LLM 动态事件
+
+GM 拥有自己的 `ActionRegistry`，注册 `core/actions/gm_actions.py` 中的 GM 专用 Action。当前支持:
+
+| Action | 用途 | 未来扩展 |
+|--------|------|---------|
+| `generate_event` | 生成外部事件描述 | — |
+| — | — | `add_agent`, `add_location`, `add_item` |
+| — | — | `modify_weather`, `set_time` |
+| — | — | `npc_speak`, `npc_act` |
+
+GM 使用 `llm_client.call()`（走 tool_call 模式）生成事件，与 agent 共用同一套 retry/logging 机制。
+
+### 场景配置
+
+```python
+class MyScene(Scene):
+    gm_llm_prompt = "你是这个世界的 GM，请生成..."
+```
+
+- `gm_llm_prompt` 为空字符串 = 使用空 system prompt（仅工具描述）
+- GM 的 system prompt 自动追加可用工具列表（`_build_gm_prompt()`）
+
+### GM 上下文构建
+
+`_build_world_context()` 提供中等粒度上下文：
+
+- 当前 tick
+- 各位置的角色分布（含情绪/精力）
+- 最近 5 条事件
+
+### 校验上下文
+
+GM 的 `validation_context` 包含 `locations` 和 `agent_names`，便于未来 Action 做参数运行时校验。
+
+### Dispatch 机制
+
+`_dispatch(action)` 按 `action.action_type` 查表分发：
+
+```python
+handler = {
+    "generate_event": self._handle_event,
+    # "add_agent": self._handle_add_agent,
+}.get(action.action_type)
+```
+
+新增 Action 只需注册 + 加一行映射。
 
 ## 测试
 

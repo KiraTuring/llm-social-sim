@@ -98,6 +98,9 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
             events=gm_cfg["events"],
             random_events=gm_cfg["random_events"],
             chance=config["gm"]["random_event_chance"],
+            use_llm=config["gm"]["use_llm"],
+            llm_chance=config["gm"].get("llm_event_chance", 0.3),
+            llm_prompt=gm_cfg.get("llm_prompt", ""),
         )
 
         start_tick = 1
@@ -135,7 +138,7 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
 
         logger.log_tick_start(tick)
 
-        await gm.check_and_inject(world)
+        await gm.check_and_inject(world, llm_client=llm if gm.use_llm else None)
 
         agent_actions = {}
         for agent_name in world.action_order:
