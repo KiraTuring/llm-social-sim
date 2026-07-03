@@ -1,6 +1,7 @@
 """GM Action 实现：generate_event, modify_environment, 后续 add_agent/add_location 等。"""
 
 from core.action import ActionSpec
+from core.message import BROADCAST, Message
 
 
 class GenerateEventAction(ActionSpec):
@@ -32,7 +33,14 @@ class GenerateEventAction(ActionSpec):
         return None
 
     def execute(self, agent_name, params, world):
-        return [], None
+        content = params.get("content", "")
+        if not content:
+            return [], {"summary": "事件描述为空"}
+        world.add_event(content)
+        msg = Message(sender="GM", recipients=[BROADCAST], content=content,
+                      msg_type="system_event", tick=world.tick)
+        world.message_bus.send(msg)
+        return [], {"summary": content}
 
 
 class ModifyEnvironmentAction(ActionSpec):
@@ -76,4 +84,11 @@ class ModifyEnvironmentAction(ActionSpec):
         return None
 
     def execute(self, agent_name, params, world):
-        return [], None
+        loc = params.get("location", "")
+        key = params.get("key", "")
+        value = params.get("value", "")
+        if not loc or not key or not value:
+            return [], {"summary": "参数不完整，需要 location/key/value"}
+        err = world.update_environment(loc, key, value)
+        summary = err if err else f"环境变更: {loc}.{key} → {value}"
+        return [], {"summary": summary}

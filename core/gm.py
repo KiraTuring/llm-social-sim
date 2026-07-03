@@ -38,22 +38,15 @@ class GMAgent:
         scheduled = self._check_scheduled(world)
         random_ev = self._check_random()
 
-        # 先将计划/随机事件写入 event_log，让 GM 的 context 能看到
         prior = [e for e in [scheduled, random_ev] if e]
         for e in prior:
             world.add_event(e)
-
-        llm_events: list[str] = []
-        if self.use_llm and llm_client and random.random() < self.llm_chance:
-            llm_events = await self._generate_llm_event(world, llm_client) or []
-            for e in llm_events:
-                world.add_event(e)
-
-        events = prior + llm_events
-        for event in events:
             if self.logger:
-                self.logger.info(f"GM 事件: {event}")
-            self._broadcast_event(event, world)
+                self.logger.info(f"GM 事件: {e}")
+            self._broadcast_event(e, world)
+
+        if self.use_llm and llm_client and random.random() < self.llm_chance:
+            await self._generate_llm_event(world, llm_client)
 
     def _check_scheduled(self, world: "WorldState") -> str | None:
         """检查计划事件，支持 3-tuple (tick, event, changes) 格式"""
@@ -83,7 +76,7 @@ class GMAgent:
         msg = Message(sender="GM", recipients=[BROADCAST], content=event, msg_type="system_event", tick=world.tick)
         world.message_bus.send(msg)
 
-    async def _generate_llm_event(self, world: "WorldState", llm_client: "LLMClient") -> list[str] | None:
+    async def _generate_llm_event(self, world: "WorldState", llm_client: "LLMClient") -> None:
         """ReAct 循环：让 LLM 连续调用工具生成事件"""
         system_prompt = self._build_gm_prompt()
         validation_context = {
@@ -92,15 +85,16 @@ class GMAgent:
         }
         messages = [{"role": "user", "content": self._build_world_context(world)}]
 
-        all_events: list[str] = []
         for turn in range(self.MAX_TURNS):
-            turn_events: list[str] = []
-
             def _exec(action):
-                result = self._dispatch(action, world)
-                if result:
-                    turn_events.append(result)
-                return result
+                spec = self.registry.get(action.action_type)
+                if not spec:
+                    return f"未知工具: {action.action_type}"
+                _, result = spec.execute("GM", action.params, world)
+                summary = (result or {}).get("summary", f"'{action.action_type}' 执行完成")
+                if self.logger:
+                    self.logger.info(f"GM 工具: {action.action_type} → {summary}")
+                return summary
 
             _, actions = await llm_client.call_multi(
                 system_prompt=system_prompt,
@@ -115,14 +109,7 @@ class GMAgent:
             if not actions:
                 break
 
-            all_events.extend(turn_events)
-
-            if not turn_events:
-                break
-
             messages.append({"role": "user", "content": "如需继续使用工具请调用，否则直接回复'完成'。"})
-
-        return all_events if all_events else None
 
     def _build_gm_prompt(self) -> str:
         """构建 GM 的 system prompt，自动追加可用工具"""
@@ -188,28 +175,4 @@ class GMAgent:
 
         return "\n".join(parts)
 
-    def _dispatch(self, action, world: "WorldState") -> str | None:
-        """根据 action_type 分发到对应的 handler"""
-        handler = {
-            "generate_event": self._handle_event,
-            "modify_environment": self._handle_modify_env,
-        }.get(action.action_type)
-        if handler:
-            return handler(action, world)
-        return None
 
-    def _handle_event(self, action, world: "WorldState") -> str | None:
-        """处理 generate_event action"""
-        return action.content if action.content else None
-
-    def _handle_modify_env(self, action, world: "WorldState") -> str | None:
-        """处理 modify_environment action"""
-        loc = action.params.get("location", "")
-        key = action.params.get("key", "")
-        value = action.params.get("value", "")
-        if not loc or not key or not value:
-            return None
-        err = world.update_environment(loc, key, value)
-        if err:
-            return err
-        return f"环境变更: {loc}.{key} → {value}"
