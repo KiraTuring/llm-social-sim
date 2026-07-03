@@ -23,6 +23,7 @@ class WorldState:
     action_order: list[str] = field(default_factory=list)
     message_bus: Any = None
     environment: dict[str, dict[str, str]] = field(default_factory=dict)
+    interactable_keys: dict[str, list[str]] = field(default_factory=dict)
 
     @staticmethod
     def compute_adjacency(connections: list[tuple[str, str]]) -> dict[str, set[str]]:

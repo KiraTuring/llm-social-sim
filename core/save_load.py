@@ -78,6 +78,7 @@ def load_simulation_state(path: str, config: dict):
     world.visibility = scene.visibility or {}
     world.reverse_visibility = WorldState.compute_reverse_visibility(world.visibility)
     world.environment = data.get("environment", {})
+    world.interactable_keys = scene.interactable_keys or {}
 
     world.message_bus = MessageBus.from_dict(data["message_bus"])
 

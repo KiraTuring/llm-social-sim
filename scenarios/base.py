@@ -16,6 +16,7 @@ class Scene:
     gm_llm_prompt: str = ""
     world_description: str = ""
     initial_environment: dict[str, dict[str, str]] = {}
+    interactable_keys: dict[str, list[str]] = {}
     connections: list[tuple[str, str]] = []
     visibility: dict[str, list[str]] | None = None
     render_config: dict = {}
@@ -40,6 +41,7 @@ class Scene:
         world.visibility = self.visibility or {}
         world.reverse_visibility = WorldState.compute_reverse_visibility(world.visibility)
         world.environment = {k: dict(v) for k, v in self.initial_environment.items()}
+        world.interactable_keys = self.interactable_keys
 
         for agent_cfg in self.agents:
             world.message_bus.register_agent(agent_cfg["name"])

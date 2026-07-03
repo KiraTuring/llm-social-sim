@@ -160,6 +160,7 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
                 "agents_by_location": agents_by_location,
                 "hearable_agents": world.get_hearable_agents(agent_name),
                 "adjacent_locations": world.get_adjacent_locations(agent_location),
+                "interactable_keys": world.interactable_keys,
             }
             action = await agent.think(llm, registry, context, tick, validation_context)
             messages = await agent.act(action, world, registry)

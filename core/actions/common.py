@@ -209,10 +209,16 @@ class ObserveAction(ActionSpec):
         visible_locs += world.visibility.get(agent.location, [])
 
         env_parts = []
+        interactable = world.interactable_keys or {}
         for loc in visible_locs:
-            env_summary = world.get_environment_summary(loc)
-            if env_summary:
-                env_parts.append(f"{loc}({env_summary})")
+            env = world.environment.get(loc, {})
+            if env:
+                items = []
+                for k, v in env.items():
+                    allowed = interactable.get(loc, [])
+                    suffix = "[可调]" if allowed and k in allowed else ""
+                    items.append(f"{k} {v}{suffix}")
+                env_parts.append(f"{loc}({', '.join(items)})")
 
         seen = []
         for loc in visible_locs:
@@ -235,7 +241,7 @@ class ObserveAction(ActionSpec):
 
 class InteractAction(ActionSpec):
     name = "interact"
-    description = "与物品/环境互动"
+    description = "与物品/环境互动，可附带对环境指标的修改（如调节设备、开关系统等）"
     parameters = {"content": {"type": "string"}}
     text_format = "[ACTION]interact[/ACTION]\n[CONTENT]{互动描述}[/CONTENT]\n[THOUGHT]{内心独白}[/THOUGHT]"
 
@@ -250,15 +256,55 @@ class InteractAction(ActionSpec):
                     "properties": {
                         "content": {"type": "string", "description": "互动描述"},
                         "internal_monologue": {"type": "string", "description": "内心独白"},
+                        "modifications": {
+                            "type": "array",
+                            "description": "对环境指标的修改（可选），只操作当前位置的仪表/设备",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "target": {"type": "string", "description": "指标名称，如冷却效率、通讯状态"},
+                                    "value": {"type": "string", "description": "新值，如正常、开启"},
+                                },
+                                "required": ["target", "value"],
+                            },
+                        },
                     },
                     "required": ["content"],
                 },
             },
         }
 
+    def validate_params(self, params, context):
+        modifications = params.get("modifications")
+        if not modifications:
+            return None
+        interactable = context.get("interactable_keys", {})
+        location = context["agent_location"]
+        if not interactable:
+            return None
+        allowed = interactable.get(location, [])
+        if not allowed:
+            return f"当前所在位置 '{location}' 没有可调节的指标"
+        for mod in modifications:
+            target = mod.get("target", "")
+            if target not in allowed:
+                return f"'{target}' 在 {location} 不可调节，可调项: {', '.join(allowed)}"
+        return None
+
     def execute(self, agent_name, params, world):
         content = params.get("content", "")
+        modifications = params.get("modifications", [])
 
         msg = Message(sender=agent_name, recipients=[BROADCAST], content=content, msg_type="action", tick=world.tick)
         world.message_bus.send(msg)
+
+        if modifications:
+            agent = world.agents[agent_name]
+            for mod in modifications:
+                target = mod["target"]
+                value = mod["value"]
+                world.update_environment(agent.location, target, value)
+            items = ", ".join(f"{m['target']}→{m['value']}" for m in modifications)
+            return [msg], {"summary": f"指标修改: {items}"}
+
         return [msg], None

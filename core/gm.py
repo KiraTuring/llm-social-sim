@@ -126,7 +126,7 @@ class GMAgent:
         lines.append("- 不要替角色做决定或直接控制角色的行为")
         lines.append("- 事件要简短自然，一句话")
         lines.append("- 只生成一个事件。可以多次调用工具，但所有调用都围绕同一个事件")
-        lines.append("- 不要有冗余信息，如果调用多个工具，各工具给出的信息应当是互补的，不要重复")
+        lines.append("- 不要有冗余信息，如果调用多个工具，各工具给出的信息应当是互补的，不在一个工具中给出事件的全部信息，从而让角色自己去拼凑事件的全貌。比如，如果事件是\"引擎室的冷却系统效率下降\"，可以用 modify_environment 工具修改冷却效率，在 narrate 工具中只告诉角色\"你听到引擎室传来一阵异响\"，而不是直接告诉角色\"冷却效率下降了\"。")
         lines.append("")
         lines.append("你可以使用以下工具（可一次调用多个）：")
         for s in self.registry.get_tool_schemas():
@@ -164,15 +164,22 @@ class GMAgent:
 
         if world.message_bus:
             speech = []
+            actions = []
             for m in world.message_bus.get_recent(10):
                 if m.msg_type == "speech":
                     target = f" -> {m.target}" if m.target else ""
                     speech.append(f"[{m.sender}]{target}: {m.content}")
                 elif m.msg_type == "whisper":
                     speech.append(f"[{m.sender}] (悄悄对 {m.target}): {m.content}")
+                elif m.msg_type == "action":
+                    actions.append(f"[{m.sender}]: {m.content}")
             if speech:
                 parts.append("\n最近的对话：")
                 for s in speech[-8:]:
                     parts.append(f"  {s}")
+            if actions:
+                parts.append("\n最近的行动：")
+                for a in actions[-4:]:
+                    parts.append(f"  {a}")
 
         return "\n".join(parts)
