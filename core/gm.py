@@ -120,6 +120,19 @@ class GMAgent:
             for e in world.event_log[-5:]:
                 parts.append(f"  {e}")
 
+        if world.message_bus:
+            speech = []
+            for m in world.message_bus.get_recent(10):
+                if m.msg_type == "speech":
+                    target = f" -> {m.target}" if m.target else ""
+                    speech.append(f"[{m.sender}]{target}: {m.content}")
+                elif m.msg_type == "whisper":
+                    speech.append(f"[{m.sender}] (悄悄对 {m.target}): {m.content}")
+            if speech:
+                parts.append("\n最近的对话：")
+                for s in speech[-8:]:
+                    parts.append(f"  {s}")
+
         return "\n".join(parts)
 
     def _dispatch(self, action) -> str | None:
