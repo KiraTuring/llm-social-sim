@@ -30,10 +30,23 @@ class MyScene(Scene):
 可选:
 ```python
     gm_llm_prompt: str = ""          # LLM GM 的 system prompt
+    connections: list[tuple[str, str]] = []  # 地点连通边（双向），空=全连通
 ```
 Agent 配置 `<list[dict]>` 每个元素必须包含: `name`, `role`, `personality`, `goal`, `location`, `relationships`（启动时自动校验，缺字段立即报错）。
 
 场景类自动被 `--list-scenes` 识别（排除 `_` 开头和 `base.py`、`utils.py`）
+
+### 地点连通性
+
+未定义 `connections` 时所有地点互相可达（向前兼容）。有定义时 `MoveAction` 只能移动到相邻地点：
+
+```python
+connections = [
+    ("主厅", "吧台"),
+    ("主厅", "角落"),
+    ("吧台", "后厨"),
+]
+```
 
 ### Action 注册
 
@@ -77,7 +90,7 @@ class MyAction(ActionSpec):
 
 ### 参数校验（validate_params）
 
-每个 Action 可以覆盖 `validate_params(params, context)` 方法对参数做运行时校验。`context` 包含 `agent_name`、`agent_location`、`agent_names`、`locations`、`agents_by_location`、`hearable_agents`。
+每个 Action 可以覆盖 `validate_params(params, context)` 方法对参数做运行时校验。`context` 包含 `agent_name`、`agent_location`、`agent_names`、`locations`、`agents_by_location`、`hearable_agents`、`adjacent_locations`。
 
 返回 `None`=合法，`str`=错误信息：
 
@@ -97,7 +110,7 @@ class MyAction(ActionSpec):
 |--------|------|
 | `speak` | target 不能是自己；必须在 `agent_names` 且在 `hearable_agents` 中 |
 | `whisper` | target 不能为空/自己；必须在 `agent_names` 且与说话者在同一位置 |
-| `move` | target 不能是当前位置；必须在 `locations` 中 |
+| `move` | target 不能是当前位置；必须在 `locations` 中且在 `adjacent_locations` 内 |
 
 校验失败时 LLM 会收到错误提示并重试（最多 2 次），超限 fallback 到 `observe`。
 
