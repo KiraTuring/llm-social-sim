@@ -115,6 +115,7 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
     )
 
     llm = LLMClient(config["llm"], logger)
+    gm.logger = logger
 
     rule_engine = RuleEngine()
     scene.setup_rules(rule_engine)

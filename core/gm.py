@@ -15,13 +15,15 @@ class GMAgent:
     """GM Agent：注入事件，推进剧情"""
 
     def __init__(self, events: list, random_events: list, chance: float,
-                 use_llm: bool = False, llm_chance: float = 0.0, llm_prompt: str = ""):
+                 use_llm: bool = False, llm_chance: float = 0.0, llm_prompt: str = "",
+                 logger=None):
         self.scheduled_events = events
         self.random_events = random_events
         self.random_chance = chance
         self.use_llm = use_llm
         self.llm_chance = llm_chance
         self.llm_prompt = llm_prompt
+        self.logger = logger
 
         self.registry = ActionRegistry()
         self.registry.register(GenerateEventAction())
@@ -39,6 +41,8 @@ class GMAgent:
         events = [e for e in [scheduled, random_ev, llm_ev] if e]
 
         for event in events:
+            if self.logger:
+                self.logger.info(f"GM 事件: {event}")
             world.add_event(event)
             self._broadcast_event(event, world)
 

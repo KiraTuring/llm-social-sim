@@ -21,7 +21,7 @@ agent:
   content_max_length: 200
 
 gm:
-  use_llm: false
+  use_llm: true
   random_event_chance: 0.3
   llm_event_chance: 0.3
 
