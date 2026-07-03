@@ -96,8 +96,10 @@ class Agent:
         visible_locs = [self.location] + world.visibility.get(self.location, [])
         loc_agents_text = ', '.join(location_agents) if location_agents else '无'
         visible_text = ', '.join(visible_locs)
+        adjacent = world.get_adjacent_locations(self.location)
+        adjacent_text = ', '.join(adjacent) if adjacent else '无'
 
-        parts.append(f"【当前环境】\n位置: {self.location} | 这里的人: {loc_agents_text} | 你能观察到: {visible_text}")
+        parts.append(f"【当前环境】\n位置: {self.location} | 这里的人: {loc_agents_text} | 你能观察到: {visible_text} | 可前往: {adjacent_text}")
 
         parts.append(f"【你的状态】\n情绪: {self.mood} | 精力: {self.energy}")
 
