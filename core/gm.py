@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 class GMAgent:
     """GM Agent：注入事件，推进剧情"""
 
+    MAX_TURNS = 3
+
     def __init__(self, events: list, random_events: list, chance: float,
                  use_llm: bool = False, llm_chance: float = 0.0, llm_prompt: str = "",
                  logger=None):
@@ -34,11 +36,11 @@ class GMAgent:
         scheduled = self._check_scheduled(world)
         random_ev = self._check_random()
 
-        llm_ev = None
+        llm_events: list[str] = []
         if self.use_llm and llm_client and random.random() < self.llm_chance:
-            llm_ev = await self._generate_llm_event(world, llm_client)
+            llm_events = await self._generate_llm_event(world, llm_client) or []
 
-        events = [e for e in [scheduled, random_ev, llm_ev] if e]
+        events = [e for e in [scheduled, random_ev] + llm_events if e]
 
         for event in events:
             if self.logger:
@@ -67,35 +69,50 @@ class GMAgent:
         msg = Message(sender="GM", recipients=[BROADCAST], content=event, msg_type="system_event", tick=world.tick)
         world.message_bus.send(msg)
 
-    async def _generate_llm_event(self, world: "WorldState", llm_client: "LLMClient") -> str | None:
-        """根据当前世界状态，让 LLM 生成一个随机事件"""
-        context = self._build_world_context(world)
+    async def _generate_llm_event(self, world: "WorldState", llm_client: "LLMClient") -> list[str] | None:
+        """ReAct 循环：让 LLM 连续调用工具生成事件"""
         system_prompt = self._build_gm_prompt()
-
         validation_context = {
             "locations": world.locations,
             "agent_names": list(world.agents.keys()),
         }
+        messages = [{"role": "user", "content": self._build_world_context(world)}]
 
-        _, action = await llm_client.call(
-            system_prompt=system_prompt,
-            messages=[{"role": "user", "content": context}],
-            action_registry=self.registry,
-            agent_name="GM",
-            tick=world.tick,
-            validation_context=validation_context,
-        )
+        all_events: list[str] = []
+        for turn in range(self.MAX_TURNS):
+            _, actions = await llm_client.call_multi(
+                system_prompt=system_prompt,
+                messages=messages,
+                action_registry=self.registry,
+                agent_name="GM",
+                tick=world.tick,
+                validation_context=validation_context,
+            )
+            if not actions:
+                break
 
-        if action:
-            return self._dispatch(action)
-        return None
+            turn_results = []
+            for action in actions:
+                result = self._dispatch(action)
+                if result:
+                    turn_results.append(result)
+                    all_events.append(result)
+
+            if not turn_results:
+                break
+
+            text = f"执行完成：{' | '.join(turn_results)}"
+            messages.append({"role": "assistant", "content": text})
+            messages.append({"role": "user", "content": "如需继续使用工具请调用，否则直接回复'完成'。"})
+
+        return all_events if all_events else None
 
     def _build_gm_prompt(self) -> str:
         """构建 GM 的 system prompt，自动追加可用工具"""
         lines = []
         if self.llm_prompt:
             lines.append(self.llm_prompt)
-        lines.append("你可以使用的工具：")
+        lines.append("你可以使用以下工具（可一次调用多个）：")
         for s in self.registry.get_tool_schemas():
             name = s["function"]["name"]
             desc = s["function"]["description"]

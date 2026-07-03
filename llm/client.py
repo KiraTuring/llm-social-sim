@@ -202,6 +202,145 @@ class LLMClient:
 
         return choice.message.content, None
 
+    async def call_multi(
+        self,
+        system_prompt: str,
+        messages: list[dict],
+        action_registry: ActionRegistry,
+        temperature: float = 0.7,
+        agent_name: str = "unknown",
+        tick: int = 0,
+        validation_context: dict | None = None,
+        max_retries: int = 2,
+    ) -> tuple[str | None, list[Action]]:
+        """调用 LLM 并解析所有 tool calls（支持一次响应多个工具）"""
+        import json
+        import litellm
+
+        if action_registry is None:
+            return None, []
+        tool_schemas = action_registry.get_tool_schemas()
+        validation_context = validation_context or {}
+
+        for retry in range(max_retries + 1):
+            full_messages = [{"role": "system", "content": system_prompt}] + messages
+
+            response = None
+            for api_attempt in range(3):
+                try:
+                    response = await litellm.acompletion(
+                        model=self._model_str,
+                        messages=full_messages,
+                        tools=tool_schemas,
+                        temperature=temperature,
+                        api_key=self.api_key,
+                        api_base=self.base_url,
+                        drop_params=True,
+                    )
+                    break
+                except Exception as e:
+                    if api_attempt == 2:
+                        if self.logger:
+                            self.logger.error(f"API 调用失败: {agent_name} | Tick: {tick} | {e}")
+                        print(f"[LLM] 调用失败: {e}")
+                        return None, []
+                    await asyncio.sleep(1)
+
+            choice = response.choices[0]
+            raw_response = response.model_dump_json() if hasattr(response, "model_dump_json") else str(response)
+
+            if hasattr(choice.message, "tool_calls") and choice.message.tool_calls:
+                actions = []
+                all_valid = True
+                for tool_call in choice.message.tool_calls:
+                    try:
+                        params = json.loads(tool_call.function.arguments)
+
+                        action_spec = action_registry.get(tool_call.function.name)
+                        error = None
+                        if not action_spec:
+                            valid_names = ", ".join(action_registry.get_action_names())
+                            error = f"工具 '{tool_call.function.name}' 不存在，可用工具: {valid_names}"
+                        else:
+                            error = action_spec.validate_params(params, validation_context)
+
+                        if error:
+                            all_valid = False
+                            if retry < max_retries:
+                                if self.logger:
+                                    self.logger.warning(f"{agent_name} 参数错误，重试中 ({retry + 1}/{max_retries}): {error}")
+                                    self.logger.log_llm_call(
+                                        agent_name=agent_name, tick=tick, mode="tool_call",
+                                        system_prompt=system_prompt, messages=messages,
+                                        schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
+                                    )
+                                print(f"[LLM] {agent_name} 参数错误，重试中 ({retry + 1}/{max_retries}): {error}")
+                                messages.append({"role": "assistant", "content": choice.message.content or ""})
+                                messages.append({"role": "user", "content": error})
+                            else:
+                                if self.logger:
+                                    self.logger.log_llm_call(
+                                        agent_name=agent_name, tick=tick, mode="tool_call",
+                                        system_prompt=system_prompt, messages=messages,
+                                        schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
+                                    )
+                                print(f"[LLM] {agent_name} 重试耗尽，使用 fallback")
+                                return choice.message.content, []
+                            break
+
+                        action = Action(
+                            action_type=tool_call.function.name,
+                            target=params.get("target"),
+                            content=params.get("content", ""),
+                            internal_monologue=params.get("internal_monologue", ""),
+                        )
+                        actions.append(action)
+                    except Exception as e:
+                        all_valid = False
+                        if retry < max_retries:
+                            if self.logger:
+                                self.logger.warning(f"解析 tool call 失败: {agent_name} | Tick: {tick} | {e}")
+                            print(f"[LLM] 解析 tool call 失败: {e}")
+                            messages.append({"role": "assistant", "content": choice.message.content or ""})
+                            messages.append({"role": "user", "content": f"解析参数失败: {e}"})
+                        else:
+                            return choice.message.content, []
+                        break
+
+                if all_valid:
+                    parsed = [{"action_type": a.action_type, "target": a.target, "content": a.content} for a in actions]
+                    if self.logger:
+                        self.logger.log_llm_call(
+                            agent_name=agent_name, tick=tick, mode="tool_call",
+                            system_prompt=system_prompt, messages=messages,
+                            schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=parsed,
+                        )
+                    return choice.message.content, actions
+            else:
+                # 未调用工具
+                if retry < max_retries:
+                    if self.logger:
+                        self.logger.warning(f"{agent_name} 未调用工具，重试中 ({retry + 1}/{max_retries})")
+                        self.logger.log_llm_call(
+                            agent_name=agent_name, tick=tick, mode="tool_call",
+                            system_prompt=system_prompt, messages=messages,
+                            schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
+                        )
+                    print(f"[LLM] {agent_name} 未调用工具，重试中 ({retry + 1}/{max_retries})")
+                    messages.append({"role": "assistant", "content": choice.message.content or ""})
+                    messages.append({"role": "user", "content": "请使用提供的工具来执行操作。"})
+                else:
+                    if self.logger:
+                        self.logger.log_llm_call(
+                            agent_name=agent_name, tick=tick, mode="tool_call",
+                            system_prompt=system_prompt, messages=messages,
+                            schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
+                        )
+                    print(f"[LLM] {agent_name} 重试耗尽，使用 fallback")
+                    return choice.message.content, []
+
+        return None, []
+
     async def _call_with_text(
         self,
         system_prompt: str,
