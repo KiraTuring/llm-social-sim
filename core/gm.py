@@ -36,16 +36,21 @@ class GMAgent:
         scheduled = self._check_scheduled(world)
         random_ev = self._check_random()
 
+        # 先将计划/随机事件写入 event_log，让 GM 的 context 能看到
+        prior = [e for e in [scheduled, random_ev] if e]
+        for e in prior:
+            world.add_event(e)
+
         llm_events: list[str] = []
         if self.use_llm and llm_client and random.random() < self.llm_chance:
             llm_events = await self._generate_llm_event(world, llm_client) or []
+            for e in llm_events:
+                world.add_event(e)
 
-        events = [e for e in [scheduled, random_ev] + llm_events if e]
-
+        events = prior + llm_events
         for event in events:
             if self.logger:
                 self.logger.info(f"GM 事件: {event}")
-            world.add_event(event)
             self._broadcast_event(event, world)
 
     def _check_scheduled(self, world: "WorldState") -> str | None:
