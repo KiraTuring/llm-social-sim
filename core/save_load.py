@@ -39,6 +39,7 @@ def save_simulation_state(world, gm, scene_module: str, scene_display: str, path
         "connections": [[a, b] for a, b in world.connections],
         "action_order": world.action_order,
         "event_log": world.event_log,
+        "environment": world.environment,
         "message_bus": world.message_bus.to_dict(),
         "gm": {
             "scheduled_events": [[t, e] for t, e in gm.scheduled_events],
@@ -76,6 +77,7 @@ def load_simulation_state(path: str, config: dict):
     world.action_order = data["action_order"]
     world.visibility = scene.visibility or {}
     world.reverse_visibility = WorldState.compute_reverse_visibility(world.visibility)
+    world.environment = data.get("environment", {})
 
     world.message_bus = MessageBus.from_dict(data["message_bus"])
 

@@ -338,6 +338,60 @@ class TavernScene(Scene):
 - `ObserveAction` 自动从所有可见位置收集 agent 信息并存入记忆（**正向**：我能看到的位置）
 - `SpeakAction` 对特定目标说话时，能看到说话者的旁观者也会收到消息（**反向**：谁能看到我）
 
+## 环境状态系统（Environment）
+
+每个场景可以定义 `initial_environment`，为每个位置设置结构化环境指标。环境状态是格式化的 key-value 对，值统一用 `str`（`"97%"`、`"+0.02°"`、`"正常"`），由 GM 事件驱动更新，供 ObserveAction 读取：
+
+```python
+class SpaceshipScene(Scene):
+    initial_environment = {
+        "驾驶舱": {"航向偏差": "+0.02°", "引擎温度": "正常", "重力": "稳定"},
+        "引擎室": {"引擎震动": "轻微", "冷却效率": "100%", "燃料": "87%"},
+        "生活舱": {"温度": "22°C", "氧气": "正常"},
+        "医疗舱": {"医疗物资": "充足"},
+    }
+```
+
+### 数据流
+
+```
+Scene.initial_environment → WorldState.environment (init_world)
+                    ↓
+GM 计划事件 (3-tuple)       ──→ update_environment() ──→ environment 变更
+GM LLM modify_environment   ──→ update_environment() ──→ environment 变更
+                    ↓
+Agent observe ──→ ObserveAction.execute() 读当前+可见位置环境
+                    ↓
+action.result = {"observed": "...环境数据..."}
+                    ↓
+Agent.act() → memory.add("[observed] ...")
+```
+
+### 三种变更路径
+
+- **计划事件（确定性）**：`gm_events` 格式升级为 `(tick, text, changes?)`，`changes = {"位置": {"指标": "新值"}}`。2-tuple 无变更，向后兼容。
+- **LLM GM（动态）**：GM 的 ActionRegistry 注册了 `modify_environment` 工具，LLM 可在 ReAct 循环中调用 `generate_event`（叙事）+ `modify_environment(location, key, value)`（改状态），支持并行调用。
+- **随机事件**：保持纯文本，暂不携带变更。
+
+### ObserveAction 输出
+
+ObserveAction 读取当前位置 + visibility 中所有可见位置的环境数据：
+
+```
+你在驾驶舱 | 环境: 驾驶舱(航向偏差 +0.02°, 引擎温度 正常), 引擎室(引擎震动 轻微, 冷却效率 100%) | 看到: 芬恩(导航员)在驾驶舱 - 情绪:冷静
+```
+
+- 环境段只在有数据的位置出现
+- 所有位置都无 environment → 整个「环境」段消失（tavern 向后兼容）
+- 结果通过 `action.result` 自动写入记忆
+
+### 关键方法
+
+- `WorldState.update_environment(location, key, value)` — 更新指标，location 不合法时返回错误信息
+- `WorldState.get_environment_summary(location)` — 返回 `"key value, key value"` 或 `""`
+- `ModifyEnvironmentAction` — GM 工具，`validate_params()` 校验 location 有效性
+- `_check_scheduled()` — 支持 3-tuple `(tick, text, changes)`，触发时自动应用 changes
+
 ## 规则引擎
 
 事件驱动模式，监听 `message.msg_type`:

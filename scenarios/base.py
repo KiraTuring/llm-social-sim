@@ -15,6 +15,7 @@ class Scene:
     gm_random_events: list[str]
     gm_llm_prompt: str = ""
     world_description: str = ""
+    initial_environment: dict[str, dict[str, str]] = {}
     connections: list[tuple[str, str]] = []
     visibility: dict[str, list[str]] | None = None
     render_config: dict = {}
@@ -38,6 +39,7 @@ class Scene:
         world._adjacency = WorldState.compute_adjacency(self.connections)
         world.visibility = self.visibility or {}
         world.reverse_visibility = WorldState.compute_reverse_visibility(world.visibility)
+        world.environment = {k: dict(v) for k, v in self.initial_environment.items()}
 
         for agent_cfg in self.agents:
             world.message_bus.register_agent(agent_cfg["name"])

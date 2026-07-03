@@ -208,6 +208,12 @@ class ObserveAction(ActionSpec):
         visible_locs = [agent.location]
         visible_locs += world.visibility.get(agent.location, [])
 
+        env_parts = []
+        for loc in visible_locs:
+            env_summary = world.get_environment_summary(loc)
+            if env_summary:
+                env_parts.append(f"{loc}({env_summary})")
+
         seen = []
         for loc in visible_locs:
             for name in world.get_agents_in_location(loc):
@@ -217,6 +223,8 @@ class ObserveAction(ActionSpec):
                 seen.append(f"{name}({other.role})在{loc} - 情绪:{other.mood}")
 
         parts = [f"你在{agent.location}"]
+        if env_parts:
+            parts.append("环境: " + ", ".join(env_parts))
         if seen:
             parts.append("看到: " + "，".join(seen))
         else:

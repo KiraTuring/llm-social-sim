@@ -22,6 +22,7 @@ class WorldState:
     event_log: list[str] = field(default_factory=list)
     action_order: list[str] = field(default_factory=list)
     message_bus: Any = None
+    environment: dict[str, dict[str, str]] = field(default_factory=dict)
 
     @staticmethod
     def compute_adjacency(connections: list[tuple[str, str]]) -> dict[str, set[str]]:
@@ -50,6 +51,20 @@ class WorldState:
     def advance_tick(self):
         """推进一个 tick"""
         self.tick += 1
+
+    def update_environment(self, location: str, key: str, value: str) -> str | None:
+        """更新环境状态，如果 location 不合法返回错误信息"""
+        if location not in self.locations:
+            return f"'{location}' 不是有效位置"
+        self.environment.setdefault(location, {})[key] = value
+        return None
+
+    def get_environment_summary(self, location: str) -> str:
+        """获取某个位置的格式化环境摘要"""
+        env = self.environment.get(location, {})
+        if not env:
+            return ""
+        return ", ".join(f"{k} {v}" for k, v in env.items())
 
     def add_event(self, event: str):
         """记录事件"""

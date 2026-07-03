@@ -22,8 +22,8 @@ agent:
 
 gm:
   use_llm: true
-  random_event_chance: 0.3
-  llm_event_chance: 0.3
+  random_event_chance: 0.0
+  llm_event_chance: 1.0
 
 scene: "tavern"
 

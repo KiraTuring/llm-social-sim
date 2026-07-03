@@ -4,7 +4,7 @@ import random
 from typing import TYPE_CHECKING
 
 from core.action import ActionRegistry
-from core.actions.gm_actions import GenerateEventAction
+from core.actions.gm_actions import GenerateEventAction, ModifyEnvironmentAction
 
 if TYPE_CHECKING:
     from core.world import WorldState
@@ -30,6 +30,7 @@ class GMAgent:
 
         self.registry = ActionRegistry()
         self.registry.register(GenerateEventAction())
+        self.registry.register(ModifyEnvironmentAction())
 
     async def check_and_inject(self, world: "WorldState", llm_client: "LLMClient | None" = None):
         """每个 tick 检查是否需要注入事件"""
@@ -55,10 +56,17 @@ class GMAgent:
             self._broadcast_event(event, world)
 
     def _check_scheduled(self, world: "WorldState") -> str | None:
-        """检查计划事件"""
-        for tick, event in self.scheduled_events[:]:
+        """检查计划事件，支持 3-tuple (tick, event, changes) 格式"""
+        for item in self.scheduled_events[:]:
+            tick = item[0]
+            event = item[1]
+            changes = item[2] if len(item) > 2 else None
             if tick == world.tick:
-                self.scheduled_events.remove((tick, event))
+                self.scheduled_events.remove(item)
+                if changes:
+                    for loc, env_changes in changes.items():
+                        for key, val in env_changes.items():
+                            world.update_environment(loc, key, val)
                 return event
         return None
 
@@ -100,7 +108,7 @@ class GMAgent:
 
             turn_results = []
             for action in actions:
-                result = self._dispatch(action)
+                result = self._dispatch(action, world)
                 if result:
                     turn_results.append(result)
                     all_events.append(result)
@@ -124,9 +132,10 @@ class GMAgent:
             lines.append(self.world_description)
         lines.append("")
         lines.append("规则：")
-        lines.append("- 不要生成和近期事件冲突或简单重复的事件")
+        lines.append("- 不要生成和近期事件冲突或简单重复的事件，可以是新事件或对近期事件的后续")
         lines.append("- 不要替角色做决定或直接控制角色的行为")
         lines.append("- 事件要简短自然，一句话")
+        lines.append("- 只生成一个事件。可以多次调用工具，但所有调用都围绕同一个事件")
         lines.append("")
         lines.append("你可以使用以下工具（可一次调用多个）：")
         for s in self.registry.get_tool_schemas():
@@ -148,6 +157,15 @@ class GMAgent:
             statuses = [f"{n}(情绪:{world.agents[n].mood}, 精力:{world.agents[n].energy})" for n in names]
             parts.append(f"  {loc}: {', '.join(statuses)}")
 
+        env_lines = []
+        for loc in world.locations:
+            summary = world.get_environment_summary(loc)
+            if summary:
+                env_lines.append(f"  {loc}: {summary}")
+        if env_lines:
+            parts.append("\n环境状态：")
+            parts.extend(env_lines)
+
         if world.event_log:
             parts.append("\n最近发生的事件：")
             for e in world.event_log[-5:]:
@@ -168,15 +186,28 @@ class GMAgent:
 
         return "\n".join(parts)
 
-    def _dispatch(self, action) -> str | None:
+    def _dispatch(self, action, world: "WorldState") -> str | None:
         """根据 action_type 分发到对应的 handler"""
         handler = {
             "generate_event": self._handle_event,
+            "modify_environment": self._handle_modify_env,
         }.get(action.action_type)
         if handler:
-            return handler(action)
+            return handler(action, world)
         return None
 
-    def _handle_event(self, action) -> str | None:
+    def _handle_event(self, action, world: "WorldState") -> str | None:
         """处理 generate_event action"""
         return action.content if action.content else None
+
+    def _handle_modify_env(self, action, world: "WorldState") -> str | None:
+        """处理 modify_environment action"""
+        loc = action.params.get("location", "")
+        key = action.params.get("key", "")
+        value = action.params.get("value", "")
+        if not loc or not key or not value:
+            return None
+        err = world.update_environment(loc, key, value)
+        if err:
+            return err
+        return f"环境变更: {loc}.{key} → {value}"
