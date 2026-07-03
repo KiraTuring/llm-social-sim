@@ -36,7 +36,6 @@ class GenerateEventAction(ActionSpec):
         content = params.get("content", "")
         if not content:
             return [], {"summary": "事件描述为空"}
-        world.add_event(content)
         msg = Message(sender="GM", recipients=[BROADCAST], content=content,
                       msg_type="system_event", tick=world.tick)
         world.message_bus.send(msg)
