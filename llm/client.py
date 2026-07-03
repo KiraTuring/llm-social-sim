@@ -143,6 +143,7 @@ class LLMClient:
                         action_type=tool_call.function.name,
                         target=params.get("target"),
                         content=params.get("content", ""),
+                        params=params,
                         internal_monologue=params.get("internal_monologue", ""),
                     )
                     parsed_action = {
@@ -298,6 +299,7 @@ class LLMClient:
                             action_type=tool_call.function.name,
                             target=params.get("target"),
                             content=params.get("content", ""),
+                            params=params,
                             internal_monologue=params.get("internal_monologue", ""),
                         )
                         actions.append(action)
