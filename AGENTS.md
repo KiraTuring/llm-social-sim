@@ -111,6 +111,25 @@ class MyAction(ActionSpec):
 | `speak` | target 不能是自己；必须在 `agent_names` 且在 `hearable_agents` 中 |
 | `whisper` | target 不能为空/自己；必须在 `agent_names` 且与说话者在同一位置 |
 | `move` | target 不能是当前位置；必须在 `locations` 中且在 `adjacent_locations` 内 |
+| `radio` | target 不能为空/自己；必须在 `agent_names` 中（无位置限制） |
+
+### 通讯 Action（`core/actions/communication.py`）
+
+场景相关的远程通讯行动，目前包含 `radio`：
+
+| Action | 说明 |
+|--------|------|
+| `radio` | 通过无线电与任意位置的队友通话 |
+
+`radio` 的消息流：
+
+```
+发送方 ──→ 目标（msg_type="radio"，全内容）
+       ├→ 发送方旁观者（msg_type="action"："对着无线电说了几句话"）
+       └→ 接收方旁观者（msg_type="action"，sender=接收者："身上的无线电中传来一段通话声"）
+```
+
+旁观者在两个位置都能看到"有人在用无线电"，但都不知道内容、不知道通话对象。
 
 校验失败时 LLM 会收到错误提示并重试（最多 2 次），超限 fallback 到 `observe`。
 

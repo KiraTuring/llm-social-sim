@@ -134,6 +134,8 @@ class SpaceshipScene(Scene):
 
     def setup(self, registry):
         from core.actions.common import InteractAction, MoveAction, ObserveAction, SpeakAction, WhisperAction
+        from core.actions.communication import RadioAction
 
         for action_cls in [SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction]:
             registry.register(action_cls())
+        registry.register(RadioAction())

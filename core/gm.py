@@ -168,11 +168,9 @@ class GMAgent:
             speech = []
             actions = []
             for m in world.message_bus.get_recent(10):
-                if m.msg_type == "speech":
-                    target = f" -> {m.target}" if m.target else ""
-                    speech.append(f"[{m.sender}]{target}: {m.content}")
-                elif m.msg_type == "whisper":
-                    speech.append(f"[{m.sender}] (悄悄对 {m.target}): {m.content}")
+                if m.msg_type in ("speech", "whisper", "radio"):
+                    target_str = f" -> {m.target}" if m.target else ""
+                    speech.append(f"[{m.sender}] ({m.msg_type}{target_str}): {m.content}")
                 elif m.msg_type == "action":
                     actions.append(f"[{m.sender}]: {m.content}")
             if speech:
