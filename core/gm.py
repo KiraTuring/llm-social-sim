@@ -4,7 +4,7 @@ import random
 from typing import TYPE_CHECKING
 
 from core.action import ActionRegistry
-from core.actions.gm_actions import GenerateEventAction, ModifyEnvironmentAction
+from core.actions.gm_actions import NarrateAction, ModifyEnvironmentAction
 
 if TYPE_CHECKING:
     from core.world import WorldState
@@ -29,7 +29,7 @@ class GMAgent:
         self.logger = logger
 
         self.registry = ActionRegistry()
-        self.registry.register(GenerateEventAction())
+        self.registry.register(NarrateAction())
         self.registry.register(ModifyEnvironmentAction())
 
     async def check_and_inject(self, world: "WorldState", llm_client: "LLMClient | None" = None):
@@ -126,6 +126,7 @@ class GMAgent:
         lines.append("- 不要替角色做决定或直接控制角色的行为")
         lines.append("- 事件要简短自然，一句话")
         lines.append("- 只生成一个事件。可以多次调用工具，但所有调用都围绕同一个事件")
+        lines.append("- 不要有冗余信息，如果调用多个工具，各工具给出的信息应当是互补的，不要重复")
         lines.append("")
         lines.append("你可以使用以下工具（可一次调用多个）：")
         for s in self.registry.get_tool_schemas():
@@ -175,5 +176,3 @@ class GMAgent:
                     parts.append(f"  {s}")
 
         return "\n".join(parts)
-
-

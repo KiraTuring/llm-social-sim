@@ -1,14 +1,14 @@
-"""GM Action 实现：generate_event, modify_environment, 后续 add_agent/add_location 等。"""
+"""GM Action 实现：narrate, modify_environment, 后续 add_agent/add_location 等。"""
 
 from core.action import ActionSpec
 from core.message import BROADCAST, Message
 
 
-class GenerateEventAction(ActionSpec):
-    name = "generate_event"
-    description = "根据当前世界状态生成一个随机事件"
+class NarrateAction(ActionSpec):
+    name = "narrate"
+    description = "GM 旁白：向所有角色发出一段世界叙事或事件公告（如环境变化、远处声响、氛围描述等）"
     parameters = {"event_description": {"type": "string"}}
-    text_format = "[ACTION]generate_event[/ACTION]\n[CONTENT]{事件描述，一句话，中文}[/CONTENT]"
+    text_format = "[ACTION]narrate[/ACTION]\n[CONTENT]{叙事内容，一句话，中文}[/CONTENT]"
 
     def get_tool_schema(self):
         return {

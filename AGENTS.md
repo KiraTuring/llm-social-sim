@@ -370,7 +370,7 @@ Agent.act() → memory.add("[observed] ...")
 ### 三种变更路径
 
 - **计划事件（确定性）**：`gm_events` 格式升级为 `(tick, text, changes?)`，`changes = {"位置": {"指标": "新值"}}`。2-tuple 无变更，向后兼容。
-- **LLM GM（动态）**：GM 的 ActionRegistry 注册了 `modify_environment` 工具，LLM 可在 ReAct 循环中调用 `generate_event`（叙事）+ `modify_environment(location, key, value)`（改状态），支持并行调用。
+- **LLM GM（动态）**：GM 的 ActionRegistry 注册了 `narrate` 和 `modify_environment` 工具，LLM 可在 ReAct 循环中调用 `narrate(content)`（叙事公告）+ `modify_environment(location, key, value)`（改状态），支持并行调用。
 - **随机事件**：保持纯文本，暂不携带变更。
 
 ### ObserveAction 输出
@@ -419,7 +419,7 @@ GM 拥有自己的 `ActionRegistry`，注册 `core/actions/gm_actions.py` 中的
 
 | Action | 用途 | 未来扩展 |
 |--------|------|---------|
-| `generate_event` | 生成外部事件描述 | — |
+| `narrate` | GM 旁白：向所有角色发出世界叙事或事件公告 | — |
 | — | — | `add_agent`, `add_location`, `add_item` |
 | — | — | `modify_weather`, `set_time` |
 | — | — | `npc_speak`, `npc_act` |
@@ -466,16 +466,18 @@ GM 的 `validation_context` 包含 `locations` 和 `agent_names`，便于未来 
 
 ### Dispatch 机制
 
-`_dispatch(action)` 按 `action.action_type` 查表分发：
+GM Action 统一通过 `ActionSpec.execute()` 执行，由 `_exec` 回调统一切入并记录到 `event_log`：
 
 ```python
-handler = {
-    "generate_event": self._handle_event,
-    # "add_agent": self._handle_add_agent,
-}.get(action.action_type)
+def _exec(action):
+    spec = self.registry.get(action.action_type)
+    _, result = spec.execute("GM", action.params, world)
+    summary = (result or {}).get("summary", f"'{action.action_type}' 执行完成")
+    world.add_event(summary)
+    return summary
 ```
 
-新增 Action 只需注册 + `_dispatch` 加一行映射。
+新增 Action 只需注册到 registry，自动被 `_exec` 处理，无需额外映射。
 
 ## 测试
 
