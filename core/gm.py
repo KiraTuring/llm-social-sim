@@ -118,6 +118,12 @@ class GMAgent:
         lines = []
         if self.llm_prompt:
             lines.append(self.llm_prompt)
+        lines.append("")
+        lines.append("规则：")
+        lines.append("- 不要生成和近期事件冲突或简单重复的事件")
+        lines.append("- 不要替角色做决定或直接控制角色的行为")
+        lines.append("- 事件要简短自然，一句话")
+        lines.append("")
         lines.append("你可以使用以下工具（可一次调用多个）：")
         for s in self.registry.get_tool_schemas():
             name = s["function"]["name"]
