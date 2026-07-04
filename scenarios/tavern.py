@@ -103,7 +103,7 @@ class TavernScene(Scene):
                     lower_words = ["笨", "蠢", "滚", "闭嘴"]
                     if any(word in msg.content for word in lower_words):
                         agent.relationships[sender]["trust"] = max(-5, trust - 2)
-                        agent.mood = "愤怒"
+                        agent.states["mood"] = "愤怒"
 
                     praise_words = ["不错", "好", "谢谢", "佩服"]
                     if any(word in msg.content for word in praise_words):
@@ -122,7 +122,7 @@ class TavernScene(Scene):
             scary_words = ["危险", "杀", "威胁", "追杀"]
             if any(word in msg.content for word in scary_words):
                 for agent in world.agents.values():
-                    agent.mood = "紧张"
+                    agent.states["mood"] = "紧张"
 
     def setup(self, registry):
         """注册酒馆场景特定的 actions"""

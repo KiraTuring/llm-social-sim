@@ -16,6 +16,7 @@ class Action(BaseModel):
     params: dict = Field(default_factory=dict)
     internal_monologue: str = ""
     result: dict | None = None
+    state_update: dict | None = None
 
 
 class ActionSpec(ABC):
@@ -71,8 +72,29 @@ class ActionRegistry:
         return list(self._actions.keys())
 
     def get_tool_schemas(self) -> list[dict]:
-        """返回所有 action 的 tool schema 列表"""
-        return [act.get_tool_schema() for act in self._actions.values()]
+        """返回所有 action 的 tool schema 列表，自动注入公共参数"""
+        schemas = [act.get_tool_schema() for act in self._actions.values()]
+        state_spec = {
+            "type": "object",
+            "description": "状态更新（可选）。根据当前情况更新你的情绪和关系，精力/健康等客观状态由系统自动管理",
+            "properties": {
+                "mood": {"type": "string", "description": "新情绪值，如紧张、平静、警惕"},
+                "relations": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string", "description": "角色名"},
+                            "trust_change": {"type": "integer", "description": "信任变化量"},
+                            "impression": {"type": "string", "description": "新印象描述"},
+                        },
+                    },
+                },
+            },
+        }
+        for s in schemas:
+            s["function"]["parameters"]["properties"]["state_update"] = state_spec
+        return schemas
 
     def get_text_guide(self) -> str:
         """动态生成文本格式说明"""
@@ -83,6 +105,7 @@ class ActionRegistry:
 
 注意：
 - [THOUGHT] 是你的内心独白，别人看不到
+- [STATE] 可选，JSON 格式的状态更新，如 {{"mood": "紧张"}}
 - 如果某个字段不需要，可以省略或填 N/A
 - [ACTION] 必须是以下之一：{', '.join(self.get_action_names())}"""
 
@@ -92,15 +115,23 @@ class ActionRegistry:
         action_match = re.search(r"\[ACTION\](.*?)\[/ACTION\]", text, re.DOTALL)
         target_match = re.search(r"\[TARGET\](.*?)\[/TARGET\]", text, re.DOTALL)
         content_match = re.search(r"\[CONTENT\](.*?)\[/CONTENT\]", text, re.DOTALL)
+        state_match = re.search(r"\[STATE\](.*?)\[/STATE\]", text, re.DOTALL)
         action_type = action_match.group(1).strip() if action_match else "speak"
         content = content_match.group(1).strip() if content_match else ""
         target = target_match.group(1).strip() if target_match else None
         internal_monologue = thought_match.group(1).strip() if thought_match else ""
+        state_update = None
+        if state_match:
+            import json
+            try:
+                state_update = json.loads(state_match.group(1).strip())
+            except json.JSONDecodeError:
+                pass
 
         return Action(
             action_type=action_type,
             target=target,
             content=content,
-            params=params,
             internal_monologue=internal_monologue,
+            state_update=state_update,
         )

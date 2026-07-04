@@ -137,7 +137,7 @@ class SpaceshipScene(Scene):
             scary_words = ["异常", "故障", "偏离", "警告", "危险"]
             if any(word in msg.content for word in scary_words):
                 for agent in world.agents.values():
-                    agent.mood = "紧张"
+                    agent.states["mood"] = "紧张"
 
     def setup(self, registry):
         from core.actions.common import InteractAction, MoveAction, ObserveAction, SpeakAction, WhisperAction

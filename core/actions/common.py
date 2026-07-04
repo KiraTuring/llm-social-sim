@@ -226,7 +226,7 @@ class ObserveAction(ActionSpec):
                 if name == agent_name:
                     continue
                 other = world.agents[name]
-                seen.append(f"{name}({other.role})在{loc} - 情绪:{other.mood}")
+                seen.append(f"{name}({other.role})在{loc} - 情绪:{other.states.get('mood', '平静')}")
 
         parts = [f"你在{agent.location}"]
         if env_parts:

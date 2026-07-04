@@ -54,7 +54,7 @@ class ConsoleRenderer:
         location_emoji = self.render_config.get("location_icons", {}).get(agent.location, "📍")
 
         content = f"[bold]{location_emoji} {agent.name}[/bold] [{agent.location}]\n"
-        content += f"[dim]情绪: {agent.mood} | 精力: {agent.energy}[/dim]\n"
+        content += f"[dim]情绪: {agent.states.get('mood', '平静')} | 精力: {agent.states.get('energy', 100)}[/dim]\n"
 
         inbox = getattr(agent, '_perceived_inbox', [])
         if inbox:

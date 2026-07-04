@@ -21,8 +21,7 @@ def serialize_agent(agent: Agent) -> dict:
         "goal": agent.goal,
         "location": agent.location,
         "relationships": agent.relationships,
-        "mood": agent.mood,
-        "energy": agent.energy,
+        "states": agent.states,
         "content_max_length": agent.content_max_length,
         "agent_type": "ManualAgent" if isinstance(agent, ManualAgent) else "Agent",
         "memory": serialize_memory(agent.memory),
@@ -111,8 +110,7 @@ def load_simulation_state(path: str, config: dict):
         else:
             agent = Agent(**agent_kwargs)
 
-        agent.mood = agent_data["mood"]
-        agent.energy = agent_data["energy"]
+        agent.states = agent_data.get("states", {"mood": "平静", "energy": agent_data.get("energy", 100)})
 
         world.agents[name] = agent
 
