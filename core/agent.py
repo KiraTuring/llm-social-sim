@@ -25,6 +25,8 @@ class Agent:
         max_energy: int = 100,
         inbox_limit: int = 5,
         world_description: str = "",
+        states: dict | None = None,
+        writable_states: set | None = None,
     ):
         self.name = name
         self.role = role
@@ -37,8 +39,8 @@ class Agent:
         self.inbox_limit = inbox_limit
         self.world_description = world_description
 
-        self.states = {"mood": "平静", "energy": max_energy}
-        self._writable_states = {"mood"}
+        self.states = dict(states) if states else {"情绪": "平静", "精力": max_energy}
+        self._writable_states = set(writable_states) if writable_states else {"情绪"}
         self._last_action = None
 
     def build_system_prompt(self, registry: "ActionRegistry") -> str:
@@ -105,7 +107,8 @@ class Agent:
 
         parts.append(f"【当前环境】\n你的位置: {self.location}, 这里的人: {loc_agents_text} | 你能观察到: {visible_text} | 可前往: {adjacent_text}")
 
-        parts.append(f"【你的状态】\n情绪: {self.states.get('mood', '平静')} | 精力: {self.states.get('energy', 100)}")
+        state_str = " | ".join(f"{k}: {v}" for k, v in self.states.items())
+        parts.append(f"【你的状态】\n{state_str}")
 
         memory_context = self.memory.get_context()
         if memory_context:
@@ -193,17 +196,17 @@ class Agent:
                 # Apply state_update from LLM (only writable states)
                 su = action.params.get("state_update", action.state_update or {})
                 if isinstance(su, dict):
-                    mood = su.get("mood")
-                    if mood and "mood" in self._writable_states:
-                        self.states["mood"] = mood
-                    relations = su.get("relations")
-                    if relations and "relations" in self._writable_states:
-                        for r in relations:
-                            name = r.get("name")
-                            if name and name in self.relationships:
-                                self.relationships[name]["trust"] += r.get("trust_change", 0)
-                                if "impression" in r:
-                                    self.relationships[name]["impression"] = r["impression"]
+                    for key, val in su.items():
+                        if key == "relations":
+                            if key in self._writable_states:
+                                for r in val:
+                                    name = r.get("name")
+                                    if name and name in self.relationships:
+                                        self.relationships[name]["trust"] += r.get("trust_change", 0)
+                                        if "impression" in r:
+                                            self.relationships[name]["impression"] = r["impression"]
+                        elif key in self._writable_states:
+                            self.states[key] = val
 
                 if result:
                     for key, value in result.items():

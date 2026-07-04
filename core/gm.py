@@ -146,7 +146,10 @@ class GMAgent:
 
         parts.append("\n角色位置与状态：")
         for loc, names in locs.items():
-            statuses = [f"{n}(情绪:{world.agents[n].states.get('mood', '平静')}, 精力:{world.agents[n].states.get('energy', 100)})" for n in names]
+            statuses = []
+            for n in names:
+                state_str = ", ".join(f"{k}:{v}" for k, v in world.agents[n].states.items())
+                statuses.append(f"{n}({state_str})")
             parts.append(f"  {loc}: {', '.join(statuses)}")
 
         env_lines = []

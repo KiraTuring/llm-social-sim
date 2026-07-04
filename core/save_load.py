@@ -110,7 +110,7 @@ def load_simulation_state(path: str, config: dict):
         else:
             agent = Agent(**agent_kwargs)
 
-        agent.states = agent_data.get("states", {"mood": "平静", "energy": agent_data.get("energy", 100)})
+        agent.states = agent_data.get("states", {"情绪": "平静", "精力": 100})
 
         world.agents[name] = agent
 
