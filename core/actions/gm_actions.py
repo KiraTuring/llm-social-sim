@@ -6,7 +6,7 @@ from core.message import BROADCAST, Message
 
 class NarrateAction(ActionSpec):
     name = "narrate"
-    description = "GM 旁白：向所有角色发出一段世界叙事或事件公告（如环境变化、远处声响、氛围描述等）. 避免全知视角，只描述角色能感知到的内容"
+    description = "GM 旁白：向角色发出世界叙事或事件公告。target=留空（全船广播）、角色名（私信）、位置名（该位置所有人）。避免全知视角，只描述角色能感知到的内容"
     parameters = {"event_description": {"type": "string"}}
     text_format = "[ACTION]narrate[/ACTION]\n[CONTENT]{叙事内容，一句话，中文}[/CONTENT]"
 
@@ -23,6 +23,10 @@ class NarrateAction(ActionSpec):
                             "type": "string",
                             "description": "事件描述，一句话，中文",
                         },
+                        "target": {
+                            "type": "string",
+                            "description": "接收对象（可选）：留空=全船广播，角色名=私信给该角色，位置名=发给该位置的所有人",
+                        },
                     },
                     "required": ["content"],
                 },
@@ -30,14 +34,32 @@ class NarrateAction(ActionSpec):
         }
 
     def validate_params(self, params, context):
-        return None
+        target = params.get("target", "")
+        if not target:
+            return None
+        agent_names = context.get("agent_names", [])
+        locations = context.get("locations", [])
+        if target in agent_names or target in locations:
+            return None
+        return f"'{target}' 不是有效的角色或位置，可选角色: {', '.join(agent_names)}，可选位置: {', '.join(locations)}"
 
     def execute(self, agent_name, params, world):
         content = params.get("content", "")
         if not content:
             return [], {"summary": "事件描述为空"}
-        msg = Message(sender="GM", recipients=[BROADCAST], content=content,
-                      msg_type="system_event", tick=world.tick)
+        target = params.get("target", "")
+
+        if target in world.agents:
+            recipients = [target]
+        elif target in world.locations:
+            recipients = world.get_agents_in_location(target)
+            if not recipients:
+                return [], {"summary": f"'{target}' 无人在场"}
+        else:
+            recipients = [BROADCAST]
+
+        msg = Message(sender="GM", recipients=recipients, target=target if target else None,
+                      content=content, msg_type="system_event", tick=world.tick)
         world.message_bus.send(msg)
         return [], {"summary": content}
 
