@@ -62,7 +62,8 @@ class NarrateAction(ActionSpec):
                       content=content, msg_type="system_event", tick=world.tick)
         world.message_bus.send(msg)
         prefix = f"[{target}] " if target else ""
-        return [], {"summary": prefix + content}
+        summary = f"旁白已发送: {prefix}{content}"
+        return [], {"summary": summary}
 
 
 class ModifyEnvironmentAction(ActionSpec):

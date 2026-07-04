@@ -24,6 +24,7 @@ gm:
   use_llm: true
   random_event_chance: 0.0
   llm_event_chance: 0.5
+  message_limit: 15
 
 scene: "tavern"
 

@@ -103,6 +103,7 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
             llm_chance=config["gm"].get("llm_event_chance", 0.3),
             llm_prompt=gm_cfg.get("llm_prompt", ""),
             world_description=scene.world_description,
+            message_limit=config["gm"].get("message_limit", 15),
         )
 
         start_tick = 1

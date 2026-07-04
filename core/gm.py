@@ -18,7 +18,7 @@ class GMAgent:
 
     def __init__(self, events: list, random_events: list, chance: float,
                  use_llm: bool = False, llm_chance: float = 0.0, llm_prompt: str = "",
-                 world_description: str = "", logger=None):
+                 world_description: str = "", logger=None, message_limit: int = 15):
         self.scheduled_events = events
         self.random_events = random_events
         self.random_chance = chance
@@ -27,6 +27,7 @@ class GMAgent:
         self.llm_prompt = llm_prompt
         self.world_description = world_description
         self.logger = logger
+        self.message_limit = message_limit
 
         self.registry = ActionRegistry()
         self.registry.register(NarrateAction())
@@ -124,7 +125,7 @@ class GMAgent:
         lines.append("重要规则：")
         lines.append("- 不要生成和近期事件冲突或简单重复的事件，可以是新事件或对近期事件的后续")
         lines.append("- 不要替角色做决定或直接控制角色的行为")
-        lines.append("- 留意角色的行动（「最近的行动」列表），基于角色与环境的互动产生合理的事件响应或后续影响")
+        lines.append("- 留意角色最近的消息，基于角色与环境的互动产生合理的事件响应或后续影响")
         lines.append("- 事件要简短自然，一句话")
         lines.append("- 最多生成一个新事件。可以多次调用工具，但所有调用都围绕同一个事件")
         lines.append("")
@@ -157,27 +158,13 @@ class GMAgent:
             parts.append("\n环境状态：")
             parts.extend(env_lines)
 
-        if world.event_log:
-            parts.append("\n最近发生的事件：")
-            for e in world.event_log[-5:]:
-                parts.append(f"  {e}")
-
         if world.message_bus:
-            speech = []
-            actions = []
-            for m in world.message_bus.get_recent(10):
-                if m.msg_type in ("speech", "whisper", "radio"):
-                    target_str = f" -> {m.target}" if m.target else ""
-                    speech.append(f"[{m.sender}] ({m.msg_type}{target_str}): {m.content}")
-                elif m.msg_type == "action":
-                    actions.append(f"[{m.sender}]: {m.content}")
-            if speech:
-                parts.append("\n最近的对话：")
-                for s in speech[-8:]:
-                    parts.append(f"  {s}")
-            if actions:
-                parts.append("\n最近的行动：")
-                for a in actions[-4:]:
-                    parts.append(f"  {a}")
+            msgs = []
+            for m in world.message_bus.get_recent(self.message_limit):
+                target_str = f" -> {m.target}" if m.target else ""
+                msgs.append(f"  [tick {m.tick}] [{m.sender}] ({m.msg_type}{target_str}): {m.content}")
+            if msgs:
+                parts.append("\n最近收到的消息：")
+                parts.extend(msgs)
 
         return "\n".join(parts)

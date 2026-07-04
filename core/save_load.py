@@ -125,6 +125,7 @@ def load_simulation_state(path: str, config: dict):
         llm_chance=config["gm"].get("llm_event_chance", 0.3),
         llm_prompt=scene.get_gm_config().get("llm_prompt", ""),
         world_description=scene.world_description,
+        message_limit=config["gm"].get("message_limit", 15),
     )
 
     return world, scene, gm
