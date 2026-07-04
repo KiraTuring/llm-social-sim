@@ -6,7 +6,7 @@ from core.message import BROADCAST, Message
 
 class NarrateAction(ActionSpec):
     name = "narrate"
-    description = "GM 旁白：向角色发出世界叙事或事件公告。target=留空（全船广播）、角色名（私信）、位置名（该位置所有人）。避免全知视角，只描述角色能感知到的内容"
+    description = "GM 旁白：向角色发出世界叙事或事件公告。target=留空（世界广播）、角色名（私信）、位置名（该位置所有人）。避免全知视角，只描述角色能感知到的内容"
     parameters = {"event_description": {"type": "string"}}
     text_format = "[ACTION]narrate[/ACTION]\n[CONTENT]{叙事内容，一句话，中文}[/CONTENT]"
 
@@ -61,7 +61,8 @@ class NarrateAction(ActionSpec):
         msg = Message(sender="GM", recipients=recipients, target=target if target else None,
                       content=content, msg_type="system_event", tick=world.tick)
         world.message_bus.send(msg)
-        return [], {"summary": content}
+        prefix = f"[{target}] " if target else ""
+        return [], {"summary": prefix + content}
 
 
 class ModifyEnvironmentAction(ActionSpec):
