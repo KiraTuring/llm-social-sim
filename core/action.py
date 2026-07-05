@@ -56,8 +56,9 @@ class ActionSpec(ABC):
 class ActionRegistry:
     """管理当前场景所有可用的 Action"""
 
-    def __init__(self):
+    def __init__(self, include_state_update=True):
         self._actions: dict[str, ActionSpec] = {}
+        self._include_state_update = include_state_update
 
     def register(self, action: ActionSpec) -> None:
         """注册一个 Action"""
@@ -74,26 +75,13 @@ class ActionRegistry:
     def get_tool_schemas(self) -> list[dict]:
         """返回所有 action 的 tool schema 列表，自动注入公共参数"""
         schemas = [act.get_tool_schema() for act in self._actions.values()]
-        state_spec = {
-            "type": "object",
-            "description": "状态更新（可选）。根据当前情况更新你的情绪和关系，精力/健康等客观状态由系统自动管理",
-            "properties": {
-                "mood": {"type": "string", "description": "新情绪值，如紧张、平静、警惕"},
-                "relations": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "name": {"type": "string", "description": "角色名"},
-                            "trust_change": {"type": "integer", "description": "信任变化量"},
-                            "impression": {"type": "string", "description": "新印象描述"},
-                        },
-                    },
-                },
-            },
-        }
-        for s in schemas:
-            s["function"]["parameters"]["properties"]["state_update"] = state_spec
+        if self._include_state_update:
+            spec = {
+                "type": "object",
+                "description": "状态更新（可选）。根据当前情况更新状态，可更新的字段名见【你的状态】。如需更新关系请使用 relations 数组",
+            }
+            for s in schemas:
+                s["function"]["parameters"]["properties"]["state_update"] = spec
         return schemas
 
     def get_text_guide(self) -> str:
