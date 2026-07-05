@@ -52,10 +52,9 @@ class NarrateAction(ActionSpec):
         if target in world.agents:
             recipients = [target]
         elif target in world.locations:
-            hearable_locs = [target] + world.reverse_visibility.get(target, [])
-            recipients = [name for loc in hearable_locs for name in world.get_agents_in_location(loc)]
+            recipients = world.get_hearable_agents(target, use_location=True)
             if not recipients:
-                return [], {"summary": f"'{target}' 无人在场"}
+                return [], {"summary": f"'{target}' 及可见位置均无人在场"}
         else:
             recipients = [BROADCAST]
 
