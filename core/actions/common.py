@@ -205,8 +205,7 @@ class ObserveAction(ActionSpec):
     def execute(self, agent_name, params, world):
         agent = world.agents[agent_name]
 
-        visible_locs = [agent.location]
-        visible_locs += world.visibility.get(agent.location, [])
+        visible_locs = world.get_visible_locations(agent.location)
 
         env_parts = []
         interactable = world.interactable_keys or {}

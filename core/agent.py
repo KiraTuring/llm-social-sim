@@ -107,7 +107,7 @@ class Agent:
         if self.name in location_agents:
             location_agents.remove(self.name)
 
-        visible_locs = [self.location] + world.visibility.get(self.location, [])
+        visible_locs = world.get_visible_locations(self.location)
         loc_agents_text = ', '.join(location_agents) if location_agents else '无'
         visible_text = ', '.join(visible_locs)
         adjacent = world.get_adjacent_locations(self.location)

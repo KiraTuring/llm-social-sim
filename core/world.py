@@ -67,6 +67,10 @@ class WorldState:
             return ""
         return ", ".join(f"{k} {v}" for k, v in env.items())
 
+    def get_visible_locations(self, location: str) -> list[str]:
+        """获取从某个位置能观察到哪些位置（含自身）。可扩展支持动态可见性变化"""
+        return [location] + self.visibility.get(location, [])
+
     def add_event(self, event: str):
         """记录事件"""
         self.event_log.append(f"[tick {self.tick}] {event}")
