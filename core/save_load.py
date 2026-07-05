@@ -22,6 +22,8 @@ def serialize_agent(agent: Agent) -> dict:
         "location": agent.location,
         "relationships": agent.relationships,
         "states": agent.states,
+        "writable_states": list(agent._writable_states) if agent._writable_states else [],
+        "private_states": list(agent._private_states) if agent._private_states else [],
         "content_max_length": agent.content_max_length,
         "agent_type": "ManualAgent" if isinstance(agent, ManualAgent) else "Agent",
         "memory": serialize_memory(agent.memory),
@@ -79,10 +81,7 @@ def load_simulation_state(path: str, config: dict):
     world.set_visibility(scene.visibility or {})
     world.environment = data.get("environment", {})
     world.interactable_keys = scene.interactable_keys or {}
-    protected = {}
-    for loc, keys in scene.initial_environment.items():
-        protected[loc] = set(keys.keys())
-    world._protected_env_keys = protected
+    world._protected_env_keys = WorldState.compute_protected_env_keys(scene.initial_environment)
 
     world.message_bus = MessageBus.from_dict(data["message_bus"])
 
@@ -120,15 +119,9 @@ def load_simulation_state(path: str, config: dict):
         world.agents[name] = agent
 
     gm_data = data["gm"]
-    gm = GMAgent(
-        events=[(t, e) for t, e in gm_data["scheduled_events"]],
-        random_events=gm_data["random_events"],
-        chance=config["gm"]["random_event_chance"],
-        use_llm=gm_data.get("use_llm", config["gm"]["use_llm"]),
-        llm_chance=config["gm"].get("llm_event_chance", 0.3),
-        llm_prompt=scene.get_gm_config().get("llm_prompt", ""),
-        world_description=scene.world_description,
-        message_limit=config["gm"].get("message_limit", 15),
-    )
+    gm = GMAgent.from_config(scene, config)
+    gm.scheduled_events = [(t, e) for t, e in gm_data["scheduled_events"]]
+    gm.random_events = gm_data["random_events"]
+    gm.use_llm = gm_data.get("use_llm", config["gm"]["use_llm"])
 
     return world, scene, gm

@@ -2,7 +2,6 @@
 """通用模拟入口：支持多场景选择。"""
 
 from render.console import ConsoleRenderer
-from memory.memory import AgentMemory
 from llm.client import LLMClient
 from core.rules import RuleEngine
 from core.gm import GMAgent
@@ -58,53 +57,16 @@ def _init_world(config: dict, scene_name: str, manual_agents: list[str] | None):
     manual_names = set(manual_agents or config["simulation"].get("manual_agents", []))
 
     for cfg in scene.agents:
-        memory = AgentMemory(
-            name=cfg["name"],
-            short_limit=config["agent"]["memory_short_limit"],
-            compress_threshold=config["agent"]["memory_compress_threshold"],
-            relation_limit=config["agent"].get("relation_display_limit", 3),
-        )
-        agent_states = dict(scene.states or {})
-        cfg_states = cfg.get("states")
-        if cfg_states:
-            agent_states.update(cfg_states)
-
-        agent_kwargs = dict(
-            name=cfg["name"],
-            role=cfg["role"],
-            personality=cfg["personality"],
-            goal=cfg["goal"],
-            location=cfg["location"],
-            relationships=cfg["relationships"],
-            memory=memory,
-            content_max_length=config["agent"].get("content_max_length", 200),
-            inbox_limit=config["agent"].get("inbox_limit", 5),
-            world_description=scene.world_description,
-            states=agent_states,
-            writable_states=set(cfg.get("writable_states") or scene.writable_states or []),
-            private_states=set(cfg.get("private_states") or scene.private_states or []),
-            instruction=scene.instruction,
-        )
         if cfg["name"] in manual_names:
             manual_file = config["simulation"].get("manual_file")
-            agent = ManualAgent(**agent_kwargs, file_path=manual_file)
+            agent = ManualAgent.from_config(scene, cfg, config, file_path=manual_file)
         else:
-            agent = Agent(**agent_kwargs)
+            agent = Agent.from_config(scene, cfg, config)
         world.agents[agent.name] = agent
 
     world.action_order = list(world.agents.keys())
 
-    gm_cfg = scene.get_gm_config()
-    gm = GMAgent(
-        events=gm_cfg["events"],
-        random_events=gm_cfg["random_events"],
-        chance=config["gm"]["random_event_chance"],
-        use_llm=config["gm"]["use_llm"],
-        llm_chance=config["gm"].get("llm_event_chance", 0.3),
-        llm_prompt=gm_cfg.get("llm_prompt", ""),
-        world_description=scene.world_description,
-        message_limit=config["gm"].get("message_limit", 15),
-    )
+    gm = GMAgent.from_config(scene, config)
 
     return world, scene, gm, registry
 
@@ -165,21 +127,7 @@ async def _run_tick(world, tick: int, llm, gm, registry, rule_engine, logger, re
 
         context = await agent.perceive(world, llm_client=llm)
 
-        agents_by_location = {}
-        for loc in world.locations:
-            agents_by_location[loc] = world.get_agents_in_location(loc)
-        agent_location = world.agents[agent_name].location
-
-        validation_context = {
-            "agent_name": agent_name,
-            "agent_location": agent_location,
-            "agent_names": list(world.agents.keys()),
-            "locations": world.locations,
-            "agents_by_location": agents_by_location,
-            "hearable_agents": world.get_hearable_agents(agent_name),
-            "adjacent_locations": world.get_adjacent_locations(agent_location),
-            "interactable_keys": world.interactable_keys,
-        }
+        validation_context = world.build_validation_context(agent_name)
 
         action = await agent.think(llm, registry, context, tick, validation_context)
         messages = await agent.act(action, world, registry)
@@ -228,6 +176,25 @@ def _save_state(world, gm, scene, save_path: str):
     print(f"状态已保存到 {save_path}")
 
 
+async def run_tui_simulation(config: dict, scene_name: str, max_ticks: int | None = None, mode: str | None = None, manual_agents: list[str] | None = None, load_path: str | None = None, save_path: str | None = None):
+    """使用 Textual TUI 运行模拟"""
+    if load_path:
+        world, scene, gm, registry, start_tick = _load_world(load_path, config, max_ticks)
+    else:
+        world, scene, gm, registry = _init_world(config, scene_name, manual_agents)
+        start_tick = 1
+
+    remaining = max_ticks or config["simulation"]["max_ticks"]
+
+    from render.tui_app import SimulationTuiApp
+    app = SimulationTuiApp(
+        world=world, scene=scene, gm=gm, registry=registry,
+        config=config, start_tick=start_tick, remaining=remaining,
+        mode=mode, save_path=save_path,
+    )
+    await app.run_async()
+
+
 async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = None, mode: str | None = None, manual_agents: list[str] | None = None, load_path: str | None = None, save_path: str | None = None):
     """运行模拟"""
     remaining = max_ticks or config["simulation"]["max_ticks"]
@@ -263,6 +230,7 @@ def main():
     parser.add_argument("--manual-file", type=str, help="手动控制 JSON 文件路径", default=None)
     parser.add_argument("--save", type=str, help="运行结束后保存状态到文件", default=None)
     parser.add_argument("--load", type=str, help="从存档文件继续运行", default=None)
+    parser.add_argument("--tui", action="store_true", help="使用 TUI 界面")
 
     args = parser.parse_args()
 
@@ -283,6 +251,10 @@ def main():
         print("可用场景:")
         for scene in scenes:
             print(f"  - {scene}")
+        return
+
+    if args.tui:
+        asyncio.run(run_tui_simulation(config, args.scene, args.ticks, args.mode, args.manual, load_path=args.load, save_path=args.save))
         return
 
     asyncio.run(run_simulation(config, args.scene, args.ticks, args.mode, args.manual, load_path=args.load, save_path=args.save))

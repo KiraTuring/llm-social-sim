@@ -2,6 +2,8 @@
 
 from typing import TYPE_CHECKING
 
+from memory.memory import AgentMemory
+
 if TYPE_CHECKING:
     from core.action import ActionRegistry
     from core.world import WorldState
@@ -45,6 +47,37 @@ class Agent:
         self._writable_states = set(writable_states) if writable_states else set()
         self._private_states = set(private_states) if private_states else set()
         self._last_action = None
+
+    @classmethod
+    def from_config(cls, scene, cfg, config, **extra):
+        """从 scene 配置和模拟配置构建 Agent（消除重复的创建逻辑）。"""
+        memory = AgentMemory(
+            name=cfg["name"],
+            short_limit=config["agent"]["memory_short_limit"],
+            compress_threshold=config["agent"]["memory_compress_threshold"],
+            relation_limit=config["agent"].get("relation_display_limit", 3),
+        )
+        states = dict(scene.states or {})
+        if cfg.get("states"):
+            states.update(cfg["states"])
+
+        return cls(
+            name=cfg["name"],
+            role=cfg["role"],
+            personality=cfg["personality"],
+            goal=cfg["goal"],
+            location=cfg["location"],
+            relationships=cfg["relationships"],
+            memory=memory,
+            content_max_length=config["agent"].get("content_max_length", 200),
+            inbox_limit=config["agent"].get("inbox_limit", 5),
+            world_description=scene.world_description,
+            states=states,
+            writable_states=set(cfg.get("writable_states") or scene.writable_states or []),
+            private_states=set(cfg.get("private_states") or scene.private_states or []),
+            instruction=scene.instruction,
+            **extra,
+        )
 
     def build_system_prompt(self, registry: "ActionRegistry") -> str:
         """构建 System Prompt"""

@@ -44,6 +44,11 @@ class WorldState:
                 reverse.setdefault(vloc, []).append(loc)
         return reverse
 
+    @staticmethod
+    def compute_protected_env_keys(initial_environment: dict[str, dict[str, str]]) -> dict[str, set[str]]:
+        """从初始环境配置计算受保护的指标 key 集合"""
+        return {loc: set(keys.keys()) for loc, keys in initial_environment.items()}
+
     def get_adjacent_locations(self, loc: str) -> list[str]:
         """获取从某个位置可达的相邻位置"""
         if not self.connections:
@@ -123,3 +128,18 @@ class WorldState:
         """轮换行动顺序"""
         if len(self.action_order) > 1:
             self.action_order = self.action_order[1:] + [self.action_order[0]]
+
+    def build_validation_context(self, agent_name: str) -> dict:
+        """为指定 Agent 构建 LLM 参数校验上下文"""
+        agent_location = self.agents[agent_name].location
+        agents_by_location = {loc: self.get_agents_in_location(loc) for loc in self.locations}
+        return {
+            "agent_name": agent_name,
+            "agent_location": agent_location,
+            "agent_names": list(self.agents.keys()),
+            "locations": self.locations,
+            "agents_by_location": agents_by_location,
+            "hearable_agents": self.get_hearable_agents(agent_name),
+            "adjacent_locations": self.get_adjacent_locations(agent_location),
+            "interactable_keys": self.interactable_keys,
+        }

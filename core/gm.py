@@ -34,6 +34,21 @@ class GMAgent:
         self.registry.register(ModifyEnvironmentAction())
         self.registry.register(ModifyCharStateAction())
 
+    @classmethod
+    def from_config(cls, scene, config):
+        """从 scene 配置和模拟配置构建 GMAgent。"""
+        gm_cfg = scene.get_gm_config()
+        return cls(
+            events=gm_cfg["events"],
+            random_events=gm_cfg["random_events"],
+            chance=config["gm"]["random_event_chance"],
+            use_llm=config["gm"]["use_llm"],
+            llm_chance=config["gm"].get("llm_event_chance", 0.3),
+            llm_prompt=gm_cfg.get("llm_prompt", ""),
+            world_description=scene.world_description,
+            message_limit=config["gm"].get("message_limit", 15),
+        )
+
     async def check_and_inject(self, world: "WorldState", llm_client: "LLMClient | None" = None):
         """每个 tick 检查是否需要注入事件"""
 

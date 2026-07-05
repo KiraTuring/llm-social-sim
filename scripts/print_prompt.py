@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#! /usr/bin/env python3
 """打印指定场景中 Agent 的 system prompt，方便开发和调试"""
 
 import argparse
@@ -7,7 +7,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from memory.memory import AgentMemory
 from core.agent import Agent
 from core.action import ActionRegistry
 from scenarios.utils import load_scene
@@ -34,35 +33,7 @@ def main():
         sys.exit(1)
 
     for cfg in agents:
-        memory = AgentMemory(
-            name=cfg["name"],
-            short_limit=config["agent"]["memory_short_limit"],
-            compress_threshold=config["agent"]["memory_compress_threshold"],
-        )
-        agent_states = dict(scene.states or {})
-        cfg_states = cfg.get("states")
-        if cfg_states:
-            agent_states.update(cfg_states)
-
-        agent_writable = cfg.get("writable_states") or scene.writable_states or []
-        agent_private = cfg.get("private_states") or scene.private_states or []
-
-        agent = Agent(
-            name=cfg["name"],
-            role=cfg["role"],
-            personality=cfg["personality"],
-            goal=cfg["goal"],
-            location=cfg["location"],
-            relationships=cfg["relationships"],
-            memory=memory,
-            content_max_length=config["agent"].get("content_max_length", 200),
-            inbox_limit=config["agent"].get("inbox_limit", 5),
-            world_description=scene.world_description,
-            states=agent_states,
-            writable_states=set(agent_writable),
-            private_states=set(agent_private),
-            instruction=scene.instruction,
-        )
+        agent = Agent.from_config(scene, cfg, config)
 
         prompt = agent.build_system_prompt(registry)
 
