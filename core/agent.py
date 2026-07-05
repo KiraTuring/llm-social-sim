@@ -26,6 +26,7 @@ class Agent:
         world_description: str = "",
         states: dict | None = None,
         writable_states: set | None = None,
+        instruction: str = "",
     ):
         self.name = name
         self.role = role
@@ -37,6 +38,7 @@ class Agent:
         self.content_max_length = content_max_length
         self.inbox_limit = inbox_limit
         self.world_description = world_description
+        self.instruction = instruction
 
         self.states = dict(states) if states else {}
         self._writable_states = set(writable_states) if writable_states else set()
@@ -84,7 +86,9 @@ class Agent:
 
 ## 输出要求
 每次必须选择一个工具来行动。
-所有工具都包含可选的 internal_monologue 字段（内心独白，别人看不到）。"""
+所有工具都包含可选的 internal_monologue 字段（内心独白，别人看不到）。
+
+{self.instruction}"""
 
     async def perceive(self, world: "WorldState", llm_client: "LLMClient | None" = None) -> str:
         """感知：收集消息 + 环境 + 记忆"""

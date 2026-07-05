@@ -20,6 +20,7 @@ class Scene:
     connections: list[tuple[str, str]] = []
     visibility: dict[str, list[str]] | None = None
     render_config: dict = {}
+    instruction: str = ""
 
     def setup(self, registry: ActionRegistry) -> None:
         """注册场景特定的 actions"""

@@ -85,6 +85,7 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
                 world_description=scene.world_description,
                 states=cfg.get("states"),
                 writable_states=set(cfg.get("writable_states", [])),
+                instruction=scene.instruction,
             )
             if cfg["name"] in manual_names:
                 manual_file = config["simulation"].get("manual_file")
