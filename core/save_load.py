@@ -79,6 +79,10 @@ def load_simulation_state(path: str, config: dict):
     world.set_visibility(scene.visibility or {})
     world.environment = data.get("environment", {})
     world.interactable_keys = scene.interactable_keys or {}
+    protected = {}
+    for loc, keys in scene.initial_environment.items():
+        protected[loc] = set(keys.keys())
+    world._protected_env_keys = protected
 
     world.message_bus = MessageBus.from_dict(data["message_bus"])
 

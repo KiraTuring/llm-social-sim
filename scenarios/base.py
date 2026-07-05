@@ -44,6 +44,10 @@ class Scene:
         world._adjacency = WorldState.compute_adjacency(self.connections)
         world.set_visibility(self.visibility or {})
         world.environment = {k: dict(v) for k, v in self.initial_environment.items()}
+        protected = {}
+        for loc, keys in self.initial_environment.items():
+            protected[loc] = set(keys.keys())
+        world._protected_env_keys = protected
         world.interactable_keys = self.interactable_keys
 
         for agent_cfg in self.agents:

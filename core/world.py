@@ -24,6 +24,7 @@ class WorldState:
     message_bus: Any = None
     environment: dict[str, dict[str, str]] = field(default_factory=dict)
     interactable_keys: dict[str, list[str]] = field(default_factory=dict)
+    _protected_env_keys: dict[str, set[str]] = field(default_factory=dict)
 
     @staticmethod
     def compute_adjacency(connections: list[tuple[str, str]]) -> dict[str, set[str]]:
@@ -59,6 +60,22 @@ class WorldState:
             return f"'{location}' 不是有效位置"
         self.environment.setdefault(location, {})[key] = value
         return None
+
+    def modify_environment(self, location: str, key: str, value: str) -> tuple[bool, str]:
+        """GM 专用单一入口：value='delete' 时删除 key，否则更新。
+        返回 (success, message)，message 可直接用作 summary。"""
+        if location not in self.locations:
+            return False, f"'{location}' 不是有效位置"
+        if value != "delete":
+            self.environment.setdefault(location, {})[key] = value
+            return True, f"环境变更: {location}.{key} → {value}"
+        # value == "delete"
+        if key not in self.environment.get(location, {}):
+            return False, f"'{location}' 中不存在指标 '{key}'"
+        if key in self._protected_env_keys.get(location, set()):
+            return False, f"'{key}' 是预定义指标，不可删除"
+        del self.environment[location][key]
+        return True, f"环境指标已删除: {location}.{key}"
 
     def get_environment_summary(self, location: str) -> str:
         """获取某个位置的格式化环境摘要"""

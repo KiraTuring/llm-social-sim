@@ -68,7 +68,7 @@ class NarrateAction(ActionSpec):
 
 class ModifyEnvironmentAction(ActionSpec):
     name = "modify_environment"
-    description = "修改某个位置的环境状态指标, 你可以添加新的指标或修改已有指标的值。"
+    description = "修改或删除某个位置的环境状态指标。value='delete' 时删除该指标（不可删除预定义指标），否则设为新值。"
     parameters = {"location": {"type": "string"}, "key": {"type": "string"}, "value": {"type": "string"}}
     text_format = "[ACTION]modify_environment[/ACTION]\n[TARGET]{位置}[/TARGET]\n[CONTENT]{key} -> {value}[/CONTENT]"
 
@@ -91,7 +91,7 @@ class ModifyEnvironmentAction(ActionSpec):
                         },
                         "value": {
                             "type": "string",
-                            "description": "新值，如97%、偏高、稳定",
+                            "description": "新值（如97%、偏高）或 'delete' 删除该指标",
                         },
                     },
                     "required": ["location", "key", "value"],
@@ -112,9 +112,8 @@ class ModifyEnvironmentAction(ActionSpec):
         value = params.get("value", "")
         if not loc or not key or not value:
             return [], {"summary": "参数不完整，需要 location/key/value"}
-        err = world.update_environment(loc, key, value)
-        summary = err if err else f"环境变更: {loc}.{key} → {value}"
-        return [], {"summary": summary}
+        success, msg = world.modify_environment(loc, key, value)
+        return [], {"summary": msg}
 
 
 class ModifyCharStateAction(ActionSpec):
