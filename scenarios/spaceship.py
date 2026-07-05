@@ -38,7 +38,7 @@ class SpaceshipScene(Scene):
         "请在行动时通过 state_update 参数同步更新你的状态。"
     )
 
-    states = {"情绪": "平静", "精力": 100}
+    states = {"情绪": "平静"}
     writable_states = ["情绪"]
 
     agents = [

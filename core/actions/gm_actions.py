@@ -68,7 +68,7 @@ class NarrateAction(ActionSpec):
 
 class ModifyEnvironmentAction(ActionSpec):
     name = "modify_environment"
-    description = "修改某个位置的环境状态指标（如引擎温度、冷却效率等）"
+    description = "修改某个位置的环境状态指标（如引擎温度、冷却效率等）, 你可以添加新的指标或修改已有指标的值。"
     parameters = {"location": {"type": "string"}, "key": {"type": "string"}, "value": {"type": "string"}}
     text_format = "[ACTION]modify_environment[/ACTION]\n[TARGET]{位置}[/TARGET]\n[CONTENT]{key} -> {value}[/CONTENT]"
 
