@@ -66,6 +66,8 @@ def load_simulation_state(path: str, config: dict):
         raise ValueError(f"不支持的存档版本: {data.get('version')}")
 
     scene = load_scene(data["scene"])
+    display_name = data.get("scene_display", data["scene"])
+    print(f"载入存档: {display_name}")
 
     world = WorldState()
     world.tick = data["tick"]
@@ -110,8 +112,6 @@ def load_simulation_state(path: str, config: dict):
             agent = ManualAgent(**agent_kwargs)
         else:
             agent = Agent(**agent_kwargs)
-
-        agent.states = agent_data.get("states", {})
 
         world.agents[name] = agent
 

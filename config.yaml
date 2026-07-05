@@ -17,7 +17,6 @@ simulation:
 agent:
   memory_short_limit: 10
   memory_compress_threshold: 30
-  max_energy: 100
   content_max_length: 200
 
 gm:

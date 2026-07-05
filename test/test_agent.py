@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 from core.agent import Agent
 from core.action import ActionSpec, ActionRegistry
+from core.message import BROADCAST
 from core.world import WorldState
 from llm.client import LLMClient
 from memory.memory import AgentMemory
@@ -22,9 +23,9 @@ class TestSpeakAction(ActionSpec):
     def execute(self, agent_name, params, world):
         from core.message import Message
 
-        target = params.get("target", "all")
+        target = params.get("target", BROADCAST)
         content = params.get("content", "")
-        recipients = ["all"] if target == "all" else [target]
+        recipients = [BROADCAST] if target == BROADCAST else [target]
 
         msg = Message(sender=agent_name, recipients=recipients, content=content, msg_type="speech", tick=world.tick)
         world.message_bus.send(msg)

@@ -189,8 +189,6 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
                 })
                 rule_engine.trigger(msg.msg_type, msg, world)
 
-        world.message_bus.get_all()
-
         renderer.render_tick(world, agent_actions)
 
         if config["simulation"]["rotate_order"]:
@@ -234,7 +232,7 @@ def main():
         sys.exit(1)
 
     if args.scene is None:
-        args.scene = "tavern"
+        args.scene = config.get("scene", "tavern")
 
     config = load_config(args.config)
 

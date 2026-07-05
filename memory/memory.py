@@ -1,10 +1,5 @@
 """Agent 记忆管理：短期记忆 + 摘要压缩 + 关系日志。"""
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from core.agent import Agent
-
 
 class AgentMemory:
     """Agent 记忆系统"""
