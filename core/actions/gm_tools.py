@@ -68,7 +68,7 @@ class NarrateAction(ActionSpec):
 
 class ModifyEnvironmentAction(ActionSpec):
     name = "modify_environment"
-    description = "修改或删除某个位置的环境状态指标。value='delete' 时删除该指标（不可删除预定义指标），否则设为新值。"
+    description = "管理某个位置的环境状态指标。可以添加新指标（指定新 key 和 value）、修改现有指标（指定已有 key 和新 value）、或删除无用指标（value='delete'，不可删除场景预定义指标）。"
     parameters = {"location": {"type": "string"}, "key": {"type": "string"}, "value": {"type": "string"}}
     text_format = "[ACTION]modify_environment[/ACTION]\n[TARGET]{位置}[/TARGET]\n[CONTENT]{key} -> {value}[/CONTENT]"
 
@@ -91,7 +91,7 @@ class ModifyEnvironmentAction(ActionSpec):
                         },
                         "value": {
                             "type": "string",
-                            "description": "新值（如97%、偏高）或 'delete' 删除该指标",
+                            "description": "新值（如97%、偏高）；设为新值即添加或修改指标，设为 'delete' 则删除该指标",
                         },
                     },
                     "required": ["location", "key", "value"],

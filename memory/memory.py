@@ -1,18 +1,16 @@
-"""Agent 记忆管理：短期记忆 + 摘要压缩 + 关系日志。"""
+"""Agent 记忆管理：短期记忆 + 摘要压缩。"""
 
 
 class AgentMemory:
     """Agent 记忆系统"""
 
-    def __init__(self, name: str, short_limit: int, compress_threshold: int, relation_limit: int = 3):
+    def __init__(self, name: str, short_limit: int, compress_threshold: int):
         self.name = name
         self.short_limit = short_limit
         self.compress_threshold = compress_threshold
-        self.relation_limit = relation_limit
 
         self._short_term: list[dict] = []
         self._summary: str = ""
-        self._relations: dict[str, list[str]] = {}
         self._compress_needed = False
 
     def to_dict(self) -> dict:
@@ -20,28 +18,21 @@ class AgentMemory:
         return {
             "short_term": self._short_term,
             "summary": self._summary,
-            "relations": self._relations,
             "compress_needed": self._compress_needed,
         }
 
     @classmethod
-    def from_dict(cls, data: dict, name: str, short_limit: int, compress_threshold: int, relation_limit: int = 3) -> "AgentMemory":
+    def from_dict(cls, data: dict, name: str, short_limit: int, compress_threshold: int) -> "AgentMemory":
         """从 dict 恢复 AgentMemory"""
-        memory = cls(name=name, short_limit=short_limit, compress_threshold=compress_threshold, relation_limit=relation_limit)
+        memory = cls(name=name, short_limit=short_limit, compress_threshold=compress_threshold)
         memory._short_term = data.get("short_term", [])
         memory._summary = data.get("summary", "")
-        memory._relations = data.get("relations", {})
         memory._compress_needed = data.get("compress_needed", False)
         return memory
 
-    def add(self, event: str, agent_name: str | None = None, tick: int = 0):
+    def add(self, event: str, tick: int = 0):
         """添加记忆事件"""
-        if agent_name:
-            if agent_name not in self._relations:
-                self._relations[agent_name] = []
-            self._relations[agent_name].append(event)
-        else:
-            self._short_term.append({"tick": tick, "event": event})
+        self._short_term.append({"tick": tick, "event": event})
 
         if len(self._short_term) >= self.compress_threshold:
             self._compress_needed = True
@@ -56,14 +47,6 @@ class AgentMemory:
         if self._short_term:
             recent = "\n".join([f"- {e['event']}" for e in self._short_term])
             parts.append(f"【你最近记得的事】\n{recent}")
-
-        if self._relations:
-            rel_parts = []
-            for other, events in self._relations.items():
-                if events:
-                    rel_parts.append(f"{other}: {'; '.join(events[-self.relation_limit:])}")
-            if rel_parts:
-                parts.append(f"【你对其他人的印象】\n" + "\n".join(rel_parts))
 
         return "\n\n".join(parts)
 

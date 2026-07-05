@@ -55,7 +55,6 @@ class Agent:
             name=cfg["name"],
             short_limit=config["agent"]["memory_short_limit"],
             compress_threshold=config["agent"]["memory_compress_threshold"],
-            relation_limit=config["agent"].get("relation_display_limit", 3),
         )
         states = dict(scene.states or {})
         if cfg.get("states"):
@@ -89,7 +88,8 @@ class Agent:
         )
 
         relations_text = "\n".join(
-            [f"- {name}: {rel.get('impression', '')}" for name, rel in self.relationships.items()]
+            [f"- {name}: 信任度 {rel.get('trust', 0)}，印象「{rel.get('impression', '')}」"
+             for name, rel in self.relationships.items()]
         )
 
         world_part = f"\n\n## 世界\n{self.world_description}" if self.world_description else ""
@@ -190,10 +190,17 @@ class Agent:
                     for name, changes in rel_updates.items():
                         if name not in self.relationships:
                             continue
+                        old_trust = self.relationships[name].get("trust", 0)
                         self.relationships[name]["trust"] += changes.get("trust_change", 0)
                         self.relationships[name]["trust"] = max(-5, min(5, self.relationships[name]["trust"]))
                         if "impression" in changes:
                             self.relationships[name]["impression"] = changes["impression"]
+                        if llm_client.logger:
+                            llm_client.logger.debug(
+                                f"关系变化: {self.name}→{name} "
+                                f"信任 {old_trust}→{self.relationships[name]['trust']} "
+                                f"{', 印象更新' if 'impression' in changes else ''}"
+                            )
             except Exception:
                 pass
 

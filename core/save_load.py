@@ -91,7 +91,6 @@ def load_simulation_state(path: str, config: dict):
             name=name,
             short_limit=config["agent"]["memory_short_limit"],
             compress_threshold=config["agent"]["memory_compress_threshold"],
-            relation_limit=config["agent"].get("relation_display_limit", 3),
         )
 
         agent_kwargs = dict(
