@@ -59,7 +59,7 @@ class Agent:
 
         world_part = f"\n\n## 世界\n{self.world_description}" if self.world_description else ""
 
-        return f"""## 模拟规则
+        prompt = f"""## 模拟规则
 你在扮演 {self.name}（{self.role}），在一个持续运行的社交模拟世界中进行角色扮演。
 模拟以 tick 为单位推进，每个 tick 你可以执行一次行动。{world_part}
 
@@ -86,9 +86,12 @@ class Agent:
 
 ## 输出要求
 每次必须选择一个工具来行动。
-所有工具都包含可选的 internal_monologue 字段（内心独白，别人看不到）。
+所有工具都包含可选的 internal_monologue 字段（内心独白，别人看不到）。"""
 
-{self.instruction}"""
+        if self.instruction:
+            prompt += f"\n\n{self.instruction}"
+
+        return prompt
 
     async def perceive(self, world: "WorldState", llm_client: "LLMClient | None" = None) -> str:
         """感知：收集消息 + 环境 + 记忆"""
