@@ -31,6 +31,7 @@ class MyScene(Scene):
 ```python
     gm_llm_prompt: str = ""          # LLM GM 的 system prompt
     connections: list[tuple[str, str]] = []  # 地点连通边（双向），空=全连通
+    instruction: str = ""            # 附加在 Agent system prompt 末尾的额外指引
 ```
 Agent 配置 `<list[dict]>` 每个元素必须包含: `name`, `role`, `personality`, `goal`, `location`, `relationships`（启动时自动校验，缺字段立即报错）。
 
@@ -511,6 +512,19 @@ def _exec(action):
 | `test_gm.py` | GM 事件注入 |
 | `test_retry.py` | LLM 重试机制（无 tool call、不合法工具名、不合法参数） |
 | `test_bugs.py` | Bug 修复验证（model 配置、compress 空返回、visibility 安全、message_bus 字段） |
+
+## 调试工具
+
+### `scripts/print_prompt.py`
+
+打印指定场景中 Agent 的完整 system prompt，方便查看 LLM 实际收到的上下文，无需运行完整模拟：
+
+```bash
+python3 scripts/print_prompt.py spaceship           # 打印所有角色
+python3 scripts/print_prompt.py tavern --agent 艾莉娅  # 只打印指定角色
+```
+
+不需要 API key，毫秒级输出。`instruction` 字段的内容会出现在 prompt 末尾「输出要求」下方。
 
 ## 日志系统
 
