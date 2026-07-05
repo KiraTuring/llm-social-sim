@@ -298,7 +298,7 @@ class InteractAction(ActionSpec):
         modifications = params.get("modifications", [])
 
         recipients = world.get_hearable_agents(agent_name)
-        msg = Message(sender=agent_name, recipients=recipients, content=content, msg_type="action", tick=world.tick)
+        msg = Message(sender=agent_name, recipients=recipients, content=content, msg_type="interact", tick=world.tick)
         world.message_bus.send(msg)
 
         if modifications:

@@ -47,8 +47,13 @@ class GMAgent:
                 self.logger.info(f"GM 事件: {e}")
             self._broadcast_event(e, world)
 
-        if self.use_llm and llm_client and random.random() < self.llm_chance:
-            await self._generate_llm_event(world, llm_client)
+        if self.use_llm and llm_client:
+            had_interact = any(
+                m.msg_type == "interact" and m.tick == world.tick - 1
+                for m in world.message_bus.get_recent(50)
+            )
+            if had_interact or random.random() < self.llm_chance:
+                await self._generate_llm_event(world, llm_client)
 
     def _check_scheduled(self, world: "WorldState") -> str | None:
         """检查计划事件，支持 3-tuple (tick, event, changes) 格式"""
