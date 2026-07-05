@@ -435,7 +435,7 @@ GM 负责向世界注入外部事件，分三级触发（互不阻塞，各自�
 
 ### LLM 动态事件
 
-GM 拥有自己的 `ActionRegistry`，注册 `core/actions/gm_actions.py` 中的 GM 专用 Action。当前支持:
+GM 拥有自己的 `ActionRegistry`，注册 `core/actions/gm_tools.py` 中的 GM 专用 Action。当前支持:
 
 | Action | 用途 | 未来扩展 |
 |--------|------|---------|

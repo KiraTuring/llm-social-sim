@@ -4,7 +4,7 @@ import random
 from typing import TYPE_CHECKING
 
 from core.action import ActionRegistry
-from core.actions.gm_actions import NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction
+from core.actions.gm_tools import NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction
 
 if TYPE_CHECKING:
     from core.world import WorldState
