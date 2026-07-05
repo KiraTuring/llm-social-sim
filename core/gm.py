@@ -132,7 +132,7 @@ class GMAgent:
         lines.append("- 不要生成和近期事件冲突或简单重复的事件，可以是新事件或对近期事件的后续")
         lines.append("- 不要替角色做决定或直接控制角色的行为")
         lines.append("- 不要改变角色的位置")
-        lines.append("- 留意角色最近的消息，基于角色与环境的互动产生合理的事件响应或后续影响")
+        lines.append("- 留意角色最近的消息，基于角色与环境的互动产生合理的事件响应或后续影响。注意你要回应的是交互行为(interact)而不是聊天(speak/whisper)")
         lines.append("- 事件要简短自然，一句话")
         lines.append("- 最多同时生成一个新事件。可以多次调用工具，但所有调用都围绕同一个事件")
         lines.append("")
