@@ -45,6 +45,7 @@ def main():
             agent_states.update(cfg_states)
 
         agent_writable = cfg.get("writable_states") or scene.writable_states or []
+        agent_private = cfg.get("private_states") or scene.private_states or []
 
         agent = Agent(
             name=cfg["name"],
@@ -59,6 +60,7 @@ def main():
             world_description=scene.world_description,
             states=agent_states,
             writable_states=set(agent_writable),
+            private_states=set(agent_private),
             instruction=scene.instruction,
         )
 

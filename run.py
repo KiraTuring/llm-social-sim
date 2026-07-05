@@ -78,6 +78,7 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
                 agent_states.update(cfg_states)
 
             agent_writable = cfg.get("writable_states") or scene.writable_states or []
+            agent_private = cfg.get("private_states") or scene.private_states or []
 
             agent_kwargs = dict(
                 name=cfg["name"],
@@ -92,6 +93,7 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
                 world_description=scene.world_description,
                 states=agent_states,
                 writable_states=set(agent_writable),
+                private_states=set(agent_private),
                 instruction=scene.instruction,
             )
             if cfg["name"] in manual_names:

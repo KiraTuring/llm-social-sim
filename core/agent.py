@@ -26,6 +26,7 @@ class Agent:
         world_description: str = "",
         states: dict | None = None,
         writable_states: set | None = None,
+        private_states: set | None = None,
         instruction: str = "",
     ):
         self.name = name
@@ -42,6 +43,7 @@ class Agent:
 
         self.states = dict(states) if states else {}
         self._writable_states = set(writable_states) if writable_states else set()
+        self._private_states = set(private_states) if private_states else set()
         self._last_action = None
 
     def build_system_prompt(self, registry: "ActionRegistry") -> str:

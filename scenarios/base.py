@@ -23,6 +23,7 @@ class Scene:
     instruction: str = ""
     states: dict = {}
     writable_states: list = []
+    private_states: list = []
 
     def setup(self, registry: ActionRegistry) -> None:
         """注册场景特定的 actions"""

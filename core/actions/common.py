@@ -226,7 +226,8 @@ class ObserveAction(ActionSpec):
                 if name == agent_name:
                     continue
                 other = world.agents[name]
-                state_str = " ".join(f"{k}:{v}" for k, v in other.states.items())
+                visible = {k: v for k, v in other.states.items() if k not in other._private_states}
+                state_str = " ".join(f"{k}:{v}" for k, v in visible.items())
                 seen.append(f"{name}({other.role})在{loc} - {state_str}")
 
         parts = [f"你在{agent.location}"]
