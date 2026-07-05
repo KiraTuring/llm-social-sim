@@ -4,7 +4,7 @@ import random
 from typing import TYPE_CHECKING
 
 from core.action import ActionRegistry
-from core.actions.gm_actions import NarrateAction, ModifyEnvironmentAction
+from core.actions.gm_actions import NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction
 
 if TYPE_CHECKING:
     from core.world import WorldState
@@ -32,6 +32,7 @@ class GMAgent:
         self.registry = ActionRegistry(include_state_update=False)
         self.registry.register(NarrateAction())
         self.registry.register(ModifyEnvironmentAction())
+        self.registry.register(ModifyCharStateAction())
 
     async def check_and_inject(self, world: "WorldState", llm_client: "LLMClient | None" = None):
         """每个 tick 检查是否需要注入事件"""

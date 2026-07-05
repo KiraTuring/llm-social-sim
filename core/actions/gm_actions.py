@@ -115,3 +115,56 @@ class ModifyEnvironmentAction(ActionSpec):
         err = world.update_environment(loc, key, value)
         summary = err if err else f"环境变更: {loc}.{key} → {value}"
         return [], {"summary": summary}
+
+
+class ModifyCharStateAction(ActionSpec):
+    name = "modify_char_state"
+    description = "修改角色的非主观状态（如精力、体力、伤势等）。情绪类主观状态由角色自主控制，此工具应仅用于角色无法自行改变的外部属性。"
+    parameters = {"target": {"type": "string"}, "key": {"type": "string"}, "value": {"type": "string"}}
+    text_format = "[ACTION]modify_char_state[/ACTION]\n[TARGET]{角色名}[/TARGET]\n[CONTENT]{key} -> {value}[/CONTENT]"
+
+    def get_tool_schema(self):
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "target": {
+                            "type": "string",
+                            "description": "目标角色名",
+                        },
+                        "key": {
+                            "type": "string",
+                            "description": "状态名称，如精力、体力、伤势",
+                        },
+                        "value": {
+                            "type": "string",
+                            "description": "新值",
+                        },
+                    },
+                    "required": ["target", "key", "value"],
+                },
+            },
+        }
+
+    def validate_params(self, params, context):
+        target = params.get("target", "")
+        agent_names = context.get("agent_names", [])
+        if target and target not in agent_names:
+            return f"'{target}' 不是有效角色名，可选: {', '.join(agent_names)}"
+        return None
+
+    def execute(self, agent_name, params, world):
+        target = params.get("target", "")
+        key = params.get("key", "")
+        value = params.get("value", "")
+        if not target or not key or not value:
+            return [], {"summary": "参数不完整，需要 target/key/value"}
+        if target not in world.agents:
+            return [], {"summary": f"未找到角色 {target}"}
+        world.agents[target].states[key] = value
+        summary = f"角色状态: {target}.{key} → {value}"
+        return [], {"summary": summary}
