@@ -42,8 +42,7 @@ class Scene:
 
         world.connections = self.connections
         world._adjacency = WorldState.compute_adjacency(self.connections)
-        world.visibility = self.visibility or {}
-        world.reverse_visibility = WorldState.compute_reverse_visibility(world.visibility)
+        world.set_visibility(self.visibility or {})
         world.environment = {k: dict(v) for k, v in self.initial_environment.items()}
         world.interactable_keys = self.interactable_keys
 

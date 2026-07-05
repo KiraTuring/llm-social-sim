@@ -76,8 +76,7 @@ def load_simulation_state(path: str, config: dict):
     world._adjacency = WorldState.compute_adjacency(world.connections)
     world.event_log = data["event_log"]
     world.action_order = data["action_order"]
-    world.visibility = scene.visibility or {}
-    world.reverse_visibility = WorldState.compute_reverse_visibility(world.visibility)
+    world.set_visibility(scene.visibility or {})
     world.environment = data.get("environment", {})
     world.interactable_keys = scene.interactable_keys or {}
 

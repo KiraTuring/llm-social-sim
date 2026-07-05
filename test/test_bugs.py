@@ -84,15 +84,15 @@ class TestBug2CompressNoop(unittest.TestCase):
 
 
 class TestBug3VisibilitySafe(unittest.TestCase):
-    """Bug 3: WorldState.visibility 始终为 dict"""
+    """Bug 3: WorldState 默认 visible_locations 为自身"""
 
-    def test_world_default_visibility(self):
-        """WorldState 默认 visibility 应为 {}"""
-        w = WorldState()
-        self.assertEqual(w.visibility, {})
+    def test_world_default_visible_locations(self):
+        """WorldState 默认 get_visible_locations 应只返回自身"""
+        w = WorldState(locations=["a", "b"])
+        self.assertEqual(w.get_visible_locations("a"), ["a"])
 
     def test_scene_none_visibility(self):
-        """Scene 设 visibility=None 时 init_world 应产出 {}"""
+        """Scene 设 visibility=None 时 init_world 后只能看见自己"""
         class TestScene(Scene):
             name = "test"
             locations = ["a"]
@@ -102,11 +102,10 @@ class TestBug3VisibilitySafe(unittest.TestCase):
             visibility = None
 
         world = TestScene().init_world()
-        self.assertIsInstance(world.visibility, dict)
-        self.assertEqual(world.visibility, {})
+        self.assertEqual(world.get_visible_locations("a"), ["a"])
 
     def test_scene_empty_visibility(self):
-        """Scene 设 visibility={} 时 init_world 仍为 {}"""
+        """Scene 设 visibility={} 时 init_world 后只能看见自己"""
         class TestScene(Scene):
             name = "test"
             locations = ["a"]
@@ -116,10 +115,10 @@ class TestBug3VisibilitySafe(unittest.TestCase):
             visibility = {}
 
         world = TestScene().init_world()
-        self.assertEqual(world.visibility, {})
+        self.assertEqual(world.get_visible_locations("a"), ["a"])
 
     def test_scene_with_visibility(self):
-        """Scene 有 visibility 数据时正确传递"""
+        """Scene 有 visibility 数据时正确传播给 get_visible_locations"""
         class TestScene(Scene):
             name = "test"
             locations = ["a", "b"]
@@ -129,15 +128,16 @@ class TestBug3VisibilitySafe(unittest.TestCase):
             visibility = {"a": ["b"]}
 
         world = TestScene().init_world()
-        self.assertEqual(world.visibility, {"a": ["b"]})
+        self.assertIn("b", world.get_visible_locations("a"))
+        self.assertNotIn("a", world.get_visible_locations("b"))
 
-    def test_visibility_get_never_crash(self):
-        """visibility.get() 在各种场景下都不应 AttributeError"""
-        w = WorldState()
-        self.assertEqual(w.visibility.get("不存在", []), [])
+    def test_visible_locations_never_crash(self):
+        """get_visible_locations 对各种输入不抛异常"""
+        w = WorldState(locations=["a", "b"])
+        self.assertEqual(w.get_visible_locations("不存在"), ["不存在"])
 
-        w.visibility = {}
-        self.assertEqual(w.visibility.get("不存在", []), [])
+        w.set_visibility({})
+        self.assertEqual(w.get_visible_locations("不存在"), ["不存在"])
 
 
 class TestBug4MessageBusField(unittest.TestCase):

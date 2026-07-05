@@ -16,8 +16,8 @@ class WorldState:
     locations: list[str] = field(default_factory=list)
     connections: list[tuple[str, str]] = field(default_factory=list)
     _adjacency: dict[str, set[str]] = field(default_factory=dict)
-    visibility: dict[str, list[str]] = field(default_factory=dict)
-    reverse_visibility: dict[str, list[str]] = field(default_factory=dict)
+    _visibility: dict[str, list[str]] = field(default_factory=dict)
+    _reverse_visibility: dict[str, list[str]] = field(default_factory=dict)
     agents: dict[str, "Agent"] = field(default_factory=dict)
     event_log: list[str] = field(default_factory=list)
     action_order: list[str] = field(default_factory=list)
@@ -69,7 +69,12 @@ class WorldState:
 
     def get_visible_locations(self, location: str) -> list[str]:
         """获取从某个位置能观察到哪些位置（含自身）。可扩展支持动态可见性变化"""
-        return [location] + self.visibility.get(location, [])
+        return [location] + self._visibility.get(location, [])
+
+    def set_visibility(self, visibility: dict[str, list[str]]) -> None:
+        """设置可见性并自动计算逆可见性"""
+        self._visibility = dict(visibility) if visibility else {}
+        self._reverse_visibility = self.compute_reverse_visibility(self._visibility)
 
     def add_event(self, event: str):
         """记录事件"""
@@ -86,7 +91,7 @@ class WorldState:
         use_location=True:       target 是位置名
         """
         base_loc = target if use_location else self.agents[target].location
-        hearable_locs = [base_loc] + self.reverse_visibility.get(base_loc, [])
+        hearable_locs = [base_loc] + self._reverse_visibility.get(base_loc, [])
         result = []
         for loc in hearable_locs:
             for name in self.get_agents_in_location(loc):
