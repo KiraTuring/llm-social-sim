@@ -22,7 +22,6 @@ class Agent:
         relationships: dict,
         memory: "AgentMemory",
         content_max_length: int = 200,
-        max_energy: int = 100,
         inbox_limit: int = 5,
         world_description: str = "",
         states: dict | None = None,
@@ -39,8 +38,8 @@ class Agent:
         self.inbox_limit = inbox_limit
         self.world_description = world_description
 
-        self.states = dict(states) if states else {"情绪": "平静", "精力": max_energy}
-        self._writable_states = set(writable_states) if writable_states else {"情绪"}
+        self.states = dict(states) if states else {}
+        self._writable_states = set(writable_states) if writable_states else set()
         self._last_action = None
 
     def build_system_prompt(self, registry: "ActionRegistry") -> str:

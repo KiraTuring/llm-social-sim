@@ -81,9 +81,10 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
                 relationships=cfg["relationships"],
                 memory=memory,
                 content_max_length=config["agent"].get("content_max_length", 200),
-                max_energy=config["agent"].get("max_energy", 100),
                 inbox_limit=config["agent"].get("inbox_limit", 5),
                 world_description=scene.world_description,
+                states=cfg.get("states"),
+                writable_states=set(cfg.get("writable_states", [])),
             )
             if cfg["name"] in manual_names:
                 manual_file = config["simulation"].get("manual_file")

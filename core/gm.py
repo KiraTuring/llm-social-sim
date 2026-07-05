@@ -127,7 +127,7 @@ class GMAgent:
         lines.append("- 不要替角色做决定或直接控制角色的行为")
         lines.append("- 留意角色最近的消息，基于角色与环境的互动产生合理的事件响应或后续影响")
         lines.append("- 事件要简短自然，一句话")
-        lines.append("- 最多生成一个新事件。可以多次调用工具，但所有调用都围绕同一个事件")
+        lines.append("- 最多同时生成一个新事件。可以多次调用工具，但所有调用都围绕同一个事件")
         lines.append("")
         lines.append("你可以使用以下工具（可一次调用多个）：")
         for s in self.registry.get_tool_schemas():

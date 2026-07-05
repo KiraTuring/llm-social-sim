@@ -35,6 +35,8 @@ class TavernScene(Scene):
                 "雷恩": {"trust": 0, "impression": "欠酒钱的常客，有点心虚"},
                 "艾莉娅": {"trust": 1, "impression": "新来的旅人，看着有些蹊跷"},
             },
+            "states": {"情绪": "平静", "精力": 100},
+            "writable_states": ["情绪"],
         },
         {
             "name": "雷恩",
@@ -46,6 +48,8 @@ class TavernScene(Scene):
                 "老巴克": {"trust": 0, "impression": "酒馆老板，消息灵通但心机深"},
                 "艾莉娅": {"trust": 0, "impression": "神秘旅人，带着上锁的盒子"},
             },
+            "states": {"情绪": "平静", "精力": 100},
+            "writable_states": ["情绪"],
         },
         {
             "name": "艾莉娅",
@@ -57,6 +61,8 @@ class TavernScene(Scene):
                 "老巴克": {"trust": 1, "impression": "酒馆老板，应该消息灵通"},
                 "雷恩": {"trust": 0, "impression": "佣兵，看起来危险但也许有用"},
             },
+            "states": {"情绪": "平静", "精力": 100},
+            "writable_states": ["情绪"],
         },
     ]
 

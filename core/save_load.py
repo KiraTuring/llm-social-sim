@@ -99,9 +99,10 @@ def load_simulation_state(path: str, config: dict):
             relationships=agent_data["relationships"],
             memory=memory,
             content_max_length=agent_data.get("content_max_length", 200),
-            max_energy=config["agent"].get("max_energy", 100),
             inbox_limit=config["agent"].get("inbox_limit", 5),
             world_description=scene.world_description,
+            states=agent_data.get("states"),
+            writable_states=set(agent_data.get("writable_states", [])),
         )
 
         agent_type = agent_data.get("agent_type", "Agent")
@@ -110,7 +111,7 @@ def load_simulation_state(path: str, config: dict):
         else:
             agent = Agent(**agent_kwargs)
 
-        agent.states = agent_data.get("states", {"情绪": "平静", "精力": 100})
+        agent.states = agent_data.get("states", {})
 
         world.agents[name] = agent
 
