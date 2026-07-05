@@ -6,7 +6,7 @@ from core.message import BROADCAST, Message
 
 class NarrateAction(ActionSpec):
     name = "narrate"
-    description = "GM 旁白：向角色发出世界叙事或事件公告。target=留空（世界广播）、角色名（私信）、位置名（该位置所有人）。避免全知视角，只描述角色能感知到的内容"
+    description = "GM 旁白：向角色发出世界叙事或事件公告。target=留空（世界广播）、角色名（私信）、位置名（该位置及能观察到该位置的所有人）。避免全知视角，只描述角色能感知到的内容"
     parameters = {"event_description": {"type": "string"}}
     text_format = "[ACTION]narrate[/ACTION]\n[CONTENT]{叙事内容，一句话，中文}[/CONTENT]"
 
@@ -52,7 +52,8 @@ class NarrateAction(ActionSpec):
         if target in world.agents:
             recipients = [target]
         elif target in world.locations:
-            recipients = world.get_agents_in_location(target)
+            hearable_locs = [target] + world.reverse_visibility.get(target, [])
+            recipients = [name for loc in hearable_locs for name in world.get_agents_in_location(loc)]
             if not recipients:
                 return [], {"summary": f"'{target}' 无人在场"}
         else:
