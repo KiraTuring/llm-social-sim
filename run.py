@@ -9,6 +9,7 @@ from core.gm import GMAgent
 from core.agent import Agent
 from core.manual_agent import ManualAgent
 from core.action import ActionRegistry
+from core.logger import SimLogger
 import argparse
 import asyncio
 import os
@@ -48,86 +49,85 @@ def _expand_env_vars(obj: any) -> any:
     return obj
 
 
-async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = None, mode: str | None = None, manual_agents: list[str] | None = None, load_path: str | None = None, save_path: str | None = None):
-    """运行模拟"""
+def _init_world(config: dict, scene_name: str, manual_agents: list[str] | None):
+    """新场景初始化：加载场景、创建 Agent 和 GM"""
+    scene = load_scene(scene_name)
+    world = scene.init_world()
+    validate_agent_configs(scene.agents)
+    scene.setup(registry := ActionRegistry())
+    manual_names = set(manual_agents or config["simulation"].get("manual_agents", []))
 
-    if load_path:
-        from core.save_load import load_simulation_state
-        world, scene, gm = load_simulation_state(load_path, config)
-        scene.setup(registry := ActionRegistry())
-        start_tick = world.tick + 1
-        remaining = max_ticks or config["simulation"]["max_ticks"]
-        print(f"从存档恢复 [{scene.name}]，当前 tick={world.tick}，继续运行 {remaining} 个 tick\n")
-    else:
-        scene = load_scene(scene_name)
-        world = scene.init_world()
-        validate_agent_configs(scene.agents)
-        scene.setup(registry := ActionRegistry())
-        manual_names = set(manual_agents or config["simulation"].get("manual_agents", []))
-
-        for cfg in scene.agents:
-            memory = AgentMemory(
-                name=cfg["name"],
-                short_limit=config["agent"]["memory_short_limit"],
-                compress_threshold=config["agent"]["memory_compress_threshold"],
-                relation_limit=config["agent"].get("relation_display_limit", 3),
-            )
-            agent_states = dict(scene.states or {})
-            cfg_states = cfg.get("states")
-            if cfg_states:
-                agent_states.update(cfg_states)
-
-            agent_writable = cfg.get("writable_states") or scene.writable_states or []
-            agent_private = cfg.get("private_states") or scene.private_states or []
-
-            agent_kwargs = dict(
-                name=cfg["name"],
-                role=cfg["role"],
-                personality=cfg["personality"],
-                goal=cfg["goal"],
-                location=cfg["location"],
-                relationships=cfg["relationships"],
-                memory=memory,
-                content_max_length=config["agent"].get("content_max_length", 200),
-                inbox_limit=config["agent"].get("inbox_limit", 5),
-                world_description=scene.world_description,
-                states=agent_states,
-                writable_states=set(agent_writable),
-                private_states=set(agent_private),
-                instruction=scene.instruction,
-            )
-            if cfg["name"] in manual_names:
-                manual_file = config["simulation"].get("manual_file")
-                agent = ManualAgent(**agent_kwargs, file_path=manual_file)
-            else:
-                agent = Agent(**agent_kwargs)
-            world.agents[agent.name] = agent
-
-        world.action_order = list(world.agents.keys())
-
-        gm_cfg = scene.get_gm_config()
-        gm = GMAgent(
-            events=gm_cfg["events"],
-            random_events=gm_cfg["random_events"],
-            chance=config["gm"]["random_event_chance"],
-            use_llm=config["gm"]["use_llm"],
-            llm_chance=config["gm"].get("llm_event_chance", 0.3),
-            llm_prompt=gm_cfg.get("llm_prompt", ""),
-            world_description=scene.world_description,
-            message_limit=config["gm"].get("message_limit", 15),
+    for cfg in scene.agents:
+        memory = AgentMemory(
+            name=cfg["name"],
+            short_limit=config["agent"]["memory_short_limit"],
+            compress_threshold=config["agent"]["memory_compress_threshold"],
+            relation_limit=config["agent"].get("relation_display_limit", 3),
         )
+        agent_states = dict(scene.states or {})
+        cfg_states = cfg.get("states")
+        if cfg_states:
+            agent_states.update(cfg_states)
 
-        start_tick = 1
-        remaining = max_ticks or config["simulation"]["max_ticks"]
+        agent_kwargs = dict(
+            name=cfg["name"],
+            role=cfg["role"],
+            personality=cfg["personality"],
+            goal=cfg["goal"],
+            location=cfg["location"],
+            relationships=cfg["relationships"],
+            memory=memory,
+            content_max_length=config["agent"].get("content_max_length", 200),
+            inbox_limit=config["agent"].get("inbox_limit", 5),
+            world_description=scene.world_description,
+            states=agent_states,
+            writable_states=set(cfg.get("writable_states") or scene.writable_states or []),
+            private_states=set(cfg.get("private_states") or scene.private_states or []),
+            instruction=scene.instruction,
+        )
+        if cfg["name"] in manual_names:
+            manual_file = config["simulation"].get("manual_file")
+            agent = ManualAgent(**agent_kwargs, file_path=manual_file)
+        else:
+            agent = Agent(**agent_kwargs)
+        world.agents[agent.name] = agent
 
-    from core.logger import SimLogger
+    world.action_order = list(world.agents.keys())
 
+    gm_cfg = scene.get_gm_config()
+    gm = GMAgent(
+        events=gm_cfg["events"],
+        random_events=gm_cfg["random_events"],
+        chance=config["gm"]["random_event_chance"],
+        use_llm=config["gm"]["use_llm"],
+        llm_chance=config["gm"].get("llm_event_chance", 0.3),
+        llm_prompt=gm_cfg.get("llm_prompt", ""),
+        world_description=scene.world_description,
+        message_limit=config["gm"].get("message_limit", 15),
+    )
+
+    return world, scene, gm, registry
+
+
+def _load_world(load_path: str, config: dict, max_ticks: int | None):
+    """从存档恢复世界状态"""
+    from core.save_load import load_simulation_state
+
+    world, scene, gm = load_simulation_state(load_path, config)
+    scene.setup(registry := ActionRegistry())
+    start_tick = world.tick + 1
+    remaining = max_ticks or config["simulation"]["max_ticks"]
+    print(f"从存档恢复 [{scene.name}]，当前 tick={world.tick}，继续运行 {remaining} 个 tick\n")
+    return world, scene, gm, registry, start_tick
+
+
+def _setup_services(config: dict, scene, gm):
+    """创建模拟服务（logger, llm, rule_engine, renderer）"""
     log_level = getattr(__import__("logging"), config["logging"].get("level", "INFO"))
     logger = SimLogger(
         log_file=config["logging"].get("file", "logs/simulation.log"),
         level=log_level,
     )
-
     llm = LLMClient(config["llm"], logger)
     gm.logger = logger
 
@@ -140,85 +140,114 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
         show_full_monologue=config["simulation"].get("show_full_monologue", True),
     )
 
-    if not load_path:
-        print(f"\n{'='*50}")
-        print(f"场景: {scene.name}")
-        print(f"角色: {', '.join([a['name'] for a in scene.agents])}")
-        print(f"{'='*50}\n")
+    return logger, llm, rule_engine, renderer
+
+
+def _print_scene_header(scene):
+    """打印场景信息"""
+    print(f"\n{'='*50}")
+    print(f"场景: {scene.name}")
+    print(f"角色: {', '.join([a['name'] for a in scene.agents])}")
+    print(f"{'='*50}\n")
+
+
+async def _run_tick(world, tick: int, llm, gm, registry, rule_engine, logger, renderer, config: dict, mode: str):
+    """执行单个 tick：GM 注入 → Agent 行动 → 渲染"""
+    world.tick = tick
+
+    logger.log_tick_start(tick)
+
+    await gm.check_and_inject(world, llm_client=llm if gm.use_llm else None)
+
+    agent_actions = {}
+    for agent_name in world.action_order:
+        agent = world.agents[agent_name]
+
+        context = await agent.perceive(world, llm_client=llm)
+
+        agents_by_location = {}
+        for loc in world.locations:
+            agents_by_location[loc] = world.get_agents_in_location(loc)
+        agent_location = world.agents[agent_name].location
+
+        validation_context = {
+            "agent_name": agent_name,
+            "agent_location": agent_location,
+            "agent_names": list(world.agents.keys()),
+            "locations": world.locations,
+            "agents_by_location": agents_by_location,
+            "hearable_agents": world.get_hearable_agents(agent_name),
+            "adjacent_locations": world.get_adjacent_locations(agent_location),
+            "interactable_keys": world.interactable_keys,
+        }
+
+        action = await agent.think(llm, registry, context, tick, validation_context)
+        messages = await agent.act(action, world, registry)
+
+        agent_actions[agent_name] = action
+
+        action_dict = {
+            "action_type": action.action_type,
+            "target": action.target,
+            "content": action.content,
+            "internal_monologue": action.internal_monologue,
+            "result": action.result,
+        } if action else {}
+        logger.log_agent_action(agent_name, tick, action_dict)
+
+        for msg in messages:
+            logger.log_message({
+                "sender": msg.sender,
+                "recipients": msg.recipients,
+                "target": msg.target,
+                "content": msg.content,
+                "msg_type": msg.msg_type,
+                "tick": msg.tick,
+            })
+            rule_engine.trigger(msg.msg_type, msg, world)
+
+    renderer.render_tick(world, agent_actions)
+
+    if config["simulation"]["rotate_order"]:
+        world.rotate_order()
+
+    logger.log_tick_end(tick)
+
+    if mode == "interactive":
+        input("按回车继续下一个 tick...")
+    else:
+        await asyncio.sleep(config["simulation"]["auto_delay"])
+
+
+def _save_state(world, gm, scene, save_path: str):
+    """保存模拟状态"""
+    from core.save_load import save_simulation_state
+
+    scene_module = scene.__class__.__module__.split(".")[-1]
+    save_simulation_state(world, gm, scene_module, scene.name, save_path)
+    print(f"状态已保存到 {save_path}")
+
+
+async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = None, mode: str | None = None, manual_agents: list[str] | None = None, load_path: str | None = None, save_path: str | None = None):
+    """运行模拟"""
+    remaining = max_ticks or config["simulation"]["max_ticks"]
+
+    if load_path:
+        world, scene, gm, registry, start_tick = _load_world(load_path, config, max_ticks)
+    else:
+        world, scene, gm, registry = _init_world(config, scene_name, manual_agents)
+        start_tick = 1
+        _print_scene_header(scene)
+
+    logger, llm, rule_engine, renderer = _setup_services(config, scene, gm)
 
     actual_mode = mode or config["simulation"]["mode"]
-
     for tick in range(start_tick, start_tick + remaining):
-        world.tick = tick
-
-        logger.log_tick_start(tick)
-
-        await gm.check_and_inject(world, llm_client=llm if gm.use_llm else None)
-
-        agent_actions = {}
-        for agent_name in world.action_order:
-            agent = world.agents[agent_name]
-
-            context = await agent.perceive(world, llm_client=llm)
-            agents_by_location = {}
-            for loc in world.locations:
-                agents_by_location[loc] = world.get_agents_in_location(loc)
-            agent_location = world.agents[agent_name].location
-            validation_context = {
-                "agent_name": agent_name,
-                "agent_location": agent_location,
-                "agent_names": list(world.agents.keys()),
-                "locations": world.locations,
-                "agents_by_location": agents_by_location,
-                "hearable_agents": world.get_hearable_agents(agent_name),
-                "adjacent_locations": world.get_adjacent_locations(agent_location),
-                "interactable_keys": world.interactable_keys,
-            }
-            action = await agent.think(llm, registry, context, tick, validation_context)
-            messages = await agent.act(action, world, registry)
-
-            agent_actions[agent_name] = action
-
-            action_dict = {
-                "action_type": action.action_type,
-                "target": action.target,
-                "content": action.content,
-                "internal_monologue": action.internal_monologue,
-                "result": action.result,
-            } if action else {}
-            logger.log_agent_action(agent_name, tick, action_dict)
-
-            for msg in messages:
-                logger.log_message({
-                    "sender": msg.sender,
-                    "recipients": msg.recipients,
-                    "target": msg.target,
-                    "content": msg.content,
-                    "msg_type": msg.msg_type,
-                    "tick": msg.tick,
-                })
-                rule_engine.trigger(msg.msg_type, msg, world)
-
-        renderer.render_tick(world, agent_actions)
-
-        if config["simulation"]["rotate_order"]:
-            world.rotate_order()
-
-        logger.log_tick_end(tick)
-
-        if actual_mode == "interactive":
-            input("按回车继续下一个 tick...")
-        else:
-            await asyncio.sleep(config["simulation"]["auto_delay"])
+        await _run_tick(world, tick, llm, gm, registry, rule_engine, logger, renderer, config, actual_mode)
 
     renderer.render_summary(world)
-
     if save_path:
-        from core.save_load import save_simulation_state
-        scene_module = scene.__class__.__module__.split(".")[-1]
-        save_simulation_state(world, gm, scene_module, scene.name, save_path)
-        print(f"状态已保存到 {save_path}")
-
+        _save_state(world, gm, scene, save_path)
     logger.close()
 
 
@@ -241,10 +270,10 @@ def main():
         print("❌ --load 和 --scene 不能同时使用（存档中已包含场景信息）")
         sys.exit(1)
 
+    config = load_config(args.config)
+
     if args.scene is None:
         args.scene = config.get("scene", "tavern")
-
-    config = load_config(args.config)
 
     if args.manual_file:
         config.setdefault("simulation", {})["manual_file"] = args.manual_file

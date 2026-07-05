@@ -92,21 +92,21 @@ def load_simulation_state(path: str, config: dict):
             relation_limit=config["agent"].get("relation_display_limit", 3),
         )
 
-            agent_kwargs = dict(
-                name=name,
-                role=agent_data["role"],
-                personality=agent_data["personality"],
-                goal=agent_data["goal"],
-                location=agent_data["location"],
-                relationships=agent_data["relationships"],
-                memory=memory,
-                content_max_length=agent_data.get("content_max_length", 200),
-                inbox_limit=config["agent"].get("inbox_limit", 5),
-                world_description=scene.world_description,
-                states=agent_data.get("states"),
-                writable_states=set(agent_data.get("writable_states", [])),
-                private_states=set(agent_data.get("private_states", [])),
-            )
+        agent_kwargs = dict(
+            name=name,
+            role=agent_data["role"],
+            personality=agent_data["personality"],
+            goal=agent_data["goal"],
+            location=agent_data["location"],
+            relationships=agent_data["relationships"],
+            memory=memory,
+            content_max_length=agent_data.get("content_max_length", 200),
+            inbox_limit=config["agent"].get("inbox_limit", 5),
+            world_description=scene.world_description,
+            states=agent_data.get("states"),
+            writable_states=set(agent_data.get("writable_states", [])),
+            private_states=set(agent_data.get("private_states", [])),
+        )
 
         agent_type = agent_data.get("agent_type", "Agent")
         if agent_type == "ManualAgent":
