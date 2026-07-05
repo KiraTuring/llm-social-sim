@@ -72,25 +72,41 @@ class AgentMemory:
 
         return "\n\n".join(parts)
 
-    async def compress(self, llm_client: "LLMClient"):
-        """压缩短期记忆为摘要"""
+    async def compress(self, llm_client: "LLMClient", relationships: dict | None = None) -> dict | None:
+        """压缩短期记忆为摘要，可选推断关系变化。返回关系更新 dict 或 None"""
 
         if len(self._short_term) < self.compress_threshold:
-            return
+            return None
 
         if llm_client is None:
-            return
+            return None
 
         to_compress = self._short_term[:-self.short_limit]
         if not to_compress:
-            return
+            return None
 
         events_text = "\n".join(f"- {e['event']}" for e in to_compress)
 
-        system_prompt = f"你正在为角色{self.name}整理记忆摘要。请用3-5句话概括以下经历，保留关键人物和重要事件。只输出摘要本身，不要添加任何格式标记。经历中的\"你\"指代角色{self.name}。你的输出也要使用第二人称，以角色的视角展开描述，比如\"你遇到了……\"。"
+        rel_text = ""
+        if relationships:
+            lines = []
+            for name, rel in relationships.items():
+                lines.append(f"- {name}: trust={rel.get('trust', 0)}, 印象=\"{rel.get('impression', '')}\"")
+            rel_text = "\n当前关系：\n" + "\n".join(lines)
+
+        system_prompt = (
+            f"你正在为角色{self.name}整理记忆摘要。\n"
+            f"请用3-5句话概括以下经历，保留关键人物和重要事件。\n"
+            f"经历中的\"你\"指代角色{self.name}，请用第二人称视角（\"你\"）展开描述。\n"
+            f"如果有关系变化（信任增减、印象改变），也在 JSON 中返回。\n"
+            f"没有明显变化则 omit relations。\n\n"
+            f"请严格以 JSON 格式回复，不要添加任何额外内容或格式标记：\n"
+            f'{{"summary": "摘要内容", "relations": {{"角色名": {{"trust_change": 整数, "impression": "新印象（可选）"}}}}}}'
+        )
         user_content = ""
         if self._summary:
             user_content += f"已有摘要：{self._summary}\n\n"
+        user_content += rel_text + "\n" if rel_text else ""
         user_content += f"需要概括的经历：\n{events_text}"
 
         try:
@@ -106,11 +122,25 @@ class AgentMemory:
                 api_base=llm_client.base_url,
                 drop_params=True,
             )
-            new_summary = response.choices[0].message.content.strip()
-            if not new_summary:
+            raw = response.choices[0].message.content.strip()
+            if not raw:
                 if llm_client.logger:
                     llm_client.logger.warning(f"记忆压缩返回空: {self.name}")
-                return
+                return None
+
+            # Parse JSON, with regex recovery
+            import json, re
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                match = re.search(r'\{.*\}', raw, re.DOTALL)
+                data = json.loads(match.group()) if match else {}
+
+            new_summary = data.get("summary", raw)
+            if not new_summary:
+                if llm_client.logger:
+                    llm_client.logger.warning(f"记忆压缩摘要为空: {self.name}")
+                return None
 
             self._summary = new_summary
             self._short_term = self._short_term[-self.short_limit:]
@@ -121,6 +151,10 @@ class AgentMemory:
                     f"记忆压缩: {self.name} | {len(to_compress)} 条 → 摘要"
                 )
                 llm_client.logger.debug(f"记忆压缩摘要: {self.name} | {new_summary}")
+
+            return data.get("relations")
+
         except Exception as e:
             if llm_client.logger:
                 llm_client.logger.warning(f"记忆压缩失败: {self.name} | {e}")
+            return None

@@ -78,7 +78,7 @@ class ActionRegistry:
         if self._include_state_update:
             spec = {
                 "type": "object",
-                "description": "状态更新（可选）。根据当前情况更新状态，可更新的字段名见【你的状态】。如需更新关系请使用 relations 数组",
+                "description": "状态更新（可选）。根据当前情况更新状态，可更新的字段名见【你的状态】",
             }
             for s in schemas:
                 s["function"]["parameters"]["properties"]["state_update"] = spec

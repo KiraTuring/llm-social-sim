@@ -144,7 +144,15 @@ class Agent:
                     f"{self.name} 触发记忆压缩 ({len(self.memory._short_term)} 条)"
                 )
             try:
-                await self.memory.compress(llm_client)
+                rel_updates = await self.memory.compress(llm_client, relationships=self.relationships)
+                if rel_updates and isinstance(rel_updates, dict):
+                    for name, changes in rel_updates.items():
+                        if name not in self.relationships:
+                            continue
+                        self.relationships[name]["trust"] += changes.get("trust_change", 0)
+                        self.relationships[name]["trust"] = max(-5, min(5, self.relationships[name]["trust"]))
+                        if "impression" in changes:
+                            self.relationships[name]["impression"] = changes["impression"]
             except Exception:
                 pass
 
@@ -197,15 +205,7 @@ class Agent:
                 su = action.params.get("state_update", action.state_update or {})
                 if isinstance(su, dict):
                     for key, val in su.items():
-                        if key == "relations":
-                            if key in self._writable_states:
-                                for r in val:
-                                    name = r.get("name")
-                                    if name and name in self.relationships:
-                                        self.relationships[name]["trust"] += r.get("trust_change", 0)
-                                        if "impression" in r:
-                                            self.relationships[name]["impression"] = r["impression"]
-                        elif key in self._writable_states:
+                        if key in self._writable_states:
                             self.states[key] = val
 
                 if result:
