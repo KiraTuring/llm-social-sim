@@ -30,13 +30,16 @@ class SpaceshipScene(Scene):
         "    走廊尽头是一道厚重的隔离门，通往被完全隔离的引擎室\n"
         "  引擎室 → 完全封闭的主机舱，内部噪音极大\n"
         "    与外界只能通过无线电联系\n"
-            "  医疗舱 → 与生活舱相连"
+        "  医疗舱 → 与生活舱相连"
     )
 
     instruction = (
-        "如果你的情绪或精力因当前事件发生了变化（比如感到紧张、焦虑、放松、疲惫等），"
+        "如果你的情绪因当前事件发生了变化（比如感到紧张、焦虑、放松、疲惫等），"
         "请在行动时通过 state_update 参数同步更新你的状态。"
     )
+
+    states = {"情绪": "平静", "精力": 100}
+    writable_states = ["情绪"]
 
     agents = [
         {
@@ -49,8 +52,6 @@ class SpaceshipScene(Scene):
                 "叶莲娜": {"trust": 2, "impression": "称职但过于多疑的工程师，总在报告不存在的隐患"},
                 "芬恩": {"trust": 1, "impression": "可靠的导航员，就是话太少"},
             },
-            "states": {"情绪": "平静", "精力": 100},
-            "writable_states": ["情绪"],
         },
         {
             "name": "叶莲娜",
@@ -62,8 +63,6 @@ class SpaceshipScene(Scene):
                 "科尔": {"trust": 1, "impression": "任务第一的船长，不太相信我的直觉，得拿出证据"},
                 "芬恩": {"trust": 1, "impression": "导航员，好像有心事，但技术不错"},
             },
-            "states": {"情绪": "平静", "精力": 100},
-            "writable_states": ["情绪"],
         },
         {
             "name": "芬恩",
@@ -75,8 +74,6 @@ class SpaceshipScene(Scene):
                 "科尔": {"trust": 1, "impression": "船长很严厉，如果报告航向偏差会很麻烦"},
                 "叶莲娜": {"trust": 2, "impression": "工程师技术好，但关注点和我不一样"},
             },
-            "states": {"情绪": "平静", "精力": 100},
-            "writable_states": ["情绪"],
         },
     ]
 

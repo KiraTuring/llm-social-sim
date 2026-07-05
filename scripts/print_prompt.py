@@ -39,6 +39,13 @@ def main():
             short_limit=config["agent"]["memory_short_limit"],
             compress_threshold=config["agent"]["memory_compress_threshold"],
         )
+        agent_states = dict(scene.states or {})
+        cfg_states = cfg.get("states")
+        if cfg_states:
+            agent_states.update(cfg_states)
+
+        agent_writable = cfg.get("writable_states") or scene.writable_states or []
+
         agent = Agent(
             name=cfg["name"],
             role=cfg["role"],
@@ -50,8 +57,8 @@ def main():
             content_max_length=config["agent"].get("content_max_length", 200),
             inbox_limit=config["agent"].get("inbox_limit", 5),
             world_description=scene.world_description,
-            states=cfg.get("states"),
-            writable_states=set(cfg.get("writable_states", [])),
+            states=agent_states,
+            writable_states=set(agent_writable),
             instruction=scene.instruction,
         )
 
