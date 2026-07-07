@@ -1,5 +1,6 @@
 """世界状态管理。"""
 
+import copy
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -97,6 +98,17 @@ class WorldState:
         """设置可见性并自动计算逆可见性"""
         self._visibility = dict(visibility) if visibility else {}
         self._reverse_visibility = self.compute_reverse_visibility(self._visibility)
+
+    _SCENE_DIRECT_FIELDS = ("locations", "connections", "interactable_keys")
+
+    def apply_scene_config(self, scene) -> None:
+        """从 scene 复制场景级配置（init 和 load 共用）"""
+        for attr in self._SCENE_DIRECT_FIELDS:
+            setattr(self, attr, copy.deepcopy(getattr(scene, attr)))
+        self._adjacency = self.compute_adjacency(self.connections)
+        self.set_visibility(scene.visibility or {})
+        self.environment = {k: dict(v) for k, v in scene.initial_environment.items()}
+        self._protected_env_keys = self.compute_protected_env_keys(scene.initial_environment)
 
     def add_event(self, event: str):
         """记录事件"""

@@ -73,15 +73,12 @@ def load_simulation_state(path: str, config: dict):
 
     world = WorldState()
     world.tick = data["tick"]
-    world.locations = data["locations"]
-    world.connections = [tuple(p) for p in data.get("connections", [])]
-    world._adjacency = WorldState.compute_adjacency(world.connections)
+    world.apply_scene_config(scene)
     world.event_log = data["event_log"]
     world.action_order = data["action_order"]
-    world.set_visibility(scene.visibility or {})
+    world.connections = [tuple(p) for p in data.get("connections", [])]
+    world._adjacency = WorldState.compute_adjacency(world.connections)
     world.environment = data.get("environment", {})
-    world.interactable_keys = scene.interactable_keys or {}
-    world._protected_env_keys = WorldState.compute_protected_env_keys(scene.initial_environment)
 
     world.message_bus = MessageBus.from_dict(data["message_bus"])
 

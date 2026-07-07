@@ -37,15 +37,9 @@ class Scene:
         """初始化世界状态"""
         from core.message import MessageBus
 
-        world = WorldState(locations=self.locations)
+        world = WorldState()
         world.message_bus = MessageBus()
-
-        world.connections = self.connections
-        world._adjacency = WorldState.compute_adjacency(self.connections)
-        world.set_visibility(self.visibility or {})
-        world.environment = {k: dict(v) for k, v in self.initial_environment.items()}
-        world._protected_env_keys = WorldState.compute_protected_env_keys(self.initial_environment)
-        world.interactable_keys = self.interactable_keys
+        world.apply_scene_config(self)
 
         for agent_cfg in self.agents:
             world.message_bus.register_agent(agent_cfg["name"])
