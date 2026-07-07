@@ -26,6 +26,7 @@ class WorldState:
     environment: dict[str, dict[str, str]] = field(default_factory=dict)
     interactable_keys: dict[str, list[str]] = field(default_factory=dict)
     _protected_env_keys: dict[str, set[str]] = field(default_factory=dict)
+    npc_names: set[str] = field(default_factory=set)
 
     @staticmethod
     def compute_adjacency(connections: list[tuple[str, str]]) -> dict[str, set[str]]:
@@ -109,6 +110,7 @@ class WorldState:
         self.set_visibility(scene.visibility or {})
         self.environment = {k: dict(v) for k, v in scene.initial_environment.items()}
         self._protected_env_keys = self.compute_protected_env_keys(scene.initial_environment)
+        self.npc_names = set(scene.npc_names or [])
 
     def add_event(self, event: str):
         """记录事件"""

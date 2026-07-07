@@ -24,6 +24,7 @@ class Scene:
     states: dict = {}
     writable_states: list = []
     private_states: list = []
+    npc_names: list[str] = []
 
     def setup(self, registry: ActionRegistry) -> None:
         """注册场景特定的 actions"""

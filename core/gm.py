@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from core.action import ActionRegistry
 from core.actions.gm_tools import NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction
+from core.actions.gm_npc import NpcSpeakAction
 
 if TYPE_CHECKING:
     from core.world import WorldState
@@ -33,6 +34,7 @@ class GMAgent:
         self.registry.register(NarrateAction())
         self.registry.register(ModifyEnvironmentAction())
         self.registry.register(ModifyCharStateAction())
+        self.registry.register(NpcSpeakAction())
 
     @classmethod
     def from_config(cls, scene, config):
@@ -104,6 +106,7 @@ class GMAgent:
         validation_context = {
             "locations": world.locations,
             "agent_names": list(world.agents.keys()),
+            "npc_names": list(world.npc_names),
         }
         messages = [{"role": "user", "content": self._build_world_context(world)}]
 

@@ -64,7 +64,7 @@ def _init_world(config: dict, scene_name: str, manual_agents: list[str] | None):
             agent = Agent.from_config(scene, cfg, config)
         world.agents[agent.name] = agent
 
-    world.action_order = list(world.agents.keys())
+    world.action_order = [n for n in world.agents if n not in world.npc_names]
 
     gm = GMAgent.from_config(scene, config)
 
