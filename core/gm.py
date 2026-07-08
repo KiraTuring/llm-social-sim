@@ -153,10 +153,12 @@ class GMAgent:
         lines.append("- 不要生成和近期事件冲突或简单重复的事件，可以是新事件或对近期事件的后续")
         lines.append("- 不要替角色做决定或直接控制角色的行为")
         lines.append("- 不要改变角色的位置")
-        lines.append("- 留意角色最近的消息，基于角色与环境的互动产生合理的事件响应或后续影响。注意你要回应的是交互行为(interact)而不是聊天(speak/whisper)")
+        lines.append("- 不要创造场景中不存在的位置——所有可用位置已在世界描述中列出")
+        lines.append("- 留意角色最近的消息，基于角色与环境的互动产生合理的事件响应或后续影响。注意你要回应的是交互行为(interact)和角色对 NPC 的对话(speech)，普通聊天不需要回应")
         lines.append("- 事件要简短自然，一句话")
         lines.append("- 最多同时生成一个新事件。可以多次调用工具，但所有调用都围绕同一个事件")
         lines.append("")
+        lines.append("注意：你在调用工具之前输出的任何对话文字都不会被其他角色看到，也不会对模拟产生任何影响。只有工具调用本身会影响环境和其他角色。")
         lines.append("你可以使用以下工具（可一次调用多个）：")
         for s in self.registry.get_tool_schemas():
             name = s["function"]["name"]
