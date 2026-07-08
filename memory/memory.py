@@ -83,7 +83,10 @@ class AgentMemory:
         )
         user_content = ""
         if self._summary:
-            user_content += f"已有摘要：{self._summary}\n\n"
+            user_content += f"已有摘要：{self._summary}\n"
+            user_content += f"请在已有摘要的基础上，概括新的经历，只保留已有摘要中的重要信息。\n\n"
+            if llm_client.logger:
+                llm_client.logger.info(f"记忆压缩: {self.name} | 已有摘要: {self._summary}")
         user_content += rel_text + "\n" if rel_text else ""
         user_content += f"需要概括的经历：\n{events_text}"
 
@@ -107,7 +110,8 @@ class AgentMemory:
                 return None
 
             # Parse JSON, with regex recovery
-            import json, re
+            import json
+            import re
             try:
                 data = json.loads(raw)
             except json.JSONDecodeError:

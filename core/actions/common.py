@@ -167,11 +167,16 @@ class MoveAction(ActionSpec):
         adjacent = world.get_adjacent_locations(old_loc)
         if target not in adjacent:
             return [], None
+
+        old_recipients = world.get_hearable_agents(agent_name)
         agent.location = target
+
+        new_recipients = world.get_hearable_agents(agent_name)
+        recipients = list(set(old_recipients + new_recipients))
 
         msg = Message(
             sender=agent_name,
-            recipients=[BROADCAST],
+            recipients=recipients,
             content=f"从{old_loc}移动到了{target}",
             msg_type="action",
             tick=world.tick,
@@ -209,7 +214,7 @@ class ObserveAction(ActionSpec):
 
         env_parts = []
         interactable = world.interactable_keys or {}
-        for loc in visible_locs:
+        for loc in [agent.location]:
             env = world.environment.get(loc, {})
             if env:
                 items = []
