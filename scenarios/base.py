@@ -11,8 +11,8 @@ class Scene:
     name: str
     locations: list[str]
     agents: list[dict]
-    gm_events: list[tuple[int, str]]
-    gm_random_events: list[str]
+    gm_events: list[tuple[int, str]] = []
+    gm_random_events: list[str] = []
     gm_llm_prompt: str = ""
     world_description: str = ""
     initial_environment: dict[str, dict[str, str]] = {}
