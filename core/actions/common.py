@@ -187,9 +187,9 @@ class MoveAction(ActionSpec):
 
 class ObserveAction(ActionSpec):
     name = "observe"
-    description = "观察四周（了解当前和可见位置的人与环境。并非所有位置都能看到，有些位置从当前位置不可见）"
+    description = "观察四周。每次调用返回同样的环境信息（取决于你所在位置和可见范围），不会因为调用多次而得到不同结果。并非所有位置都能看到"
     parameters = {}
-    text_format = "[ACTION]observe[/ACTION]\n[CONTENT]{观察内容}[/CONTENT]\n[THOUGHT]{内心独白}[/THOUGHT]"
+    text_format = "[ACTION]observe[/ACTION]\n[THOUGHT]{内心独白}[/THOUGHT]"
 
     def get_tool_schema(self):
         return {
@@ -200,7 +200,6 @@ class ObserveAction(ActionSpec):
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "content": {"type": "string", "description": "观察内容（可选）"},
                         "internal_monologue": {"type": "string", "description": "内心独白"},
                     },
                 },
