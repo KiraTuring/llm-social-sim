@@ -65,11 +65,14 @@ class GMAgent:
             self._broadcast_event(e, world)
 
         if self.use_llm and llm_client:
-            had_interact = any(
-                m.msg_type == "interact" and m.tick == world.tick - 1
-                for m in world.message_bus.get_recent(50)
+            recent = world.message_bus.get_recent(50)
+            trigger = any(
+                (m.msg_type == "interact" or
+                 m.msg_type == "speech" and m.target in world.npc_names)
+                and m.tick == world.tick - 1
+                for m in recent
             )
-            if had_interact or random.random() < self.llm_chance:
+            if trigger or random.random() < self.llm_chance:
                 await self._generate_llm_event(world, llm_client)
 
     def _check_scheduled(self, world: "WorldState") -> str | None:
