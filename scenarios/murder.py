@@ -118,3 +118,10 @@ class MurderScene(Scene):
 - 用 narrate 工具描述环境细节和剧情推进（比如天色渐暗、警员送来新的现场报告等）
 - 不要替玩家做决定——你只回应他们的行动
 """
+
+    def setup(self, registry):
+        """注册庄园场景的行动"""
+        from core.actions.common import InteractAction, MoveAction, ObserveAction, SpeakAction, WhisperAction
+
+        for action_cls in [SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction]:
+            registry.register(action_cls())
