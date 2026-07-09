@@ -55,9 +55,8 @@ class MurderScene(Scene):
     instruction = """观察指南：
 - observe 给出当前位置的环境细节，写入你的记忆。
   在同一位置反复观察不会产生新内容——看到的就是这些。
-- 想看新房间，先 move 过去再 observe。
-- 没有想做的事时可以用 internal_monologue 记录心理活动而不调用工具，
-  比反复 observe 更有价值。"""
+- 想查看环境细节，或者进一步调查某个物品，可以用interact，描述你想做的动作。
+- 想看新房间，先 move 过去再 observe。"""
 
     agents = [
         {
@@ -134,7 +133,7 @@ class MurderScene(Scene):
 
     def setup(self, registry):
         """注册庄园场景的行动"""
-        from core.actions.common import InteractAction, MoveAction, ObserveAction, SpeakAction, WhisperAction
+        from core.actions.common import InteractAction, MoveAction, ObserveAction, SpeakAction, ThinkAction, WhisperAction
 
-        for action_cls in [SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction]:
+        for action_cls in [SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction, ThinkAction]:
             registry.register(action_cls())

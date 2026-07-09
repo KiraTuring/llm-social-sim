@@ -1,6 +1,6 @@
 llm:
   provider: "deepseek"
-  model: "deepseek-chat"
+  model: "deepseek-v4-flash"
   base_url: "https://api.deepseek.com/v1"
   api_key: "${DEEPSEEK_API_KEY}"
   response_mode: "tool_call"  # tool_call | text_parse

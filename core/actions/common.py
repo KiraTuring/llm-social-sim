@@ -149,7 +149,7 @@ class MoveAction(ActionSpec):
         if adjacent is not None and target and target not in adjacent:
             if not adjacent:
                 return f"'{target}' 不可达。当前在 {agent_loc}，没有可前往的位置。"
-            return f"'{target}' 不可达。当前在 {agent_loc}，可前往: {', '.join(adjacent)}"
+            return f"'{target}' 从当前位置不可直接到达。当前在 {agent_loc}，可前往: {', '.join(adjacent)}"
         return None
 
     def execute(self, agent_name, params, world):
@@ -242,6 +242,33 @@ class ObserveAction(ActionSpec):
 
         agent._last_observed_result = result_str
         return [], {"observed": result_str}
+
+
+class ThinkAction(ActionSpec):
+    name = "think"
+    description = "思考或等待。在你需要思考、等别人回复、或没有明确可做的事时使用。你的思考会写入你的记忆"
+    parameters = {}
+    text_format = "[ACTION]think[/ACTION]\n[THOUGHT]{内心独白}[/THOUGHT]"
+
+    def get_tool_schema(self):
+        return {
+            "type": "function",
+            "function": {
+                "name": "think",
+                "description": self.description,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "internal_monologue": {"type": "string", "description": "你的思考内容"},
+                    },
+                    "required": ["internal_monologue"],
+                },
+            },
+        }
+
+    def execute(self, agent_name, params, world):
+        thought = params.get("internal_monologue", "思考中")
+        return [], {"summary": f"思考: {thought}"}
 
 
 class InteractAction(ActionSpec):

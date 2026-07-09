@@ -121,7 +121,7 @@ class Agent:
 {relations_text if relations_text else "暂无"}
 
 ## 输出要求
-每次必须选择一个工具来行动。
+优先选择一个工具来行动。如果你在思考、等人回复、或没有明确可做的事，用 think 工具代替 observe。
 所有工具都包含可选的 internal_monologue 字段（内心独白，别人看不到）。"""
 
         if self.instruction:
