@@ -21,7 +21,6 @@ class SpeakAction(ActionSpec):
                     "properties": {
                         "target": {"type": "string", "description": "说话对象（留空=对所有人，不要填入任何文字）"},
                         "content": {"type": "string", "description": "说话内容"},
-                        "internal_monologue": {"type": "string", "description": "内心独白"},
                     },
                     "required": ["content"],
                 },
@@ -72,7 +71,6 @@ class WhisperAction(ActionSpec):
                     "properties": {
                         "target": {"type": "string", "description": "说话对象"},
                         "content": {"type": "string", "description": "说话内容"},
-                        "internal_monologue": {"type": "string", "description": "内心独白"},
                     },
                     "required": ["target", "content"],
                 },
@@ -132,7 +130,6 @@ class MoveAction(ActionSpec):
                     "properties": {
                         "target": {"type": "string", "description": "目标位置"},
                         "content": {"type": "string", "description": "移动描述（可选）"},
-                        "internal_monologue": {"type": "string", "description": "内心独白"},
                     },
                     "required": ["target"],
                 },
@@ -199,9 +196,7 @@ class ObserveAction(ActionSpec):
                 "description": self.description,
                 "parameters": {
                     "type": "object",
-                    "properties": {
-                        "internal_monologue": {"type": "string", "description": "内心独白"},
-                    },
+                    "properties": {},
                 },
             },
         }
@@ -260,7 +255,6 @@ class InteractAction(ActionSpec):
                     "type": "object",
                     "properties": {
                         "content": {"type": "string", "description": "互动描述"},
-                        "internal_monologue": {"type": "string", "description": "内心独白"},
                         "modifications": {
                             "type": "array",
                             "description": "对环境指标的修改（可选），只操作当前位置的仪表/设备",

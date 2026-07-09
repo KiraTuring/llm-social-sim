@@ -30,7 +30,7 @@ class GMAgent:
         self.logger = logger
         self.message_limit = message_limit
 
-        self.registry = ActionRegistry(include_state_update=False)
+        self.registry = ActionRegistry(include_agent_params=False)
         self.registry.register(NarrateAction())
         self.registry.register(ModifyEnvironmentAction())
         self.registry.register(ModifyCharStateAction())

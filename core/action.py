@@ -44,9 +44,7 @@ class ActionSpec(ABC):
                 "description": self.description,
                 "parameters": {
                     "type": "object",
-                    "properties": {
-                        "internal_monologue": {"type": "string", "description": "内心独白"},
-                    },
+                    "properties": {},
                 },
             },
         }
@@ -55,9 +53,9 @@ class ActionSpec(ABC):
 class ActionRegistry:
     """管理当前场景所有可用的 Action"""
 
-    def __init__(self, include_state_update=True):
+    def __init__(self, include_agent_params=True):
         self._actions: dict[str, ActionSpec] = {}
-        self._include_state_update = include_state_update
+        self._include_agent_params = include_agent_params
 
     def register(self, action: ActionSpec) -> None:
         """注册一个 Action"""
@@ -74,13 +72,16 @@ class ActionRegistry:
     def get_tool_schemas(self) -> list[dict]:
         """返回所有 action 的 tool schema 列表，自动注入公共参数"""
         schemas = [act.get_tool_schema() for act in self._actions.values()]
-        if self._include_state_update:
-            spec = {
+        if self._include_agent_params:
+            im_spec = {"type": "string", "description": "内心独白"}
+            su_spec = {
                 "type": "object",
                 "description": "状态更新（可选）。根据当前情况更新状态，可更新的字段名见【你的状态】",
             }
             for s in schemas:
-                s["function"]["parameters"]["properties"]["state_update"] = spec
+                props = s["function"]["parameters"]["properties"]
+                props["internal_monologue"] = im_spec
+                props["state_update"] = su_spec
         return schemas
 
     def get_text_guide(self) -> str:

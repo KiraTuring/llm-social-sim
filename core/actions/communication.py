@@ -30,7 +30,6 @@ class RadioAction(ActionSpec):
                     "properties": {
                         "target": {"type": "string", "description": "通话对象的名字"},
                         "content": {"type": "string", "description": "通话内容"},
-                        "internal_monologue": {"type": "string", "description": "内心独白"},
                     },
                     "required": ["target", "content"],
                 },
