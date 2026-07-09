@@ -83,38 +83,14 @@ def load_simulation_state(path: str, config: dict):
 
     world.message_bus = MessageBus.from_dict(data["message_bus"])
 
+    agents_by_name = {a["name"]: a for a in scene.agents}
+
     for name, agent_data in data["agents"].items():
-        memory = AgentMemory.from_dict(
-            agent_data["memory"],
-            name=name,
-            short_limit=config["agent"]["memory_short_limit"],
-            compress_threshold=config["agent"]["memory_compress_threshold"],
-        )
-
-        agent_kwargs = dict(
-            name=name,
-            role=agent_data["role"],
-            personality=agent_data["personality"],
-            goal=agent_data["goal"],
-            location=agent_data["location"],
-            relationships=agent_data["relationships"],
-            memory=memory,
-            content_max_length=agent_data.get("content_max_length", 200),
-            inbox_limit=config["agent"].get("inbox_limit", 5),
-            world_description=scene.world_description,
-            states=agent_data.get("states"),
-            writable_states=set(agent_data.get("writable_states", [])),
-            private_states=set(agent_data.get("private_states", [])),
-        )
-
+        cfg = agents_by_name[name]
         agent_type = agent_data.get("agent_type", "Agent")
-        if agent_type == "ManualAgent":
-            agent = ManualAgent(**agent_kwargs)
-        else:
-            agent = Agent(**agent_kwargs)
-
+        cls = ManualAgent if agent_type == "ManualAgent" else Agent
+        agent = cls.from_config(scene, cfg, config, saved=agent_data)
         world.agents[name] = agent
-        agent._last_observed_result = agent_data.get("last_observed_result", "")
 
     gm_data = data["gm"]
     gm = GMAgent.from_config(scene, config)

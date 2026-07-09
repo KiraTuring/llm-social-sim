@@ -50,34 +50,58 @@ class Agent:
         self._last_observed_result: str = ""
 
     @classmethod
-    def from_config(cls, scene, cfg, config, **extra):
-        """从 scene 配置和模拟配置构建 Agent（消除重复的创建逻辑）。"""
-        memory = AgentMemory(
-            name=cfg["name"],
-            short_limit=config["agent"]["memory_short_limit"],
-            compress_threshold=config["agent"]["memory_compress_threshold"],
-        )
-        states = dict(scene.states or {})
-        if cfg.get("states"):
-            states.update(cfg["states"])
+    def from_config(cls, scene, cfg, config, *, saved=None, **extra):
+        """创建 Agent。
 
-        return cls(
+        saved=None: 全新 agent，从 scene+cfg 构建
+        saved=agent_data: 从存档恢复，scene 提供静态字段，saved 提供运行时状态
+        """
+        base = dict(
             name=cfg["name"],
             role=cfg["role"],
             personality=cfg["personality"],
             goal=cfg["goal"],
-            location=cfg["location"],
-            relationships=cfg["relationships"],
-            memory=memory,
-            content_max_length=config["agent"].get("content_max_length", 200),
-            inbox_limit=config["agent"].get("inbox_limit", 5),
             world_description=scene.world_description,
-            states=states,
-            writable_states=set(cfg.get("writable_states") or scene.writable_states or []),
-            private_states=set(cfg.get("private_states") or scene.private_states or []),
             instruction=scene.instruction,
-            **extra,
+            inbox_limit=config["agent"].get("inbox_limit", 5),
         )
+
+        if saved is None:
+            runtime = dict(
+                location=cfg["location"],
+                relationships=cfg["relationships"],
+                memory=AgentMemory(
+                    name=cfg["name"],
+                    short_limit=config["agent"]["memory_short_limit"],
+                    compress_threshold=config["agent"]["memory_compress_threshold"],
+                ),
+                content_max_length=config["agent"].get("content_max_length", 200),
+                states=({**dict(scene.states or {}), **dict(cfg.get("states") or {})}),
+                writable_states=set(cfg.get("writable_states") or scene.writable_states or []),
+                private_states=set(cfg.get("private_states") or scene.private_states or []),
+            )
+        else:
+            runtime = dict(
+                location=saved.get("location", cfg["location"]),
+                relationships=saved.get("relationships", cfg["relationships"]),
+                memory=AgentMemory.from_dict(
+                    saved["memory"],
+                    name=cfg["name"],
+                    short_limit=config["agent"]["memory_short_limit"],
+                    compress_threshold=config["agent"]["memory_compress_threshold"],
+                ),
+                content_max_length=saved.get("content_max_length", 200),
+                states=saved.get("states", {}),
+                writable_states=set(saved.get("writable_states", [])),
+                private_states=set(saved.get("private_states", [])),
+            )
+
+        agent = cls(**base, **runtime, **extra)
+
+        if saved is not None:
+            agent._last_observed_result = saved.get("last_observed_result", "")
+
+        return agent
 
     def build_system_prompt(self, registry: "ActionRegistry") -> str:
         """构建 System Prompt"""
