@@ -268,7 +268,7 @@ class ThinkAction(ActionSpec):
 
     def execute(self, agent_name, params, world):
         thought = params.get("internal_monologue", "思考中")
-        return [], {"summary": f"思考: {thought}"}
+        return [], {"thought": thought}
 
 
 class InteractAction(ActionSpec):
