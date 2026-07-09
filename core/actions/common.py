@@ -236,7 +236,12 @@ class ObserveAction(ActionSpec):
         else:
             parts.append("没有看到其他人")
 
-        return [], {"observed": " | ".join(parts)}
+        result_str = " | ".join(parts)
+        if agent._last_observed_result == result_str:
+            return [], {"observed": "你又观察了一会儿，没有什么新的发现"}
+
+        agent._last_observed_result = result_str
+        return [], {"observed": result_str}
 
 
 class InteractAction(ActionSpec):

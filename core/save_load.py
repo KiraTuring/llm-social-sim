@@ -26,6 +26,7 @@ def serialize_agent(agent: Agent) -> dict:
         "private_states": list(agent._private_states) if agent._private_states else [],
         "content_max_length": agent.content_max_length,
         "agent_type": "ManualAgent" if isinstance(agent, ManualAgent) else "Agent",
+        "last_observed_result": getattr(agent, "_last_observed_result", ""),
         "memory": serialize_memory(agent.memory),
     }
 
@@ -113,6 +114,7 @@ def load_simulation_state(path: str, config: dict):
             agent = Agent(**agent_kwargs)
 
         world.agents[name] = agent
+        agent._last_observed_result = agent_data.get("last_observed_result", "")
 
     gm_data = data["gm"]
     gm = GMAgent.from_config(scene, config)

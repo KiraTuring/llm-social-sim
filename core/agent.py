@@ -47,6 +47,7 @@ class Agent:
         self._writable_states = set(writable_states) if writable_states else set()
         self._private_states = set(private_states) if private_states else set()
         self._last_action = None
+        self._last_observed_result: str = ""
 
     @classmethod
     def from_config(cls, scene, cfg, config, **extra):
@@ -280,7 +281,7 @@ class Agent:
         c = action.content[:self.content_max_length]
         if c:
             parts.append(f": {c}")
-        self._last_action = "你 " + " ".join(parts)
+        self._last_action = " ".join(parts)
 
     def modify_trust(self, other: str, delta: int):
         """修改对某人的信任度"""

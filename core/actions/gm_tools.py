@@ -25,7 +25,7 @@ class NarrateAction(ActionSpec):
                         },
                         "target": {
                             "type": "string",
-                            "description": "接收对象（可选）：留空=全船广播，角色名=私信给该角色，位置名=发给该位置的所有人",
+                            "description": "接收对象（可选）：留空=世界广播，角色名=私信给该角色，位置名=发给身处该位置和能看到该位置的所有人",
                         },
                     },
                     "required": ["content"],

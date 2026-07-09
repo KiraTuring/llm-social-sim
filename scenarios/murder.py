@@ -52,6 +52,12 @@ class MurderScene(Scene):
 
     states = {"情绪": "平静", "精力": 100}
     writable_states = ["情绪"]
+    instruction = """观察指南：
+- observe 给出当前位置的环境细节，写入你的记忆。
+  在同一位置反复观察不会产生新内容——看到的就是这些。
+- 想看新房间，先 move 过去再 observe。
+- 没有想做的事时可以用 internal_monologue 记录心理活动而不调用工具，
+  比反复 observe 更有价值。"""
 
     agents = [
         {
