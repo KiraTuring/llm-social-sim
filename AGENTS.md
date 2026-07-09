@@ -22,16 +22,24 @@ class MyScene(Scene):
     name: str
     locations: list[str]
     agents: list[dict]
-    gm_events: list[tuple[int, str]]
-    gm_random_events: list[str]
+    gm_events: list[tuple[int, str]] = []
+    gm_random_events: list[str] = []
     render_config: dict = {}
 ```
 
-可选:
+可选字段:
 ```python
-    gm_llm_prompt: str = ""          # LLM GM 的 system prompt
+    gm_llm_prompt: str = ""              # LLM GM 的 system prompt
+    world_description: str = ""          # 世界描述，注入 Agent system prompt
     connections: list[tuple[str, str]] = []  # 地点连通边（双向），空=全连通
-    instruction: str = ""            # 附加在 Agent system prompt 末尾的额外指引
+    visibility: dict[str, list[str]] | None = None  # 可见性定义
+    initial_environment: dict[str, dict[str, str]] = {}  # 每个位置的环境指标
+    interactable_keys: dict[str, list[str]] = {}  # 可调节的指标
+    instruction: str = ""                # 附加在 Agent system prompt 末尾的指引
+    states: dict = {}                    # 所有角色默认的状态
+    writable_states: list = []           # LLM 可修改的状态 key
+    private_states: list = []            # 对其他角色隐藏的状态 key
+    npc_names: list[str] = []            # GM 控制的 NPC 角色名
 ```
 Agent 配置 `<list[dict]>` 每个元素必须包含: `name`, `role`, `personality`, `goal`, `location`, `relationships`（启动时自动校验，缺字段立即报错）。
 
@@ -79,13 +87,13 @@ class MyAction(ActionSpec):
                     "properties": {
                         "target": {"type": "string"},
                         "content": {"type": "string"},
-                        "internal_monologue": {"type": "string", "description": "内心独白"},
                     },
                     "required": ["target"],
                 },
             },
         }
-```
+
+注意：`internal_monologue` 和 `state_update` 参数由 `ActionRegistry.get_tool_schemas()` **集中注入**，自定义 Action 不需要在 `get_tool_schema()` 中写。GM 用的 Action 不会注入这两个参数（`ActionRegistry(include_agent_params=False)`）。
 
 `get_tool_schema()` 不接收 `locations` 参数（schema 不编译 enum）。参数合法性由 `validate_params()` 运行时校验。
 
@@ -113,6 +121,8 @@ class MyAction(ActionSpec):
 | `whisper` | target 不能为空/自己；必须在 `agent_names` 且与说话者在同一位置 |
 | `move` | target 不能是当前位置；必须在 `locations` 中且在 `adjacent_locations` 内 |
 | `radio` | target 不能为空/自己；必须在 `agent_names` 中（无位置限制） |
+| `think` | 无参数校验。必填 `internal_monologue`，结果写入记忆为 `[thought]` |
+| `interact` | 可选 `modifications`，只有 `interactable_keys` 中的 key 可调 |
 
 ### 通讯 Action（`core/actions/communication.py`）
 
@@ -120,7 +130,8 @@ class MyAction(ActionSpec):
 
 | Action | 说明 |
 |--------|------|
-| `radio` | 通过无线电与任意位置的队友通话 |
+| `radio` | 通过无线电与任意位置的队友通话，受环境干扰值（`{干扰, 故障}`）阻断 |
+| `think` | 思考或等待，内心独白写入记忆。替代 observe 作为 filler |
 
 `radio` 的消息流：
 
@@ -161,6 +172,16 @@ class MyScene(Scene):
 
 `ConsoleRenderer` 自动读取 `location_icons`，不存在的位置用 `📍` 兜底。
 
+### WorldState 配置方法
+
+`init_world()` 和存档加载共用 `WorldState.apply_scene_config(scene)` 把场景级配置复制到世界状态：
+
+```python
+# 内部自动处理的字段:
+# - 直接复制: locations, connections, interactable_keys, npc_names
+# - 派生: _adjacency(从connections), visibility+_reverse_visibility, environment(从initial_environment), _protected_env_keys
+```
+
 ## MessageBus 关键细节
 
 **Agents 必须先注册才能接收消息:**
@@ -190,6 +211,12 @@ class Message:
 - `speak -> 艾莉娅`：recipients=`[艾莉娅, 旁观者]`，target=`艾莉娅`
 - `whisper -> 雷恩`：recipients=`[雷恩]`，target=`雷恩`
 - 广播（`speak` 无 target）：recipients=`["all"]`，target=`None`
+
+### 消息可见性
+
+- `SpeakAction` 发送给 `get_hearable_agents(speaker)`（同位置 + 能看见该位置的人）
+- `MoveAction` 发送给出发位置和到达位置的 hearable agents 并集
+- `RadioAction` 发送消息给目标（`msg_type="radio"`）+ 旁观者通知（`msg_type="action"`）
 
 ## LLM 集成
 
@@ -247,7 +274,6 @@ agent:
   content_max_length: 200  # 记忆和消息的统一截断长度
   max_energy: 100          # Agent 初始精力值
   inbox_limit: 5           # 每次 perceive 看到的收件箱消息数
-  relation_display_limit: 3  # 印象中显示的关系事件数
 ```
 
 ## Agent 流程
@@ -267,9 +293,23 @@ perceive() 构建的 LLM prompt 顺序：
 ```
 【当前环境】    ← 位置、同位置的人、可见范围
 【你的状态】    ← 情绪、精力
-【你最近记得的事】 ← 记忆（短期 + 摘要 + 关系）
-【你收到的消息】  ← 当前 inbox 内容（处理后清空）
+【你最近记得的事】 ← 记忆（短期 + 摘要）
+【你收到的新信息】 ← 当前 inbox 内容（处理后清空）
 ```
+
+### Agent 创建
+
+`run.py` 通过 `Agent.from_config(scene, cfg, config)` 创建 agent。存档加载时传 `saved=agent_data` 恢复运行时状态：
+
+```python
+# 新建 (from_config 内部根据 scene+cfg 计算 states, 新建空记忆)
+agent = Agent.from_config(scene, cfg, config)
+
+# 存档恢复 (saved 覆盖运行时字段, scene 提供 world_description/instruction 等)
+agent = Agent.from_config(scene, cfg, config, saved=agent_data)
+```
+
+保存时所有 agent 字段由 `serialize_agent()` 序列化，包括 `states`、`writable_states`、`private_states`、`last_observed_result`。
 
 ### inbox 生命周期
 
@@ -279,7 +319,7 @@ act()      → 发送消息到所有 inbox（包括自己）
 下一个 tick → perceive() 读取跨 tick 存活的消息
 ```
 
-**不跨 tick**：每条消息在 `perceive()` 中恰好被看到一次，然后清空。最后一个人的消息存活到下一 tick。
+**同 tick 行动可见性**：排在前面的 agent 行动后，排在后面的 agent 能在本 tick 内看到。反之，排在前面的 agent 要等到下一 tick 才知道后面的人做了什么。每条消息在 `perceive()` 中恰好被看到一次然后清空。最后一个人的消息存活到下一 tick。
 
 ### 手动控制（ManualAgent）
 
@@ -311,6 +351,7 @@ python3 run.py --scene tavern --ticks 5 --mode auto --manual 老巴克 --manual-
 
 - **`agent.act()`**: 每次执行 action 后写入 `[{action_type}] 你: {content[:content_max_length]} (目标: {target})`
 - **`ObserveAction.execute()`**: 通过 `action.result` 写入 `[observed] 你在{位置} | 看到: {人名}({角色})在{位置} - 情绪:{情绪}，...`
+- **`ThinkAction.execute()`**: 通过 `action.result` 写入 `[thought] {内心独白}`
 - **`perceive()`**: 将收到的 inbox 消息写入记忆，格式 `[{msg_type}] 你: {content[:content_max_length]}`（`你` 替换了 sender/target 中的自身名字）
 
 所有截断长度由 `content_max_length`（config，默认 200）统一控制。
@@ -327,7 +368,6 @@ python3 run.py --scene tavern --ticks 5 --mode auto --manual 老巴克 --manual-
 |------|------|------|
 | `_short_term` | 最近事件列表 | `short_limit`（config，默认 10） |
 | `_summary` | LLM 压缩摘要 | 超出 `compress_threshold`（默认 30）时触发 |
-| `_relations` | 对其他 agent 的印象 | 无限制 |
 
 ### 记忆压缩
 
@@ -355,8 +395,11 @@ class TavernScene(Scene):
 
 - 未定义 `visibility` = 只能看到同位置的 agent（向前兼容）
 - 空列表 `[]` = 同位置也看不到其他人（如暗室）
-- `ObserveAction` 自动从所有可见位置收集 agent 信息并存入记忆（**正向**：我能看到的位置）
+- `ObserveAction` 从当前位置收集环境细节 + 所有可见位置的 agent 信息并存入记忆
+  - 环境信息仅限当前位置（不再包含可见位置的环境）
+  - `_last_observed_result` 字符串比对去重，结果相同时返回"没有新的发现"
 - `SpeakAction` 对特定目标说话时，能看到说话者的旁观者也会收到消息（**反向**：谁能看到我）
+- `MoveAction` 通知发送到出发位置和到达位置的 hearable agents 并集（而非全局广播）
 
 ## 环境状态系统（Environment）
 
@@ -395,15 +438,16 @@ Agent.act() → memory.add("[observed] ...")
 
 ### ObserveAction 输出
 
-ObserveAction 读取当前位置 + visibility 中所有可见位置的环境数据：
+ObserveAction 读取当前位置的环境数据 + 所有可见位置的 agent 信息：
 
 ```
-你在驾驶舱 | 环境: 驾驶舱(航向偏差 +0.02°, 引擎温度 正常), 引擎室(引擎震动 轻微, 冷却效率 100%) | 看到: 芬恩(导航员)在驾驶舱 - 情绪:冷静
+你在驾驶舱 | 环境: 驾驶舱(航向偏差 +0.02°) | 看到: 芬恩(导航员)在驾驶舱 - 情绪:冷静
 ```
 
-- 环境段只在有数据的位置出现
-- 所有位置都无 environment → 整个「环境」段消失（tavern 向后兼容）
+- 环境段**仅限当前位置**（可见位置的环境不再包含）
+- 所有位置都无 environment → 整个「环境」段消失
 - 结果通过 `action.result` 自动写入记忆
+- 同位置重复 observe 返回 `"你又观察了一会儿，没有什么新的发现"`（去重基于 `_last_observed_result` 字符串比对）
 
 ### 关键方法
 
@@ -437,12 +481,12 @@ GM 负责向世界注入外部事件，分三级触发（互不阻塞，各自�
 
 GM 拥有自己的 `ActionRegistry`，注册 `core/actions/gm_tools.py` 中的 GM 专用 Action。当前支持:
 
-| Action | 用途 | 未来扩展 |
-|--------|------|---------|
-| `narrate` | GM 旁白：向所有角色发出世界叙事或事件公告 | — |
-| — | — | `add_agent`, `add_location`, `add_item` |
-| — | — | `modify_weather`, `set_time` |
-| — | — | `npc_speak`, `npc_act` |
+| Action | 文件 | 用途 |
+|--------|------|------|
+| `narrate` | `core/actions/gm_tools.py` | GM 旁白：世界叙事或事件公告，支持广播/位置定向/私信 |
+| `modify_environment` | `core/actions/gm_tools.py` | 修改位置环境指标，`value="delete"` 删除非预定义指标 |
+| `modify_char_state` | `core/actions/gm_tools.py` | 修改角色非主观状态（精力、体力、伤势） |
+| `npc_speak` | `core/actions/gm_npc.py` | 控制 NPC 说话，消息流对 Agent 透明（sender=NPC名） |
 
 GM 使用 `llm_client.call_multi()`（走 tool_call 模式）生成事件，支持一次响应多个工具。
 
@@ -476,13 +520,13 @@ class MyScene(Scene):
 - 当前 tick
 - 各位置的角色分布（含情绪/精力）
 - 最近 5 条事件（`world.event_log`）
-- 最近 8 条对话（从 `MessageBus.get_recent(10)` 过滤 `speech`/`whisper`）
+- 最近 15 条消息（从 `MessageBus.get_recent(message_limit)` 获取，含所有 msg_type）
 
 计划/随机事件在 LLM 调用前已写入 `event_log`，GM 可看到它们避免生成冲突内容。
 
 ### 校验上下文
 
-GM 的 `validation_context` 包含 `locations` 和 `agent_names`，便于未来 Action 做参数运行时校验。
+GM 的 `validation_context` 包含 `locations`、`agent_names` 和 `npc_names`，便于 GM Action 做参数校验（如 `npc_speak` 验证 `npc_name` 合法性）。
 
 ### Dispatch 机制
 
@@ -498,6 +542,14 @@ def _exec(action):
 ```
 
 新增 Action 只需注册到 registry，自动被 `_exec` 处理，无需额外映射。
+
+### GM LLM 触发条件
+
+`GMAgent.check_and_inject()` 中 LLM 事件触发的条件：
+
+- 上一 tick 有 `interact` 消息 → **强制触发**
+- 上一 tick 有 `speech` 消息且 target 是 NPC 名 → **强制触发**
+- 以上都没有 → 以 `llm_event_chance` 概率随机触发
 
 ## 测试
 
