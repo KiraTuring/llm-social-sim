@@ -330,7 +330,7 @@ class Agent:
                     if self._pending_user_msg:
                         self._chat_history.append(self._pending_user_msg)
                         self._pending_user_msg = None
-                    self._chat_history.append(self._build_assistant_msg(action, world.tick))
+                    self._chat_history.extend(self._build_chat_entries(action, world.tick))
 
                 return messages
             except Exception as e:
@@ -348,15 +348,53 @@ class Agent:
             parts.append(f": {c}")
         self._last_action = " ".join(parts)
 
-    def _build_assistant_msg(self, action: "Action", tick: int) -> dict:
-        """chat 模式：构建 assistant 角色消息，表示 agent 的执行记录"""
-        parts = [f"[{action.action_type}]"]
-        if action.target:
-            parts.append(f"-> {action.target}")
-        c = action.content[:self.content_max_length]
-        if c:
-            parts.append(f": {c}")
-        return {"role": "assistant", "content": " ".join(parts), "tick": tick}
+    def _build_chat_entries(self, action: "Action", tick: int) -> list[dict]:
+        """chat 模式：构建聊天历史条目。
+
+        tool_call 模式 → assistant(含 tool_calls) + tool(result) 消息对
+        text_parse 模式 → assistant(LLM 原始文本)
+        fallback       → assistant(文本标签格式)
+        """
+        entries = []
+        if action.raw_tool_calls:
+            entries.append({
+                "role": "assistant",
+                "content": action.raw_content,
+                "tool_calls": action.raw_tool_calls,
+                "tick": tick,
+            })
+            for tc in action.raw_tool_calls:
+                entries.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "content": self._tool_result_summary(action),
+                    "tick": tick,
+                })
+        elif action.raw_content:
+            entries.append({
+                "role": "assistant",
+                "content": action.raw_content,
+                "tick": tick,
+            })
+        else:
+            parts = [f"[{action.action_type}]"]
+            if action.target:
+                parts.append(f"-> {action.target}")
+            c = action.content[:self.content_max_length]
+            if c:
+                parts.append(f": {c}")
+            entries.append({
+                "role": "assistant",
+                "content": " ".join(parts),
+                "tick": tick,
+            })
+        return entries
+
+    def _tool_result_summary(self, action: "Action") -> str:
+        """从 action.result 构建工具返回摘要"""
+        if action.result:
+            return " | ".join(str(v)[:self.content_max_length] for v in action.result.values())
+        return f"'{action.action_type}' 已执行"
 
     def modify_trust(self, other: str, delta: int):
         """修改对某人的信任度"""

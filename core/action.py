@@ -16,6 +16,8 @@ class Action(BaseModel):
     internal_monologue: str = ""
     result: dict | None = None
     state_update: dict | None = None
+    raw_tool_calls: list[dict] = Field(default_factory=list)
+    raw_content: str = ""
 
 
 class ActionSpec(ABC):

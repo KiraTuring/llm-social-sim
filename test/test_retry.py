@@ -21,7 +21,11 @@ def _make_response(text_content: str, tool_call: bool, func_name: str = "observe
         tool_calls = None
 
     if tool_call:
-        FakeMessage.tool_calls = [type("FakeToolCall", (), {"function": FakeFunction()})()]
+        FakeMessage.tool_calls = [type("FakeToolCall", (), {
+            "id": f"call_test_{func_name}",
+            "type": "function",
+            "function": FakeFunction(),
+        })()]
 
     class FakeChoice:
         message = FakeMessage()

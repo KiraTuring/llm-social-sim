@@ -145,6 +145,18 @@ class LLMClient:
                         content=params.get("content", ""),
                         params=params,
                         internal_monologue=params.get("internal_monologue", ""),
+                        raw_content=choice.message.content or "",
+                        raw_tool_calls=[
+                            {
+                                "id": tc.id,
+                                "type": tc.type,
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments,
+                                },
+                            }
+                            for tc in choice.message.tool_calls
+                        ],
                     )
                     parsed_action = {
                         "action_type": action.action_type,
@@ -316,6 +328,15 @@ class LLMClient:
                         break
 
                 if all_valid:
+                    for action in actions:
+                        action.raw_content = choice.message.content or ""
+                        if hasattr(choice.message, "tool_calls") and choice.message.tool_calls:
+                            action.raw_tool_calls = [
+                                {"id": tc.id, "type": tc.type,
+                                 "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+                                for tc in choice.message.tool_calls
+                            ]
+
                     parsed = [{"action_type": a.action_type, "target": a.target, "content": a.content} for a in actions]
                     if self.logger:
                         self.logger.log_llm_call(
@@ -426,6 +447,8 @@ class LLMClient:
             text = choice.message.content or ""
             raw_response = response.model_dump_json() if hasattr(response, "model_dump_json") else str(response)
             action = action_registry.parse_text(text)
+            if action:
+                action.raw_content = text
 
             # --- 校验 ---
             error = None

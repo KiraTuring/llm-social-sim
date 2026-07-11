@@ -36,7 +36,11 @@ def _make_llm_response(content: str = "", tool_call: bool = True):
 
     tc = None
     if tool_call:
-        tc = [type("FakeToolCall", (), {"function": FakeFunction()})()]
+        tc = [type("FakeToolCall", (), {
+            "id": "call_test_01",
+            "type": "function",
+            "function": FakeFunction(),
+        })()]
 
     FakeMessage = type("FakeMessage", (), {"content": content, "tool_calls": tc})
 
