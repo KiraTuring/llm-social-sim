@@ -15,6 +15,7 @@ simulation:
   show_full_monologue: false  # 是否完整显示内心独白
 
 agent:
+  prompt_format: "text"  # "text"(flat text) | "chat"(multi-turn chat history)
   memory_short_limit: 10
   memory_compress_threshold: 30
   content_max_length: 200

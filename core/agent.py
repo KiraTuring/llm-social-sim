@@ -30,6 +30,7 @@ class Agent:
         writable_states: set | None = None,
         private_states: set | None = None,
         instruction: str = "",
+        prompt_format: str = "text",
     ):
         self.name = name
         self.role = role
@@ -42,12 +43,15 @@ class Agent:
         self.inbox_limit = inbox_limit
         self.world_description = world_description
         self.instruction = instruction
+        self.prompt_format = prompt_format
 
         self.states = dict(states) if states else {}
         self._writable_states = set(writable_states) if writable_states else set()
         self._private_states = set(private_states) if private_states else set()
         self._last_action = None
         self._last_observed_result: str = ""
+        self._chat_history: list[dict] = []
+        self._pending_user_msg: dict | None = None
 
     @classmethod
     def from_config(cls, scene, cfg, config, *, saved=None, **extra):
@@ -56,6 +60,7 @@ class Agent:
         saved=None: 全新 agent，从 scene+cfg 构建
         saved=agent_data: 从存档恢复，scene 提供静态字段，saved 提供运行时状态
         """
+        prompt_format = config["agent"].get("prompt_format", "text")
         base = dict(
             name=cfg["name"],
             role=cfg["role"],
@@ -64,6 +69,7 @@ class Agent:
             world_description=scene.world_description,
             instruction=scene.instruction,
             inbox_limit=config["agent"].get("inbox_limit", 5),
+            prompt_format=prompt_format,
         )
 
         if saved is None:
@@ -100,6 +106,7 @@ class Agent:
 
         if saved is not None:
             agent._last_observed_result = saved.get("last_observed_result", "")
+            agent._chat_history = saved.get("chat_history", [])
 
         return agent
 
@@ -176,9 +183,10 @@ class Agent:
         state_str = " | ".join(f"{k}: {v}" for k, v in self.states.items())
         parts.append(f"【你的状态】\n{state_str}")
 
-        memory_context = self.memory.get_context()
-        if memory_context:
-            parts.append(memory_context)
+        if self.prompt_format == "text":
+            memory_context = self.memory.get_context()
+            if memory_context:
+                parts.append(memory_context)
 
         if inbox:
             msgs_text_lines = []
@@ -199,7 +207,7 @@ class Agent:
 
         world.message_bus.clear_inbox(self.name)
 
-        if self._last_action:
+        if self.prompt_format == "text" and self._last_action:
             parts.append(f"【你上一tick的行动】\n{self._last_action} \n不要重复刚才的行动。")
 
         result = "\n\n".join(parts)
@@ -229,7 +237,27 @@ class Agent:
             except Exception:
                 pass
 
+            if self.prompt_format == "chat":
+                self._truncate_chat_history()
+
         return result
+
+    def _build_chat_messages(self, current_context: str, tick: int) -> list[dict]:
+        """chat 模式：组装多轮消息。summary 插在最前（system 之后），chat_history 居中。"""
+        messages = list(self._chat_history)
+        messages.append({"role": "user", "content": current_context, "tick": tick})
+
+        if self.memory._summary:
+            messages.insert(0, {"role": "user", "content": f"【你的过去】\n{self.memory._summary}"})
+
+        return messages
+
+    def _truncate_chat_history(self):
+        """压缩后截断 chat_history：只保留 _short_term 中最早 tick 之后的条目。"""
+        if not self.memory._short_term:
+            return
+        oldest_tick = min(e["tick"] for e in self.memory._short_term)
+        self._chat_history = [e for e in self._chat_history if e.get("tick", 0) >= oldest_tick]
 
     async def think(
         self,
@@ -243,7 +271,10 @@ class Agent:
 
         system_prompt = self.build_system_prompt(registry)
 
-        messages = [{"role": "user", "content": context}]
+        if self.prompt_format == "chat":
+            messages = self._build_chat_messages(context, tick)
+        else:
+            messages = [{"role": "user", "content": context}]
 
         _, action = await llm.call(
             system_prompt=system_prompt,
@@ -254,6 +285,9 @@ class Agent:
             tick=tick,
             validation_context=validation_context,
         )
+
+        if action and self.prompt_format == "chat":
+            self._pending_user_msg = {"role": "user", "content": context, "tick": tick}
 
         if not action:
             print(f"[{self.name}] LLM 未返回 Action，使用默认")
@@ -291,6 +325,13 @@ class Agent:
                     self.memory.add(summary, tick=world.tick)
 
                 self._build_last_action(action, world)
+
+                if self.prompt_format == "chat":
+                    if self._pending_user_msg:
+                        self._chat_history.append(self._pending_user_msg)
+                        self._pending_user_msg = None
+                    self._chat_history.append(self._build_assistant_msg(action, world.tick))
+
                 return messages
             except Exception as e:
                 print(f"[{self.name}] 执行 action 失败: {e}")
@@ -306,6 +347,16 @@ class Agent:
         if c:
             parts.append(f": {c}")
         self._last_action = " ".join(parts)
+
+    def _build_assistant_msg(self, action: "Action", tick: int) -> dict:
+        """chat 模式：构建 assistant 角色消息，表示 agent 的执行记录"""
+        parts = [f"[{action.action_type}]"]
+        if action.target:
+            parts.append(f"-> {action.target}")
+        c = action.content[:self.content_max_length]
+        if c:
+            parts.append(f": {c}")
+        return {"role": "assistant", "content": " ".join(parts), "tick": tick}
 
     def modify_trust(self, other: str, delta: int):
         """修改对某人的信任度"""

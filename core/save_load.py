@@ -27,6 +27,8 @@ def serialize_agent(agent: Agent) -> dict:
         "content_max_length": agent.content_max_length,
         "agent_type": "ManualAgent" if isinstance(agent, ManualAgent) else "Agent",
         "last_observed_result": getattr(agent, "_last_observed_result", ""),
+        "prompt_format": getattr(agent, "prompt_format", "text"),
+        "chat_history": getattr(agent, "_chat_history", []),
         "memory": serialize_memory(agent.memory),
     }
 
