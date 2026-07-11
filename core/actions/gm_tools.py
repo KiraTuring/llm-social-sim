@@ -46,7 +46,7 @@ class NarrateAction(ActionSpec):
     def execute(self, agent_name, params, world):
         content = params.get("content", "")
         if not content:
-            return [], {"summary": "事件描述为空"}
+            return [], {"result": "事件描述为空"}
         target = params.get("target", "")
 
         if target in world.agents:
@@ -54,7 +54,7 @@ class NarrateAction(ActionSpec):
         elif target in world.locations:
             recipients = world.get_hearable_agents(target, use_location=True)
             if not recipients:
-                return [], {"summary": f"'{target}' 及可见位置均无人在场"}
+                return [], {"result": f"'{target}' 及可见位置均无人在场"}
         else:
             recipients = [BROADCAST]
 
@@ -62,8 +62,8 @@ class NarrateAction(ActionSpec):
                       content=content, msg_type="system_event", tick=world.tick)
         world.message_bus.send(msg)
         prefix = f"[{target}] " if target else ""
-        summary = f"旁白: {prefix}{content}"
-        return [], {"summary": summary}
+        world.add_event(f"旁白: {prefix}{content}")
+        return [], None
 
 
 class ModifyEnvironmentAction(ActionSpec):
@@ -111,9 +111,12 @@ class ModifyEnvironmentAction(ActionSpec):
         key = params.get("key", "")
         value = params.get("value", "")
         if not loc or not key or not value:
-            return [], {"summary": "参数不完整，需要 location/key/value"}
+            return [], {"result": "参数不完整，需要 location/key/value"}
         success, msg = world.modify_environment(loc, key, value)
-        return [], {"summary": msg}
+        if not success:
+            return [], {"result": msg}
+        world.add_event(msg)
+        return [], None
 
 
 class ModifyCharStateAction(ActionSpec):
@@ -161,9 +164,9 @@ class ModifyCharStateAction(ActionSpec):
         key = params.get("key", "")
         value = params.get("value", "")
         if not target or not key or not value:
-            return [], {"summary": "参数不完整，需要 target/key/value"}
+            return [], {"result": "参数不完整，需要 target/key/value"}
         if target not in world.agents:
-            return [], {"summary": f"未找到角色 {target}"}
+            return [], {"result": f"未找到角色 {target}"}
         world.agents[target].states[key] = value
-        summary = f"角色状态: {target}.{key} → {value}"
-        return [], {"summary": summary}
+        world.add_event(f"角色状态: {target}.{key} → {value}")
+        return [], None

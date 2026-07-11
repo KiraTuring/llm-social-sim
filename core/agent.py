@@ -392,9 +392,8 @@ class Agent:
 
     def _tool_result_summary(self, action: "Action") -> str:
         """从 action.result 构建工具返回摘要"""
-        if action.result:
-            return " | ".join(str(v)[:self.content_max_length] for v in action.result.values())
-        return f"'{action.action_type}' 已执行"
+        from core.action import format_tool_result
+        return format_tool_result(action.action_type, action.result, self.content_max_length)
 
     def modify_trust(self, other: str, delta: int):
         """修改对某人的信任度"""

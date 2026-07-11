@@ -125,3 +125,10 @@ class ActionRegistry:
             internal_monologue=internal_monologue,
             state_update=state_update,
         )
+
+
+def format_tool_result(action_type: str, result: dict | None, max_length: int = 200) -> str:
+    """统一的工具返回摘要，用于 tool role 消息"""
+    if not result:
+        return f"'{action_type}' 已执行"
+    return " | ".join(str(v)[:max_length] for v in result.values())

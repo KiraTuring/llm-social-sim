@@ -138,8 +138,8 @@ class GMAgent:
                 if not spec:
                     return f"未知工具: {action.action_type}"
                 _, result = spec.execute("GM", action.params, world)
-                summary = (result or {}).get("summary", f"'{action.action_type}' 执行完成")
-                world.add_event(summary)
+                from core.action import format_tool_result
+                summary = format_tool_result(action.action_type, result)
                 if self.logger:
                     self.logger.info(f"GM 工具: {action.action_type} → {summary}")
                 return summary

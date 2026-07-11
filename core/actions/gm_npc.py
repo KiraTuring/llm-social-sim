@@ -52,4 +52,5 @@ class NpcSpeakAction(ActionSpec):
         )
         world.message_bus.send(msg)
         suffix = f" -> {target}" if target else ""
-        return [msg], {"summary": f"NPC {npc_name}{suffix}: {content}"}
+        world.add_event(f"NPC {npc_name}{suffix}: {content}")
+        return [msg], None
