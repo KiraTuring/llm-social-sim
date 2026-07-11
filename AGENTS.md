@@ -269,11 +269,24 @@ logging:
 
 ```yaml
 agent:
+  prompt_format: "text"       # "text"(flat text) | "chat"(multi-turn chat history)
   memory_short_limit: 10
   memory_compress_threshold: 30
   content_max_length: 200  # 记忆和消息的统一截断长度
   max_energy: 100          # Agent 初始精力值
   inbox_limit: 5           # 每次 perceive 看到的收件箱消息数
+```
+
+### GM 配置
+
+```yaml
+gm:
+  prompt_format: "text"              # "text"(fresh each tick) | "chat"(persistent multi-turn)
+  chat_history_max_messages: 40      # chat 模式下 GM 历史消息上限
+  use_llm: true
+  random_event_chance: 0.2
+  llm_event_chance: 0.5
+  message_limit: 15                  # 世界上下文中显示的消息数
 ```
 
 ## Agent 流程
@@ -320,6 +333,85 @@ act()      → 发送消息到所有 inbox（包括自己）
 ```
 
 **同 tick 行动可见性**：排在前面的 agent 行动后，排在后面的 agent 能在本 tick 内看到。反之，排在前面的 agent 要等到下一 tick 才知道后面的人做了什么。每条消息在 `perceive()` 中恰好被看到一次然后清空。最后一个人的消息存活到下一 tick。
+
+## Prompt 格式
+
+Agent 和 GM 各自支持两种 prompt 格式，通过 config 中的 `prompt_format` 切换（`"text"`=无状态扁平文本，`"chat"`=多轮持久对话）。
+
+### text 模式（默认）
+
+所有上下文扁平坦入单条 `user` 消息，每次 think 无状态：
+
+```
+system + [user: 环境 + 状态 + 记忆上下文(短期+摘要) + 收件箱 + 上一轮行动]
+```
+
+Agent 之间的差异只体现在 context 文本内容上。GM 每 tick 重新构建消息列表。
+
+### chat 模式（Agent）
+
+每轮追加到 Agent 持久化的 `_chat_history`，LLM 收到标准多轮对话：
+
+```
+system + [
+  user: "【你的过去】{压缩摘要}"     ← 动态注入，不在 _chat_history 中
+  user(tick1): 环境 + 状态 + 收件箱
+  assistant(tool_calls): [{函数}]
+  tool(tool_call_id): {执行结果}
+  user(tick2): 环境 + 状态 + 收件箱
+  ...
+]
+```
+
+chat 模式下 `perceive()` 生成的上下文差异：
+
+| | text 模式 | chat 模式 |
+|---|---|---|
+| 记忆上下文 | 注入 `memory.get_context()`（短期+摘要） | 不注入（替换为 chat_history） |
+| 上一轮行动 | 注入 `_last_action` 文本片段 | 不注入（assistant 消息已包含） |
+
+**消息结构** — `_build_chat_entries()` 根据 `action.raw_tool_calls` 决定：
+
+- **有 `raw_tool_calls`**（tool_call 模式）→ `assistant(tool_calls)` + `tool(result)` 消息对
+- **有 `raw_content`**（text_parse 模式）→ `assistant(LLM 原始文本)`
+- **都没有**（ManualAgent 或 action 失败）→ `assistant("[action_type]")` 文本标签
+
+Tool 消息内容由共享函数 `format_tool_result()` 统一生成（`core/action.py`）：
+
+```python
+def format_tool_result(action_type, result, max_length=200):
+    if not result:
+        return f"'{action_type}' 已执行"
+    return " | ".join(str(v)[:max_length] for v in result.values())
+```
+
+**生命周期**：
+
+```
+think() → 传 _chat_history 副本给 LLM → LLM 返回 action → 设 _pending_user_msg
+act()   → 执行 → _build_chat_entries() → 提交到 _chat_history
+          (清空 _pending_user_msg)
+perceive() → 压缩触发时调用 _truncate_chat_history() 按 tick 对齐记忆
+```
+
+**retry 不污染历史**：`think()` 传 `list(_chat_history)` 副本给 LLM，重试消息追加在副本上，不影响持久 `_chat_history`。
+
+**save/load**：`serialize_agent()` 序列化 `prompt_format` 和 `chat_history`，存档恢复时还原。
+
+### chat 模式（GM）
+
+`gm.prompt_format: "chat"` 启用。GM 维护跨 tick 的 `_gm_history`，每轮 ReAct 的结果持久化：
+
+```
+tick1 _gm_history: [user(t1), assistant(narrate), tool(结果)]
+tick2 messages:     [user(t1), assistant(narrate), tool(结果), user(t2)]
+      ReAct 后:     [..., assistant(narrate), tool(结果)]
+```
+
+细节：
+- 延续提示 `"如需继续使用工具..."` 在提交前过滤
+- `any_actions` 标志：GM 不调用工具时不写入历史
+- 截断时 `while` 循环确保首条为 `user`（避免孤立 `tool` 消息）
 
 ### 手动控制（ManualAgent）
 
@@ -535,12 +627,17 @@ GM Action 统一通过 `ActionSpec.execute()` 执行，由 `_exec` 回调统一�
 ```python
 def _exec(action):
     spec = self.registry.get(action.action_type)
+    if not spec:
+        return f"未知工具: {action.action_type}"
     _, result = spec.execute("GM", action.params, world)
-    summary = (result or {}).get("summary", f"'{action.action_type}' 执行完成")
-    world.add_event(summary)
+    from core.action import format_tool_result
+    summary = format_tool_result(action.action_type, result)
+    if self.logger:
+        self.logger.info(f"GM 工具: {action.action_type} → {summary}")
     return summary
 ```
 
+`world.add_event()` 已移入各 GM Action 的 `execute()` 内部，`_exec` 不再管理 event_log。
 新增 Action 只需注册到 registry，自动被 `_exec` 处理，无需额外映射。
 
 ### GM LLM 触发条件
@@ -564,6 +661,7 @@ def _exec(action):
 | `test_gm.py` | GM 事件注入 |
 | `test_retry.py` | LLM 重试机制（无 tool call、不合法工具名、不合法参数） |
 | `test_bugs.py` | Bug 修复验证（model 配置、compress 空返回、visibility 安全、message_bus 字段） |
+| `test_chat_format.py` | chat 模式消息结构、截断、retry 隔离、text 模式回归 |
 
 ## 调试工具
 
