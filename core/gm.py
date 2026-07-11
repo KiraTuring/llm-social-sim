@@ -19,7 +19,8 @@ class GMAgent:
 
     def __init__(self, events: list, random_events: list, chance: float,
                  use_llm: bool = False, llm_chance: float = 0.0, llm_prompt: str = "",
-                 world_description: str = "", logger=None, message_limit: int = 15):
+                 world_description: str = "", logger=None, message_limit: int = 15,
+                 prompt_format: str = "text", history_max_messages: int = 40):
         self.scheduled_events = events
         self.random_events = random_events
         self.random_chance = chance
@@ -29,6 +30,9 @@ class GMAgent:
         self.world_description = world_description
         self.logger = logger
         self.message_limit = message_limit
+        self.prompt_format = prompt_format
+        self.history_max_messages = history_max_messages
+        self._gm_history: list[dict] = []
 
         self.registry = ActionRegistry(include_agent_params=False)
         self.registry.register(NarrateAction())
@@ -49,6 +53,8 @@ class GMAgent:
             llm_prompt=gm_cfg.get("llm_prompt", ""),
             world_description=scene.world_description,
             message_limit=config["gm"].get("message_limit", 15),
+            prompt_format=config["gm"].get("prompt_format", "text"),
+            history_max_messages=config["gm"].get("chat_history_max_messages", 40),
         )
 
     async def check_and_inject(self, world: "WorldState", llm_client: "LLMClient | None" = None):
@@ -103,6 +109,14 @@ class GMAgent:
         msg = Message(sender="GM", recipients=[BROADCAST], content=event, msg_type="system_event", tick=world.tick)
         world.message_bus.send(msg)
 
+    def _truncate_gm_history(self):
+        """chat 模式：滑动窗口截断 GM 对话历史"""
+        if len(self._gm_history) > self.history_max_messages:
+            excess = len(self._gm_history) - self.history_max_messages
+            self._gm_history = self._gm_history[excess:]
+            if self._gm_history and self._gm_history[0].get("role") != "user":
+                self._gm_history.pop(0)
+
     async def _generate_llm_event(self, world: "WorldState", llm_client: "LLMClient") -> None:
         """ReAct 循环：让 LLM 连续调用工具生成事件"""
         system_prompt = self._build_gm_prompt()
@@ -111,7 +125,12 @@ class GMAgent:
             "agent_names": list(world.agents.keys()),
             "npc_names": list(world.npc_names),
         }
-        messages = [{"role": "user", "content": self._build_world_context(world)}]
+
+        if self.prompt_format == "chat":
+            messages = list(self._gm_history)
+            messages.append({"role": "user", "content": self._build_world_context(world)})
+        else:
+            messages = [{"role": "user", "content": self._build_world_context(world)}]
 
         for turn in range(self.MAX_TURNS):
             def _exec(action):
@@ -138,7 +157,15 @@ class GMAgent:
             if not actions:
                 break
 
-            messages.append({"role": "user", "content": "如需继续使用工具请调用，否则直接回复'完成'。"})
+            messages.append({"role": "user",
+                "content": "如需继续使用工具请调用，否则直接回复'完成'。"})
+
+        if self.prompt_format == "chat":
+            self._gm_history = [
+                m for m in messages
+                if not (m.get("role") == "user" and "如需继续使用工具" in m.get("content", ""))
+            ]
+            self._truncate_gm_history()
 
     def _build_gm_prompt(self) -> str:
         """构建 GM 的 system prompt，自动追加可用工具"""

@@ -21,6 +21,8 @@ agent:
   content_max_length: 200
 
 gm:
+  prompt_format: "text"  # "text"(fresh each tick) | "chat"(persistent multi-turn)
+  chat_history_max_messages: 40
   use_llm: true
   random_event_chance: 0.2
   llm_event_chance: 0.5
@@ -30,4 +32,4 @@ scene: "tavern"
 
 logging:
   file: "logs/simulation.log"
-  level: "DEBUG"  # DEBUG, INFO, WARNING, ERROR
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR

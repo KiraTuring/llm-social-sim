@@ -49,6 +49,7 @@ def save_simulation_state(world, gm, scene_module: str, scene_display: str, path
             "scheduled_events": [[t, e] for t, e in gm.scheduled_events],
             "random_events": gm.random_events,
             "use_llm": gm.use_llm,
+            "history": getattr(gm, "_gm_history", []),
         },
         "agents": {
             name: serialize_agent(agent)
@@ -99,5 +100,6 @@ def load_simulation_state(path: str, config: dict):
     gm.scheduled_events = [(t, e) for t, e in gm_data["scheduled_events"]]
     gm.random_events = gm_data["random_events"]
     gm.use_llm = gm_data.get("use_llm", config["gm"]["use_llm"])
+    gm._gm_history = gm_data.get("history", [])
 
     return world, scene, gm
