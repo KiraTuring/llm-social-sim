@@ -114,8 +114,8 @@ class GMAgent:
         if len(self._gm_history) > self.history_max_messages:
             excess = len(self._gm_history) - self.history_max_messages
             self._gm_history = self._gm_history[excess:]
-            if self._gm_history and self._gm_history[0].get("role") != "user":
-                self._gm_history.pop(0)
+        while self._gm_history and self._gm_history[0].get("role") != "user":
+            self._gm_history.pop(0)
 
     async def _generate_llm_event(self, world: "WorldState", llm_client: "LLMClient") -> None:
         """ReAct 循环：让 LLM 连续调用工具生成事件"""
