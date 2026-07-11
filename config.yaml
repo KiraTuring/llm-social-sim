@@ -15,21 +15,21 @@ simulation:
   show_full_monologue: false  # 是否完整显示内心独白
 
 agent:
-  prompt_format: "text"  # "text"(flat text) | "chat"(multi-turn chat history)
+  prompt_format: "chat"  # "text"(flat text) | "chat"(multi-turn chat history)
   memory_short_limit: 10
   memory_compress_threshold: 30
   content_max_length: 200
 
 gm:
-  prompt_format: "text"  # "text"(fresh each tick) | "chat"(persistent multi-turn)
+  prompt_format: "chat"  # "text"(fresh each tick) | "chat"(persistent multi-turn)
   chat_history_max_messages: 40
   use_llm: true
   random_event_chance: 0.2
-  llm_event_chance: 0.5
-  message_limit: 15
+  llm_event_chance: 0.2
+  message_limit: 10
 
 scene: "tavern"
 
 logging:
   file: "logs/simulation.log"
-  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  level: "DEBUG"  # DEBUG, INFO, WARNING, ERROR

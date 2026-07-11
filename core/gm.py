@@ -132,6 +132,8 @@ class GMAgent:
         else:
             messages = [{"role": "user", "content": self._build_world_context(world)}]
 
+        any_actions = False
+
         for turn in range(self.MAX_TURNS):
             def _exec(action):
                 spec = self.registry.get(action.action_type)
@@ -156,11 +158,12 @@ class GMAgent:
             )
             if not actions:
                 break
+            any_actions = True
 
             messages.append({"role": "user",
                 "content": "如需继续使用工具请调用，否则直接回复'完成'。"})
 
-        if self.prompt_format == "chat":
+        if self.prompt_format == "chat" and any_actions:
             self._gm_history = [
                 m for m in messages
                 if not (m.get("role") == "user" and "如需继续使用工具" in m.get("content", ""))
