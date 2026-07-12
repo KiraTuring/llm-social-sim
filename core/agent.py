@@ -115,9 +115,7 @@ class Agent:
 
         action_names = ", ".join(registry.get_action_names())
 
-        desc_lines = "\n".join(
-            f"- {name}: {registry.get(name).description}" for name in registry.get_action_names()
-        )
+        desc_lines = registry.describe()
 
         relations_text = "\n".join(
             [f"- {name}: 信任度 {rel.get('trust', 0)}，印象「{rel.get('impression', '')}」"

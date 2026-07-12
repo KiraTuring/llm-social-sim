@@ -30,6 +30,15 @@ class Scene:
         """注册场景特定的 actions"""
         pass
 
+    def setup_gm(self, registry: ActionRegistry) -> None:
+        """注册 GM 可用工具。场景覆盖此方法可添加自定义 GM 工具。"""
+        from core.actions.gm_tools import NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction
+        from core.actions.gm_npc import NpcSpeakAction
+        registry.register(NarrateAction())
+        registry.register(ModifyEnvironmentAction())
+        registry.register(ModifyCharStateAction())
+        registry.register(NpcSpeakAction())
+
     def setup_rules(self, engine: RuleEngine) -> None:
         """注册场景特定的规则"""
         pass

@@ -86,6 +86,13 @@ class ActionRegistry:
                 props["state_update"] = su_spec
         return schemas
 
+    def describe(self, indent: str = "") -> str:
+        """返回所有工具的格式化描述列表。"""
+        return "\n".join(
+            f"{indent}- {name}: {spec.description}"
+            for name, spec in self._actions.items()
+        )
+
     def get_text_guide(self) -> str:
         """动态生成文本格式说明"""
         formats = "\n\n".join([act.text_format for act in self._actions.values()])

@@ -20,7 +20,8 @@ class GMAgent:
     def __init__(self, events: list, random_events: list, chance: float,
                  use_llm: bool = False, llm_chance: float = 0.0, llm_prompt: str = "",
                  world_description: str = "", logger=None, message_limit: int = 15,
-                 prompt_format: str = "text", history_max_messages: int = 40):
+                 prompt_format: str = "text", history_max_messages: int = 40,
+                 gm_registry: ActionRegistry | None = None):
         self.scheduled_events = events
         self.random_events = random_events
         self.random_chance = chance
@@ -34,14 +35,17 @@ class GMAgent:
         self.history_max_messages = history_max_messages
         self._gm_history: list[dict] = []
 
-        self.registry = ActionRegistry(include_agent_params=False)
-        self.registry.register(NarrateAction())
-        self.registry.register(ModifyEnvironmentAction())
-        self.registry.register(ModifyCharStateAction())
-        self.registry.register(NpcSpeakAction())
+        if gm_registry is not None:
+            self.registry = gm_registry
+        else:
+            self.registry = ActionRegistry(include_agent_params=False)
+            self.registry.register(NarrateAction())
+            self.registry.register(ModifyEnvironmentAction())
+            self.registry.register(ModifyCharStateAction())
+            self.registry.register(NpcSpeakAction())
 
     @classmethod
-    def from_config(cls, scene, config):
+    def from_config(cls, scene, config, gm_registry=None):
         """从 scene 配置和模拟配置构建 GMAgent。"""
         gm_cfg = scene.get_gm_config()
         return cls(
@@ -55,6 +59,7 @@ class GMAgent:
             message_limit=config["gm"].get("message_limit", 15),
             prompt_format=config["gm"].get("prompt_format", "text"),
             history_max_messages=config["gm"].get("chat_history_max_messages", 40),
+            gm_registry=gm_registry,
         )
 
     async def check_and_inject(self, world: "WorldState", llm_client: "LLMClient | None" = None):
@@ -120,11 +125,7 @@ class GMAgent:
     async def _generate_llm_event(self, world: "WorldState", llm_client: "LLMClient") -> None:
         """ReAct 循环：让 LLM 连续调用工具生成事件"""
         system_prompt = self._build_gm_prompt()
-        validation_context = {
-            "locations": world.locations,
-            "agent_names": list(world.agents.keys()),
-            "npc_names": list(world.npc_names),
-        }
+        validation_context = world.build_validation_context("GM")
 
         if self.prompt_format == "chat":
             messages = list(self._gm_history)
@@ -194,10 +195,7 @@ class GMAgent:
         lines.append("")
         lines.append("注意：你在调用工具之前输出的任何对话文字都不会被其他角色看到，也不会对模拟产生任何影响，相当于内心独白。只有工具调用本身会影响环境和其他角色。")
         lines.append("你可以使用以下工具（可一次调用多个）：")
-        for s in self.registry.get_tool_schemas():
-            name = s["function"]["name"]
-            desc = s["function"]["description"]
-            lines.append(f"  - {name}: {desc}")
+        lines.append(self.registry.describe(indent="  "))
         return "\n".join(lines)
 
     def _build_world_context(self, world: "WorldState") -> str:

@@ -99,7 +99,7 @@ class MyAction(ActionSpec):
 
 ### 参数校验（validate_params）
 
-每个 Action 可以覆盖 `validate_params(params, context)` 方法对参数做运行时校验。`context` 包含 `agent_name`、`agent_location`、`agent_names`、`locations`、`agents_by_location`、`hearable_agents`、`adjacent_locations`。
+每个 Action 可以覆盖 `validate_params(params, context)` 方法对参数做运行时校验。`context` 包含 `agent_name`、`agent_location`、`agent_names`、`locations`、`agents_by_location`、`hearable_agents`、`adjacent_locations`。对于 GM 工具（无 `agent_location`），额外包含 `npc_names`。
 
 返回 `None`=合法，`str`=错误信息：
 
@@ -112,6 +112,29 @@ class MyAction(ActionSpec):
             return f"'{target}' 不是有效位置，可选: {', '.join(locations)}"
         return None
 ```
+
+### GM Action 注册
+
+GM 工具的注册方式与角色 Action 相同，由场景的 `setup_gm()` 方法定义：
+
+```python
+def setup_gm(self, registry: ActionRegistry):
+    registry.register(NarrateAction())           # GM 旁白
+    registry.register(ModifyEnvironmentAction()) # 修改环境指标
+    registry.register(ModifyCharStateAction())   # 修改角色状态
+    registry.register(NpcSpeakAction())          # 控制 NPC 说话
+```
+
+基类 Scene 默认注册以上 4 个工具。场景可覆盖以添加自定义 GM 工具：
+
+```python
+class MyScene(Scene):
+    def setup_gm(self, registry):
+        super().setup_gm(registry)  # 保留默认工具
+        registry.register(MyCustomGMAction())
+```
+
+GM 使用的 `ActionRegistry` 使用 `include_agent_params=False`（不含 `internal_monologue` 和 `state_update`）。
 
 内置 Action 的校验规则：
 

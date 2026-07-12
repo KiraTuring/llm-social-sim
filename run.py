@@ -66,7 +66,9 @@ def _init_world(config: dict, scene_name: str, manual_agents: list[str] | None):
 
     world.action_order = [n for n in world.agents if n not in world.npc_names]
 
-    gm = GMAgent.from_config(scene, config)
+    gm_registry = ActionRegistry(include_agent_params=False)
+    scene.setup_gm(gm_registry)
+    gm = GMAgent.from_config(scene, config, gm_registry)
 
     return world, scene, gm, registry
 
@@ -77,6 +79,9 @@ def _load_world(load_path: str, config: dict, max_ticks: int | None):
 
     world, scene, gm = load_simulation_state(load_path, config)
     scene.setup(registry := ActionRegistry())
+    gm_registry = ActionRegistry(include_agent_params=False)
+    scene.setup_gm(gm_registry)
+    gm.registry = gm_registry
     start_tick = world.tick + 1
     remaining = max_ticks or config["simulation"]["max_ticks"]
     print(f"从存档恢复 [{scene.name}]，当前 tick={world.tick}，继续运行 {remaining} 个 tick\n")

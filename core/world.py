@@ -144,7 +144,15 @@ class WorldState:
             self.action_order = self.action_order[1:] + [self.action_order[0]]
 
     def build_validation_context(self, agent_name: str) -> dict:
-        """为指定 Agent 构建 LLM 参数校验上下文"""
+        """为指定 Agent 或 GM 构建 LLM 参数校验上下文"""
+        if agent_name not in self.agents:
+            return {
+                "agent_name": agent_name,
+                "agent_names": list(self.agents.keys()),
+                "locations": self.locations,
+                "npc_names": list(self.npc_names),
+                "interactable_keys": self.interactable_keys,
+            }
         agent_location = self.agents[agent_name].location
         agents_by_location = {loc: self.get_agents_in_location(loc) for loc in self.locations}
         return {
