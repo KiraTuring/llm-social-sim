@@ -22,7 +22,7 @@ class MyScene(Scene):
     name: str
     locations: list[str]
     agents: list[dict]
-    gm_events: list[tuple[int, str]] = []
+    gm_events: list[tuple[int, str]] | list[tuple[int, str, dict]] = []
     gm_random_events: list[str] = []
     render_config: dict = {}
 ```
@@ -154,7 +154,6 @@ GM 使用的 `ActionRegistry` 使用 `include_agent_params=False`（不含 `inte
 | Action | 说明 |
 |--------|------|
 | `radio` | 通过无线电与任意位置的队友通话，受环境干扰值（`{干扰, 故障}`）阻断 |
-| `think` | 思考或等待，内心独白写入记忆。替代 observe 作为 filler |
 
 `radio` 的消息流：
 
@@ -296,7 +295,6 @@ agent:
   memory_short_limit: 10
   memory_compress_threshold: 30
   content_max_length: 200  # 记忆和消息的统一截断长度
-  max_energy: 100          # Agent 初始精力值
   inbox_limit: 5           # 每次 perceive 看到的收件箱消息数
 ```
 
@@ -320,7 +318,7 @@ gm:
 2. **`think()`** → 调用 LLM 生成 Action
 3. **`act()`** → 通过 ActionRegistry 查找并执行，**自动将行动摘要写入短期记忆**
 
-**同 tick 行动可见性**：排在前面的 agent 说话/行动后，排在后面的 agent 能在本 tick 内看到（通过 perceive 读到的 inbox 消息）；反之，排在前面的 agent 要等到下一 tick 才知道后面的人做了什么。
+**同 tick 行动可见性**：排在前面的 agent 说话/行动后，排在后面的 agent 能在本 tick 内看到（通过 perceive 读到的 inbox 消息）；反之，排在前面的 agent 要等到下一 tick 才知道后面的人做了什么。每条消息在 `perceive()` 中恰好被看到一次然后清空，最后一个人的消息存活到下一 tick。
 
 ### 上下文顺序
 
@@ -354,8 +352,6 @@ perceive() → 读取并清空 inbox
 act()      → 发送消息到所有 inbox（包括自己）
 下一个 tick → perceive() 读取跨 tick 存活的消息
 ```
-
-**同 tick 行动可见性**：排在前面的 agent 行动后，排在后面的 agent 能在本 tick 内看到。反之，排在前面的 agent 要等到下一 tick 才知道后面的人做了什么。每条消息在 `perceive()` 中恰好被看到一次然后清空。最后一个人的消息存活到下一 tick。
 
 ## Prompt 格式
 
@@ -548,7 +544,7 @@ Agent.act() → memory.add("[observed] ...")
 ### 三种变更路径
 
 - **计划事件（确定性）**：`gm_events` 格式升级为 `(tick, text, changes?)`，`changes = {"位置": {"指标": "新值"}}`。2-tuple 无变更，向后兼容。
-- **LLM GM（动态）**：GM 的 ActionRegistry 注册了 `narrate` 和 `modify_environment` 工具，LLM 可在 ReAct 循环中调用 `narrate(content)`（叙事公告）+ `modify_environment(location, key, value)`（改状态），支持并行调用。
+- **LLM GM（动态）**：通过 `scene.setup_gm()` 注册的 GM 工具（`narrate`、`modify_environment`、`modify_char_state`、`npc_speak`），LLM 可在 ReAct 循环中并行调用。
 - **随机事件**：保持纯文本，暂不携带变更。
 
 ### ObserveAction 输出
@@ -594,7 +590,7 @@ GM 负责向世界注入外部事件，分三级触发（互不阻塞，各自�
 
 ### LLM 动态事件
 
-GM 拥有自己的 `ActionRegistry`，注册 `core/actions/gm_tools.py` 中的 GM 专用 Action。当前支持:
+GM 拥有自己的 `ActionRegistry`，由场景的 `setup_gm()` 方法定义。基类默认注册以下工具：
 
 | Action | 文件 | 用途 |
 |--------|------|------|
@@ -634,14 +630,13 @@ class MyScene(Scene):
 
 - 当前 tick
 - 各位置的角色分布（含情绪/精力）
-- 最近 5 条事件（`world.event_log`）
 - 最近 15 条消息（从 `MessageBus.get_recent(message_limit)` 获取，含所有 msg_type）
 
 计划/随机事件在 LLM 调用前已写入 `event_log`，GM 可看到它们避免生成冲突内容。
 
 ### 校验上下文
 
-GM 的 `validation_context` 包含 `locations`、`agent_names` 和 `npc_names`，便于 GM Action 做参数校验（如 `npc_speak` 验证 `npc_name` 合法性）。
+GM 的 `validation_context` 通过 `world.build_validation_context("GM")` 构建，包含 `agent_name`、`agent_names`、`locations`、`npc_names` 和 `interactable_keys`，便于 GM Action 做参数校验（如 `npc_speak` 验证 `npc_name` 合法性）。
 
 ### Dispatch 机制
 
