@@ -29,7 +29,7 @@ class RadioAction(ActionSpec):
                     "type": "object",
                     "properties": {
                         "target": {"type": "string", "description": "通话对象的名字"},
-                        "content": {"type": "string", "description": "通话内容"},
+                        "content": {"type": "string", "description": "通话内容，简短的一两句话"},
                     },
                     "required": ["target", "content"],
                 },
@@ -37,6 +37,10 @@ class RadioAction(ActionSpec):
         }
 
     def validate_params(self, params, context):
+        content = params.get("content", "")
+        max_len = context.get("content_max_length", 200)
+        if len(content) > max_len:
+            return f"内容过长（{len(content)}字），超出限制（{max_len}字），请精简到{max_len}字以内"
         target = params.get("target", "")
         if not target:
             return "通话对象不能为空"

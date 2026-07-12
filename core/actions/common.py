@@ -20,7 +20,7 @@ class SpeakAction(ActionSpec):
                     "type": "object",
                     "properties": {
                         "target": {"type": "string", "description": "说话对象（留空=对所有人，不要填入任何文字）"},
-                        "content": {"type": "string", "description": "说话内容"},
+                        "content": {"type": "string", "description": "说话内容，简短的一两句话"},
                     },
                     "required": ["content"],
                 },
@@ -28,6 +28,10 @@ class SpeakAction(ActionSpec):
         }
 
     def validate_params(self, params, context):
+        content = params.get("content", "")
+        max_len = context.get("content_max_length", 200)
+        if len(content) > max_len:
+            return f"内容过长（{len(content)}字），超出限制（{max_len}字），请精简到{max_len}字以内"
         target = params.get("target", "")
         agent_names = context.get("agent_names", [])
         agent_name = context.get("agent_name", "")
@@ -70,7 +74,7 @@ class WhisperAction(ActionSpec):
                     "type": "object",
                     "properties": {
                         "target": {"type": "string", "description": "说话对象"},
-                        "content": {"type": "string", "description": "说话内容"},
+                        "content": {"type": "string", "description": "说话内容，简短的一两句话"},
                     },
                     "required": ["target", "content"],
                 },
@@ -78,6 +82,10 @@ class WhisperAction(ActionSpec):
         }
 
     def validate_params(self, params, context):
+        content = params.get("content", "")
+        max_len = context.get("content_max_length", 200)
+        if len(content) > max_len:
+            return f"内容过长（{len(content)}字），超出限制（{max_len}字），请精简到{max_len}字以内"
         target = params.get("target", "")
         agent_names = context.get("agent_names", [])
         agent_name = context.get("agent_name", "")
@@ -286,7 +294,7 @@ class InteractAction(ActionSpec):
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "content": {"type": "string", "description": "互动描述"},
+                        "content": {"type": "string", "description": "互动描述，简短的一两句话"},
                         "modifications": {
                             "type": "array",
                             "description": "对环境指标的修改（可选），只操作当前位置的仪表/设备",
@@ -306,6 +314,10 @@ class InteractAction(ActionSpec):
         }
 
     def validate_params(self, params, context):
+        content = params.get("content", "")
+        max_len = context.get("content_max_length", 200)
+        if len(content) > max_len:
+            return f"内容过长（{len(content)}字），超出限制（{max_len}字），请精简到{max_len}字以内"
         modifications = params.get("modifications")
         if not modifications:
             return None

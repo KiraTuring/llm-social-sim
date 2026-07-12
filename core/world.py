@@ -164,4 +164,5 @@ class WorldState:
             "hearable_agents": self.get_hearable_agents(agent_name),
             "adjacent_locations": self.get_adjacent_locations(agent_location),
             "interactable_keys": self.interactable_keys,
+            "content_max_length": self.agents[agent_name].content_max_length,
         }
