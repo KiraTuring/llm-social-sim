@@ -1,6 +1,7 @@
 """Textual TUI 应用骨架"""
 
 import asyncio
+import datetime
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Header, Tree, RichLog, Static, Button, Label
@@ -41,12 +42,20 @@ class SimulationTuiApp(App):
     Tree, RichLog, Static {
         height: 100%;
     }
+    Tree {
+        overflow-x: hidden;
+    }
     #agent-detail {
         padding: 0 1;
     }
     #scene-label {
         margin: 0 2;
         min-width: 16;
+    }
+    #status-label {
+        margin: 0 1;
+        text-style: italic;
+        min-width: 20;
     }
     """
 
@@ -70,7 +79,7 @@ class SimulationTuiApp(App):
             with Vertical(id="left-panel"):
                 yield Tree("📍 地点", id="location-tree")
             with Vertical(id="center-panel"):
-                yield RichLog(id="event-log", highlight=True, markup=True)
+                yield RichLog(id="event-log", highlight=True, markup=True, wrap=True)
             with Vertical(id="right-panel"):
                 yield Static("", id="agent-detail")
         with Horizontal(id="controls"):
@@ -78,8 +87,10 @@ class SimulationTuiApp(App):
             auto_label = "⏸ 暂停" if self._auto_mode else "▶ 自动"
             yield Button(auto_label, id="btn-auto", variant="primary")
             yield Button("⏭ 下一Tick", id="btn-next", variant="default")
+            yield Button("💾 保存", id="btn-save", variant="default")
             yield Button("Q 退出", id="btn-quit", variant="error")
             yield Label("Tick 0/0", id="tick-label")
+            yield Label("", id="status-label")
 
     def on_mount(self) -> None:
         if self._auto_mode:
@@ -91,6 +102,8 @@ class SimulationTuiApp(App):
             self._next_event.set()
         elif event.button.id == "btn-auto":
             self._toggle_auto()
+        elif event.button.id == "btn-save":
+            self._save_state()
         elif event.button.id == "btn-quit":
             self.exit()
 
@@ -99,14 +112,21 @@ class SimulationTuiApp(App):
             self._next_event.set()
         elif event.key == "a":
             self._toggle_auto()
+        elif event.key == "s":
+            self._save_state()
         elif event.key == "q":
             self.exit()
+
+    def _set_status(self, text: str):
+        self.query_one("#status-label", Label).update(text)
 
     def _toggle_auto(self):
         self._auto_mode = not self._auto_mode
         self.query_one("#btn-auto", Button).label = "⏸ 暂停" if self._auto_mode else "▶ 自动"
         if self._auto_mode:
             self._next_event.set()
+        else:
+            self._next_event.clear()
 
     async def _simulation_loop(self) -> None:
         from llm.client import LLMClient
@@ -134,6 +154,7 @@ class SimulationTuiApp(App):
             if not self._auto_mode:
                 self._next_event.clear()
 
+            self._set_status("📡 GM 生成事件...")
             await self.gm.check_and_inject(
                 self.world, llm_client=llm if self.gm.use_llm else None
             )
@@ -141,17 +162,21 @@ class SimulationTuiApp(App):
             agent_actions = {}
             for agent_name in self.world.action_order:
                 agent = self.world.agents[agent_name]
+                self._set_status(f"🤔 {agent_name} 感知环境...")
                 context = await agent.perceive(self.world, llm_client=llm)
 
                 validation_context = self.world.build_validation_context(agent_name)
 
+                self._set_status(f"🧠 {agent_name} 思考中...")
                 action = await agent.think(
                     llm, self.registry, context, tick, validation_context
                 )
+                self._set_status(f"⚡ {agent_name} 行动中...")
                 await agent.act(action, self.world, self.registry)
                 agent_actions[agent_name] = action
 
             self._update_ui(agent_actions)
+            self._set_status("")
 
             if self.config["simulation"]["rotate_order"]:
                 self.world.rotate_order()
@@ -223,6 +248,16 @@ class SimulationTuiApp(App):
                 parts.append("关系: " + ", ".join(rel_parts))
             parts.append("")
         self.query_one("#agent-detail", Static).update("\n".join(parts).strip())
+
+    def _save_state(self):
+        from core.save_load import save_simulation_state
+        now = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        scene_module = self.scene.__class__.__module__.split(".")[-1]
+        path = f"saves/{scene_module}_{now}.json"
+        save_simulation_state(self.world, self.gm, scene_module, self.scene.name, path)
+        log = self.query_one("#event-log", RichLog)
+        log.write(f"\n[bold green]💾 已保存到 {path}[/bold green]")
+        log.scroll_end()
 
     def _show_summary(self):
         log = self.query_one("#event-log", RichLog)
