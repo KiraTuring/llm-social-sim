@@ -105,7 +105,7 @@ class SimulationTuiApp(App):
         margin: 0 0 0 0;
     }
     .action-collapsible {
-        margin: 0 0 0 0;
+        margin: 0 0 0 1;
     }
     .agent-collapsible {
         margin: 0 0 0 0;
@@ -122,6 +122,9 @@ class SimulationTuiApp(App):
         text-style: italic;
         min-width: 30;
         max-width: 40;
+    }
+    #hint-label {
+        margin: 0 2;
     }
     .panel-title {
         padding: 0 1;
@@ -181,6 +184,7 @@ class SimulationTuiApp(App):
             yield Button("Q 退出", id="btn-quit", variant="error")
             yield Label("Tick 0/0", id="tick-label")
             yield Label("", id="status-label")
+            yield Label("[dim]快捷键: Space=下一Tick  A=自动  S=保存  Q=退出[/]", id="hint-label")
 
     def on_mount(self) -> None:
         if self._auto_mode:
@@ -319,7 +323,7 @@ class SimulationTuiApp(App):
         for event in self.world.event_log:
             if f"[tick {self.world.tick}]" in event:
                 content = event.replace(f"[tick {self.world.tick}] ", "")
-                scroll.mount(Static(f"[bold yellow]🎲 GM: {content}[/bold yellow]", classes="gm-event"))
+                scroll.mount(Static(f"[bold yellow]🎲 {content}[/bold yellow]", classes="gm-event"))
 
         for name in self.world.action_order:
             action = agent_actions.get(name)
@@ -386,13 +390,14 @@ class SimulationTuiApp(App):
 
     def _save_state(self):
         from core.save_load import save_simulation_state
-        now = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        scene_module = self.scene.__class__.__module__.split(".")[-1]
-        path = f"saves/{scene_module}_{now}.json"
-        save_simulation_state(self.world, self.gm, scene_module, self.scene.name, path)
-        scroll = self.query_one("#event-scroll", VerticalScroll)
-        scroll.mount(Static(f"[bold green]💾 已保存到 {path}[/bold green]"))
-        scroll.scroll_end(animate=False)
+        try:
+            now = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            scene_module = self.scene.__class__.__module__.split(".")[-1]
+            path = f"saves/{scene_module}_{now}.json"
+            save_simulation_state(self.world, self.gm, scene_module, self.scene.name, path)
+            self.notify(f"💾 已保存到 {path}", title="保存成功", timeout=4)
+        except Exception as e:
+            self.notify(f"保存失败: {e}", title="错误", severity="error", timeout=6)
 
     def _show_summary(self):
         scroll = self.query_one("#event-scroll", VerticalScroll)
