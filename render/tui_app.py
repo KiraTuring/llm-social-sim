@@ -3,8 +3,64 @@
 import asyncio
 import datetime
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, Vertical
-from textual.widgets import Header, Tree, RichLog, Static, Button, Label
+from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.screen import ModalScreen
+from textual.widgets import Header, Tree, Static, Button, Label, Collapsible
+
+
+class LocationInfoScreen(ModalScreen):
+    """地点详情弹窗"""
+
+    def __init__(self, location, world):
+        super().__init__()
+        self.location = location
+        self.world = world
+
+    CSS = """
+    LocationInfoScreen {
+        align: center middle;
+    }
+    LocationInfoScreen .dialog {
+        width: 50;
+        height: auto;
+        padding: 1 2;
+        background: $surface;
+        border: thick $primary;
+    }
+    LocationInfoScreen Static {
+        margin: 0 0 1 0;
+    }
+    LocationInfoScreen Button {
+        dock: bottom;
+        margin: 1 0 0 0;
+    }
+    """
+
+    def compose(self):
+        env = self.world.get_environment_summary(self.location)
+        visible = self.world.get_visible_locations(self.location)
+        adjacent = self.world.get_adjacent_locations(self.location)
+        agents = self.world.get_agents_in_location(self.location)
+
+        with Vertical(classes="dialog"):
+            yield Static(f"[bold]📍 {self.location}[/bold]")
+            if env:
+                yield Static(f"[bold]环境:[/bold] {env}")
+            if visible:
+                yield Static(f"[bold]可见地点:[/bold] {', '.join(visible)}")
+            if adjacent:
+                yield Static(f"[bold]可达地点:[/bold] {', '.join(adjacent)}")
+            if agents:
+                yield Static(f"[bold]当前角色:[/bold] {', '.join(agents)}")
+            yield Button("关闭", id="close-btn")
+
+    def on_button_pressed(self, event):
+        if event.button.id == "close-btn":
+            self.dismiss()
+
+    def on_key(self, event):
+        if event.key == "escape":
+            self.dismiss()
 
 
 class SimulationTuiApp(App):
@@ -39,14 +95,23 @@ class SimulationTuiApp(App):
     Button {
         margin: 0 1;
     }
-    Tree, RichLog, Static {
+    #location-tree, #event-scroll, #agent-scroll {
         height: 100%;
     }
     Tree {
         overflow-x: hidden;
     }
-    #agent-detail {
-        padding: 0 1;
+    .gm-event {
+        margin: 0 0 0 0;
+    }
+    .action-collapsible {
+        margin: 0 0 0 0;
+    }
+    .agent-collapsible {
+        margin: 0 0 0 0;
+    }
+    CollapsibleTitle {
+        width: 100%;
     }
     #scene-label {
         margin: 0 2;
@@ -55,9 +120,30 @@ class SimulationTuiApp(App):
     #status-label {
         margin: 0 1;
         text-style: italic;
-        min-width: 20;
+        min-width: 30;
+        max-width: 40;
+    }
+    .panel-title {
+        padding: 0 1;
+        background: $primary-darken-2;
+        color: $text;
+        text-style: bold;
+    }
+    .tick-sep {
+        color: $accent;
+        text-style: bold;
     }
     """
+
+    ACTION_STYLES = {
+        "speak": ("💬", "cyan"),
+        "whisper": ("🤫", "magenta"),
+        "move": ("👣", "blue"),
+        "observe": ("👁", "green"),
+        "think": ("🧠", "yellow"),
+        "interact": ("🤚", "dark_orange"),
+        "radio": ("📻", "bright_magenta"),
+    }
 
     def __init__(self, world, scene, gm, registry, config,
                  start_tick=1, remaining=10, mode=None, save_path=None):
@@ -72,16 +158,20 @@ class SimulationTuiApp(App):
         self.save_path = save_path
         self._next_event = asyncio.Event()
         self._auto_mode = (mode == "auto")
+        self._agent_expanded: set[str] = set()
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         with Horizontal():
             with Vertical(id="left-panel"):
-                yield Tree("📍 地点", id="location-tree")
+                yield Static("[bold]📍 地点[/bold]", classes="panel-title")
+                yield Tree("所有地点", id="location-tree")
             with Vertical(id="center-panel"):
-                yield RichLog(id="event-log", highlight=True, markup=True, wrap=True)
+                yield Static("[bold]📜 事件流[/bold]", classes="panel-title")
+                yield VerticalScroll(id="event-scroll")
             with Vertical(id="right-panel"):
-                yield Static("", id="agent-detail")
+                yield Static("[bold]👥 角色状态[/bold]", classes="panel-title")
+                yield VerticalScroll(id="agent-scroll")
         with Horizontal(id="controls"):
             yield Label(f"📖 {self.scene.name}", id="scene-label")
             auto_label = "⏸ 暂停" if self._auto_mode else "▶ 自动"
@@ -119,6 +209,21 @@ class SimulationTuiApp(App):
 
     def _set_status(self, text: str):
         self.query_one("#status-label", Label).update(text)
+
+    def on_tree_node_selected(self, event: Tree.NodeSelected):
+        location = event.node.data
+        if location:
+            self.push_screen(LocationInfoScreen(location, self.world))
+
+    def on_collapsible_expanded(self, event: Collapsible.Expanded):
+        name = getattr(event.collapsible, "_agent_name", None)
+        if name:
+            self._agent_expanded.add(name)
+
+    def on_collapsible_collapsed(self, event: Collapsible.Collapsed):
+        name = getattr(event.collapsible, "_agent_name", None)
+        if name:
+            self._agent_expanded.discard(name)
 
     def _toggle_auto(self):
         self._auto_mode = not self._auto_mode
@@ -191,9 +296,7 @@ class SimulationTuiApp(App):
         self._show_summary()
 
     def _update_ui(self, agent_actions):
-        log = self.query_one("#event-log", RichLog)
-        log.write(f"\n[bold blue]── Tick {self.world.tick} {'─' * 40}[/bold blue]\n")
-
+        # Left panel: location tree
         tree = self.query_one("#location-tree", Tree)
         tree.clear()
         for loc in self.world.locations:
@@ -202,52 +305,84 @@ class SimulationTuiApp(App):
             label = f"{icon} {loc}"
             if agents_here:
                 label += f" ({len(agents_here)}人)"
-            branch = tree.root.add(label)
+            branch = tree.root.add(label, data=loc)
             for name in agents_here:
                 agent = self.world.agents[name]
                 state_parts = [f"{k}:{v}" for k, v in agent.states.items()]
                 branch.add_leaf(f"👤 {name}  {' | '.join(state_parts)}")
         tree.root.expand_all()
 
+        # Center panel: append new tick entries
+        scroll = self.query_one("#event-scroll", VerticalScroll)
+        scroll.mount(Static(f"═══ Tick {self.world.tick} {'═' * 50}", classes="tick-sep"))
+
         for event in self.world.event_log:
             if f"[tick {self.world.tick}]" in event:
                 content = event.replace(f"[tick {self.world.tick}] ", "")
-                log.write(f"[bold yellow]🎲 GM: {content}[/bold yellow]")
+                scroll.mount(Static(f"[bold yellow]🎲 GM: {content}[/bold yellow]", classes="gm-event"))
 
         for name in self.world.action_order:
             action = agent_actions.get(name)
             if not action:
                 continue
-            line = f"[cyan]{name}[/cyan] → {action.action_type}"
+            icon, color = self.ACTION_STYLES.get(action.action_type, ("▶", "white"))
+            summary = f"{icon} [{color}]{name}[/] → {action.action_type}"
             if action.target:
-                line += f" -> [bold]{action.target}[/bold]"
+                summary += f" -> [bold]{action.target}[/bold]"
             if action.content:
-                truncated = action.content[:80]
-                line += f": {truncated}"
-            log.write(line)
+                summary += f": {action.content}"
+
+            body_parts = []
+            if action.internal_monologue:
+                body_parts.append(f"🧠 {action.internal_monologue}")
             if action.result:
                 for key, value in action.result.items():
                     label_map = {"observed": "观察"}
                     prefix = label_map.get(key, key)
-                    log.write(f"  [green]{prefix}: {value}[/green]")
+                    body_parts.append(f"{prefix}: {value}")
+            if not body_parts:
+                body_parts.append("(无详细信息)")
 
-        log.scroll_end()
+            scroll.mount(Collapsible(
+                Static("\n".join(body_parts)),
+                title=summary, collapsed=True,
+                classes="action-collapsible",
+            ))
 
-        parts = ["[bold]👥 角色详情[/bold]", ""]
+        scroll.scroll_end(animate=False)
+
+        # Right panel: rebuild agent details
+        right = self.query_one("#agent-scroll", VerticalScroll)
+        right.remove_children()
         for name in self.world.action_order:
             agent = self.world.agents[name]
-            parts.append(f"[bold]{name}[/bold] @ {agent.location}")
+            title = f"{name} @ {agent.location}"
+
+            body_parts = []
             state_str = " | ".join(f"{k}: {v}" for k, v in agent.states.items())
             if state_str:
-                parts.append(state_str)
+                body_parts.append(f"[bold]状态:[/bold] {state_str}")
             rels = agent.relationships
             if rels:
                 rel_parts = []
                 for r_name, r_info in rels.items():
                     rel_parts.append(f"{r_name}({r_info.get('trust', 0)})")
-                parts.append("关系: " + ", ".join(rel_parts))
-            parts.append("")
-        self.query_one("#agent-detail", Static).update("\n".join(parts).strip())
+                body_parts.append(f"[bold]关系:[/bold] {', '.join(rel_parts)}")
+            memories = agent.memory._short_term[-5:]
+            if memories:
+                mem_parts = []
+                for m in memories:
+                    mem_parts.append(f"  - {m['event']}")
+                body_parts.append(f"[bold]🧠 最近记忆:[/bold]\n" + "\n".join(mem_parts))
+
+            c = Collapsible(
+                Static("\n".join(body_parts)),
+                title=title,
+                collapsed=(name not in self._agent_expanded),
+                classes="agent-collapsible",
+            )
+            c._agent_name = name
+            right.mount(c)
 
     def _save_state(self):
         from core.save_load import save_simulation_state
@@ -255,22 +390,24 @@ class SimulationTuiApp(App):
         scene_module = self.scene.__class__.__module__.split(".")[-1]
         path = f"saves/{scene_module}_{now}.json"
         save_simulation_state(self.world, self.gm, scene_module, self.scene.name, path)
-        log = self.query_one("#event-log", RichLog)
-        log.write(f"\n[bold green]💾 已保存到 {path}[/bold green]")
-        log.scroll_end()
+        scroll = self.query_one("#event-scroll", VerticalScroll)
+        scroll.mount(Static(f"[bold green]💾 已保存到 {path}[/bold green]"))
+        scroll.scroll_end(animate=False)
 
     def _show_summary(self):
-        log = self.query_one("#event-log", RichLog)
-        log.write("\n[bold green]=== 模拟完成 ===[/bold green]")
+        scroll = self.query_one("#event-scroll", VerticalScroll)
+        scroll.mount(Static("[bold green]=== 模拟完成 ===[/bold green]"))
         for name in self.world.action_order:
             agent = self.world.agents[name]
-            log.write(f"\n[bold]{name}[/bold]")
+            lines = [f"[bold]{name}[/bold]"]
             rels = agent.relationships
             if rels:
                 for r_name, r_info in rels.items():
-                    log.write(f"  {r_name}: {r_info.get('trust', 0)}")
+                    lines.append(f"  {r_name}: {r_info.get('trust', 0)}")
             else:
-                log.write("  无关系记录")
+                lines.append("  无关系记录")
+            scroll.mount(Static("\n".join(lines)))
+        scroll.scroll_end(animate=False)
 
         if self.save_path:
             from core.save_load import save_simulation_state
