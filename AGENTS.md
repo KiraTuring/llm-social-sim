@@ -247,6 +247,7 @@ class Message:
 - **模型格式**: `deepseek/deepseek-chat`（litellm 格式 `provider/model`）
 - **API**: litellm，使用 `api_base` 参数（不是 `base_url`）
 - 模型名从 config 读取（`config.yaml` 的 `provider` + `model`），不再硬编码
+- **`extra_params`**: `llm:` 段可配置高级参数（如 `thinking`、`reasoning_effort`），以 YAML dict 合并到每次 `litellm.acompletion()` 调用。分层覆盖：`model`/`messages`/`tools`/`api_key`/`api_base`/`drop_params` 由代码强制（不可覆盖），`temperature` 默认 0.7 但可用 `extra_params.temperature` 覆盖，其余字段按 provider 由 `drop_params` 过滤
 
 ### 双模式 Action 解析
 

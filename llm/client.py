@@ -19,6 +19,7 @@ class LLMClient:
         self.api_key = config["api_key"]
         self.response_mode = config["response_mode"]
         self.logger = logger
+        self.extra_params = config.get("extra_params") or {}
         self._model_str = f"{self.provider}/{self.model}" if "/" not in self.model else self.model
 
     async def call(
@@ -67,15 +68,17 @@ class LLMClient:
             response = None
             for api_attempt in range(3):
                 try:
-                    response = await litellm.acompletion(
-                        model=self._model_str,
-                        messages=full_messages,
-                        tools=tool_schemas,
-                        temperature=temperature,
-                        api_key=self.api_key,
-                        api_base=self.base_url,
-                        drop_params=True,
-                    )
+                    call_kwargs = dict(self.extra_params)
+                    call_kwargs.update({
+                        "model": self._model_str,
+                        "messages": full_messages,
+                        "tools": tool_schemas,
+                        "api_key": self.api_key,
+                        "api_base": self.base_url,
+                        "drop_params": True,
+                    })
+                    call_kwargs.setdefault("temperature", temperature)
+                    response = await litellm.acompletion(**call_kwargs)
                     break
                 except Exception as e:
                     if api_attempt == 2:
@@ -247,15 +250,17 @@ class LLMClient:
             response = None
             for api_attempt in range(3):
                 try:
-                    response = await litellm.acompletion(
-                        model=self._model_str,
-                        messages=full_messages,
-                        tools=tool_schemas,
-                        temperature=temperature,
-                        api_key=self.api_key,
-                        api_base=self.base_url,
-                        drop_params=True,
-                    )
+                    call_kwargs = dict(self.extra_params)
+                    call_kwargs.update({
+                        "model": self._model_str,
+                        "messages": full_messages,
+                        "tools": tool_schemas,
+                        "api_key": self.api_key,
+                        "api_base": self.base_url,
+                        "drop_params": True,
+                    })
+                    call_kwargs.setdefault("temperature", temperature)
+                    response = await litellm.acompletion(**call_kwargs)
                     break
                 except Exception as e:
                     if api_attempt == 2:
@@ -426,14 +431,16 @@ class LLMClient:
         for retry in range(3):
             for attempt in range(3):
                 try:
-                    response = await litellm.acompletion(
-                        model=self.model,
-                        messages=[{"role": "system", "content": system_prompt}] + messages,
-                        temperature=temperature,
-                        api_key=self.api_key,
-                        api_base=self.base_url,
-                        drop_params=True,
-                    )
+                    call_kwargs = dict(self.extra_params)
+                    call_kwargs.update({
+                        "model": self.model,
+                        "messages": [{"role": "system", "content": system_prompt}] + messages,
+                        "api_key": self.api_key,
+                        "api_base": self.base_url,
+                        "drop_params": True,
+                    })
+                    call_kwargs.setdefault("temperature", temperature)
+                    response = await litellm.acompletion(**call_kwargs)
                     break
                 except Exception as e:
                     if attempt == 2:
