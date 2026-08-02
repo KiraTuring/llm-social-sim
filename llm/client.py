@@ -20,6 +20,8 @@ class LLMClient:
         self.response_mode = config["response_mode"]
         self.logger = logger
         self.extra_params = config.get("extra_params") or {}
+        if self.logger:
+            self.logger.debug(f"EXTRA PARAMS: {self.extra_params}")
         self._model_str = f"{self.provider}/{self.model}" if "/" not in self.model else self.model
 
     async def call(
