@@ -272,6 +272,8 @@ user: 请选择一个可用的工具来行动，不要只输出文字。
 
 LLM 调用了不合法工具或参数时（如 target 不存在、位置不对），`validate_params()` 返回错误信息，自动追加到 messages 重试（最多 2 次）。参数校验和「无 tool call」共享同一个重试计数器，超限统一 fallback。
 
+**单工具限制**：Agent 路径（`call()` → `call_multi(limit_tools=1)`）一次只保留第一个 tool call，LLM 返回多个工具时多余的**显式丢弃**并记 WARNING——不参与校验、不进入重试，chat 历史里也不会残留未执行工具的记录。GM 的 `call_multi()` 不设限制，可一次响应并执行多个工具。
+
 ## 配置加载
 
 环境变量展开语法: `${VAR_NAME}`

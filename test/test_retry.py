@@ -39,6 +39,35 @@ def _make_response(text_content: str, tool_call: bool, func_name: str = "observe
     return FakeResponse()
 
 
+def _make_multi_response(calls):
+    """构造含多个 tool call 的模拟响应。calls: [(func_name, func_args), ...]"""
+    class FakeFunction:
+        def __init__(self, name, arguments):
+            self.name = name
+            self.arguments = arguments
+
+    class FakeToolCall:
+        def __init__(self, name, arguments):
+            self.id = f"call_{name}_{id(self)}"
+            self.type = "function"
+            self.function = FakeFunction(name, arguments)
+
+    class FakeMessage:
+        content = ""
+        tool_calls = [FakeToolCall(n, a) for n, a in calls]
+
+    class FakeChoice:
+        message = FakeMessage()
+
+    class FakeResponse:
+        choices = [FakeChoice()]
+
+        def model_dump_json(self):
+            return '{"mock": true}'
+
+    return FakeResponse()
+
+
 class TestLLMRetry(unittest.TestCase):
 
     def setUp(self):
@@ -92,6 +121,25 @@ class TestLLMRetry(unittest.TestCase):
                 validation_context=validation_context,
             )
             return action, call_count
+
+    async def _call_multi(self, response):
+        call_count = 0
+
+        async def fake_acompletion(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            return response
+
+        with patch("litellm.acompletion", new=fake_acompletion):
+            _, actions = await self.client.call_multi(
+                system_prompt="测试",
+                messages=[{"role": "user", "content": "hello"}],
+                action_registry=self.registry,
+                agent_name="GM",
+                tick=1,
+                allow_no_tool=True,
+            )
+            return actions, call_count
 
     # ── 原有用例：无 tool call ──
 
@@ -229,6 +277,35 @@ class TestLLMRetry(unittest.TestCase):
         )
         self.assertIsNone(action)
         self.assertEqual(calls, 3)
+
+    def test_agent_multi_tool_discards_extra(self):
+        """Agent 一次返回多个工具 → 只保留第一个，多余显式丢弃，不触发重试"""
+        action, calls = asyncio.run(
+            self._run(
+                _make_multi_response([
+                    ("observe", '{"internal_monologue": "a"}'),
+                    ("speak", '{"target": "张三", "content": "hi"}'),
+                ]),
+                None, None,
+            )
+        )
+        self.assertIsNotNone(action)
+        self.assertEqual(action.action_type, "observe")
+        self.assertEqual(calls, 1)
+        self.assertEqual(len(action.raw_tool_calls), 1)
+
+    def test_gm_multi_tool_keeps_all(self):
+        """call_multi 不设 limit_tools（GM 路径）→ 全部工具都返回"""
+        actions, calls = asyncio.run(
+            self._call_multi(
+                _make_multi_response([
+                    ("observe", '{"internal_monologue": "a"}'),
+                    ("observe", '{"internal_monologue": "b"}'),
+                ]),
+            )
+        )
+        self.assertEqual(len(actions), 2)
+        self.assertEqual(calls, 1)
 
 
 if __name__ == "__main__":

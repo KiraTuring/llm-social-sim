@@ -43,6 +43,7 @@ class LLMClient:
                 system_prompt, messages, action_registry, temperature,
                 agent_name, tick, validation_context,
                 allow_no_tool=False,
+                limit_tools=1,
             )
             return text, actions[0] if actions else None
         else:
@@ -88,13 +89,15 @@ class LLMClient:
         validation_context: dict | None = None,
         max_retries: int = 2,
         allow_no_tool: bool = False,
+        limit_tools: int | None = None,
         execute_action=None,
     ) -> tuple[str | None, list[Action]]:
         """调用 LLM 并解析所有 tool calls（支持一次响应多个工具）。
 
         allow_no_tool: True 时 LLM 返回纯文本直接返回 (text, []) 不走 retry
+        limit_tools: 限制最多解析前 N 个 tool call，多余的显式丢弃（Agent 路径传 1）
         execute_action: 可选回调，提供时将自动执行 action 并构建 tool 消息追加到 messages
-        call() 的单 Action 路径也复用本方法（allow_no_tool=False，取第一个 action）。
+        call() 的单 Action 路径也复用本方法（allow_no_tool=False, limit_tools=1）。
         """
         import json
 
@@ -122,9 +125,23 @@ class LLMClient:
             raw_response = response.model_dump_json() if hasattr(response, "model_dump_json") else str(response)
 
             if hasattr(choice.message, "tool_calls") and choice.message.tool_calls:
+                tool_calls = list(choice.message.tool_calls)
+                if limit_tools is not None and len(tool_calls) > limit_tools:
+                    discarded = len(tool_calls) - limit_tools
+                    if self.logger:
+                        self.logger.warning(
+                            f"{agent_name} 一次返回 {len(tool_calls)} 个工具，"
+                            f"仅保留前 {limit_tools} 个，显式丢弃 {discarded} 个"
+                        )
+                    print(
+                        f"[LLM] {agent_name} 一次返回 {len(tool_calls)} 个工具，"
+                        f"仅保留第 1 个，显式丢弃 {discarded} 个"
+                    )
+                    tool_calls = tool_calls[:limit_tools]
+
                 actions = []
                 all_valid = True
-                for tool_call in choice.message.tool_calls:
+                for tool_call in tool_calls:
                     try:
                         params = json.loads(tool_call.function.arguments)
 
@@ -183,12 +200,11 @@ class LLMClient:
                 if all_valid:
                     for action in actions:
                         action.raw_content = choice.message.content or ""
-                        if hasattr(choice.message, "tool_calls") and choice.message.tool_calls:
-                            action.raw_tool_calls = [
-                                {"id": tc.id, "type": tc.type,
-                                 "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
-                                for tc in choice.message.tool_calls
-                            ]
+                        action.raw_tool_calls = [
+                            {"id": tc.id, "type": tc.type,
+                             "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+                            for tc in tool_calls
+                        ]
 
                     parsed = [{"action_type": a.action_type, "target": a.target, "content": a.content} for a in actions]
                     if self.logger:
@@ -200,7 +216,7 @@ class LLMClient:
 
                     if execute_action and actions:
                         tc_list = []
-                        for tc in choice.message.tool_calls:
+                        for tc in tool_calls:
                             tc_list.append({
                                 "id": tc.id,
                                 "type": "function",
