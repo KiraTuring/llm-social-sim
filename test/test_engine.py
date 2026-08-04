@@ -148,6 +148,17 @@ async def run_tests():
     logger.close()
     print("[5] 未 begin_tick 步进报错 OK")
 
+    # 6. move 后位置索引一致（MoveAction 走 world.move_agent 增量维护）
+    engine, world, logger = await build_engine({
+        "雷恩": {"1": {"action_type": "move", "target": "主厅"}},
+    })
+    await engine.run_tick(1)
+    assert world.agents["雷恩"].location == "主厅", world.agents["雷恩"].location
+    assert "雷恩" in world.get_agents_in_location("主厅"), world.get_agents_in_location("主厅")
+    assert "雷恩" not in world.get_agents_in_location("角落"), world.get_agents_in_location("角落")
+    logger.close()
+    print("[6] move 后位置索引一致 OK")
+
     print("=" * 50)
     print("全部 SimulationEngine 测试通过")
 

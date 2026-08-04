@@ -27,6 +27,7 @@ class WorldState:
     interactable_keys: dict[str, list[str]] = field(default_factory=dict)
     _protected_env_keys: dict[str, set[str]] = field(default_factory=dict)
     npc_names: set[str] = field(default_factory=set)
+    _agents_by_location: dict[str, list[str]] = field(default_factory=dict)
 
     @staticmethod
     def compute_adjacency(connections: list[tuple[str, str]]) -> dict[str, set[str]]:
@@ -113,12 +114,43 @@ class WorldState:
         self.npc_names = set(scene.npc_names or [])
 
     def add_event(self, event: str):
-        """记录事件"""
+        """记录事件。
+
+        TODO(Phase 3): 有界事件存储，裁剪时归档到持久化文件。
+        """
         self.event_log.append(f"[tick {self.tick}] {event}")
 
     def get_agents_in_location(self, location: str) -> list[str]:
-        """获取某个位置的所有 Agent"""
-        return [name for name, agent in self.agents.items() if agent.location == location]
+        """获取某个位置的所有 Agent（返回副本，调用方可安全修改）"""
+        if not self._agents_by_location and self.agents:
+            self.rebuild_location_index()
+        return list(self._agents_by_location.get(location, ()))
+
+    def rebuild_location_index(self) -> None:
+        """按当前 agents 的位置重建索引（引擎启动/存档加载后调用）。"""
+        index: dict[str, list[str]] = {}
+        for name, agent in self.agents.items():
+            index.setdefault(agent.location, []).append(name)
+        self._agents_by_location = index
+
+    def move_agent(self, agent_name: str, new_location: str) -> str | None:
+        """移动 Agent 并增量维护位置索引。返回错误信息或 None。"""
+        if agent_name not in self.agents:
+            return f"'{agent_name}' 不存在"
+        if new_location not in self.locations:
+            return f"'{new_location}' 不是有效位置"
+        if not self._agents_by_location:
+            self.rebuild_location_index()
+
+        agent = self.agents[agent_name]
+        old_location = agent.location
+        if old_location != new_location:
+            old_bucket = self._agents_by_location.get(old_location)
+            if old_bucket and agent_name in old_bucket:
+                old_bucket.remove(agent_name)
+            self._agents_by_location.setdefault(new_location, []).append(agent_name)
+            agent.location = new_location
+        return None
 
     def get_hearable_agents(self, target: str, *, exclude: str | None = None, use_location: bool = False) -> list[str]:
         """获取能听到某个位置事件的所有 agent（同位置 + 可见位置）

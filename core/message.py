@@ -20,7 +20,10 @@ class Message:
 
 
 class MessageBus:
-    """消息总线，负责消息分发和存储"""
+    """消息总线，负责消息分发和存储。
+
+    TODO(Phase 3): 有界消息存储，裁剪时归档到持久化文件。
+    """
 
     def __init__(self):
         self._messages: list[Message] = []

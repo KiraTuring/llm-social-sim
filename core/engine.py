@@ -64,6 +64,8 @@ class SimulationEngine:
         self.agent_actions: dict[str, "Action"] = {}
         self._current_tick: int | None = None
         self._next_agent_idx = 0
+        # 统一重建位置索引：CLI/TUI/测试的 world 在此前已就绪
+        self.world.rebuild_location_index()
 
     @property
     def pending_agents(self) -> list[str]:

@@ -174,7 +174,9 @@ class MoveAction(ActionSpec):
             return [], None
 
         old_recipients = world.get_hearable_agents(agent_name)
-        agent.location = target
+        error = world.move_agent(agent_name, target)
+        if error is not None:
+            return [], None
 
         new_recipients = world.get_hearable_agents(agent_name)
         recipients = list(set(old_recipients + new_recipients))
