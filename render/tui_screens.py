@@ -73,12 +73,17 @@ class LocationInfoScreen(ModalScreen):
 
 
 class AgentInfoScreen(ModalScreen):
-    """角色详情弹窗"""
+    """角色详情弹窗：静态身份/能力边界 + 深挖信息。
 
-    def __init__(self, agent_name, world):
+    动态内容（位置、状态、关系信任值、最近记忆）由右侧常驻面板承担，
+    这里只放静态配置与长文本信息（印象、工具、记忆摘要、手动计划）。
+    """
+
+    def __init__(self, agent_name, world, registry=None):
         super().__init__()
         self.agent_name = agent_name
         self.world = world
+        self.registry = registry
 
     CSS = """
     AgentInfoScreen {
@@ -103,31 +108,141 @@ class AgentInfoScreen(ModalScreen):
     """
 
     def compose(self):
+        from render.tui_info import format_agent_tools, is_npc
+
         agent = self.world.agents.get(self.agent_name)
         with VerticalScroll(classes="dialog"):
             if agent is None:
                 yield Static(f"[bold]{_esc(self.agent_name)}[/bold] 不存在")
                 yield Button("关闭", id="close-btn")
                 return
-            yield Static(f"[bold]👤 {_esc(agent.name)}[/bold]")
+
+            title = f"👤 {_esc(agent.name)}"
+            if is_npc(self.agent_name, self.world):
+                title = f"🎭 {_esc(agent.name)} (NPC)"
+            if getattr(agent, "agent_type", "") == "ManualAgent":
+                title += " [手动]"
+            yield Static(f"[bold]{title}[/bold]")
             yield Static(f"[bold]身份:[/bold] {_esc(agent.role)}")
             yield Static(f"[bold]性格:[/bold] {_esc(agent.personality)}")
             yield Static(f"[bold]目标:[/bold] {_esc(agent.goal)}")
-            yield Static(f"[bold]位置:[/bold] {_esc(agent.location)}")
-            if agent.states:
-                state_str = " | ".join(f"{k}: {_esc(v)}" for k, v in agent.states.items())
-                yield Static(f"[bold]状态:[/bold] {state_str}")
+
             if agent.relationships:
-                rel_lines = []
-                for r_name, r_info in agent.relationships.items():
-                    trust = r_info.get("trust", 0)
-                    impression = r_info.get("impression", "")
-                    rel_lines.append(f"  {_esc(r_name)} (信任 {trust})：{_esc(impression)}")
-                yield Static("[bold]关系:[/bold]\n" + "\n".join(rel_lines))
-            memories = agent.memory._short_term[-8:]
-            if memories:
-                mem_lines = [f"  - {_esc(m['event'])}" for m in memories]
-                yield Static("[bold]🧠 最近记忆:[/bold]\n" + "\n".join(mem_lines))
+                imp_lines = [
+                    f"  {_esc(r_name)}：{_esc(r_info.get('impression', ''))}"
+                    for r_name, r_info in agent.relationships.items()
+                    if r_info.get("impression")
+                ]
+                if imp_lines:
+                    yield Static("[bold]关系印象:[/bold]\n" + "\n".join(imp_lines))
+
+            cap_parts = []
+            writable = getattr(agent, "_writable_states", None)
+            private = getattr(agent, "_private_states", None)
+            if writable:
+                cap_parts.append(f"可写状态: {_esc(', '.join(sorted(writable)))}")
+            if private:
+                cap_parts.append(f"私有状态: {_esc(', '.join(sorted(private)))}")
+            cap_parts.append(f"prompt 格式: {_esc(agent.prompt_format)}")
+            cap_parts.append(f"内容截断: {agent.content_max_length}")
+            yield Static("[bold]能力边界:[/bold]\n" + "\n".join(cap_parts))
+
+            if self.registry is not None:
+                tool_lines = format_agent_tools(self.registry)
+                if tool_lines:
+                    yield Static(
+                        "[bold]🛠 可用工具:[/bold]\n" + "\n".join(tool_lines)
+                    )
+
+            summary = getattr(agent.memory, "_summary", "") or ""
+            if summary:
+                yield Static(f"[bold]🧠 记忆摘要:[/bold]\n{_esc(summary)}")
+
+            last_observed = getattr(agent, "_last_observed_result", "") or ""
+            if last_observed:
+                yield Static(
+                    f"[bold]👁 上次观察:[/bold] {_esc(last_observed)}"
+                )
+
+            plan = getattr(agent, "_manual_plan", None)
+            if plan:
+                plan_lines = []
+                for tick, entry in plan.get(agent.name, {}).items():
+                    if tick != "*":
+                        try:
+                            if int(tick) < self.world.tick:
+                                continue
+                        except ValueError:
+                            pass
+                    act = entry.get("action_type", "?")
+                    target = entry.get("target")
+                    content = entry.get("content", "")
+                    suffix = f" -> {_esc(target)}" if target else ""
+                    if content:
+                        suffix += f" \"{_esc(content)}\""
+                    label = f"tick {tick}" if tick != "*" else "其余 tick"
+                    plan_lines.append(f"  {label}: {act}{suffix}")
+                if plan_lines:
+                    yield Static(
+                        "[bold]📋 手动计划:[/bold]\n" + "\n".join(plan_lines)
+                    )
+
+            yield Button("关闭", id="close-btn")
+
+    def on_button_pressed(self, event):
+        if event.button.id == "close-btn":
+            self.dismiss()
+
+    def on_key(self, event):
+        if event.key == "escape":
+            self.dismiss()
+
+    def on_click(self, event):
+        if event.widget is self:
+            self.dismiss()
+
+
+class SceneInfoScreen(ModalScreen):
+    """场景配置弹窗：世界设定 + GM/Agent/LLM/模拟配置摘要。"""
+
+    def __init__(self, scene, world, gm, config):
+        super().__init__()
+        self.scene = scene
+        self.world = world
+        self.gm = gm
+        self.config = config
+
+    CSS = """
+    SceneInfoScreen {
+        align: center middle;
+    }
+    SceneInfoScreen .dialog {
+        width: 70%;
+        max-width: 84;
+        min-width: 46;
+        height: auto;
+        max-height: 85%;
+        padding: 1 2;
+        background: $surface;
+        border: thick $primary;
+    }
+    SceneInfoScreen Static {
+        margin: 0 0 1 0;
+    }
+    SceneInfoScreen Button {
+        margin: 1 0 0 0;
+    }
+    """
+
+    def compose(self):
+        from render.tui_info import format_scene_sections
+
+        with VerticalScroll(classes="dialog"):
+            yield Static(f"[bold]📖 场景配置 — {_esc(self.scene.name)}[/bold]")
+            for title, body in format_scene_sections(
+                self.scene, self.world, self.gm, self.config
+            ):
+                yield Static(f"[bold]{_esc(title)}[/bold]\n{_esc(body)}")
             yield Button("关闭", id="close-btn")
 
     def on_button_pressed(self, event):

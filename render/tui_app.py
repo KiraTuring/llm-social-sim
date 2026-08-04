@@ -8,7 +8,7 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Header, Tree, Static, Button, Label, Collapsible
 
-from render.tui_screens import _esc, AgentInfoScreen, LocationInfoScreen
+from render.tui_screens import _esc, AgentInfoScreen, LocationInfoScreen, SceneInfoScreen
 
 
 class SimulationTuiApp(App):
@@ -73,7 +73,7 @@ class SimulationTuiApp(App):
     Contents {
         padding: 1 0 0 3;
     }
-    #scene-label {
+    #btn-scene {
         margin: 0 2;
         min-width: 16;
     }
@@ -149,7 +149,7 @@ class SimulationTuiApp(App):
                 yield Static("[bold]👥 角色状态[/bold]", classes="panel-title")
                 yield VerticalScroll(id="agent-scroll")
         with Horizontal(id="controls"):
-            yield Label(f"📖 {self.scene.name}", id="scene-label")
+            yield Button(f"📖 {self.scene.name}", id="btn-scene", variant="default")
             auto_label = "⏸ 暂停" if self._auto_mode else "▶ 自动"
             yield Button(auto_label, id="btn-auto", variant="primary")
             yield Button("⏭ 下一Tick", id="btn-next", variant="default")
@@ -157,7 +157,7 @@ class SimulationTuiApp(App):
             yield Button("Q 退出", id="btn-quit", variant="error")
             yield Label("Tick 0/0", id="tick-label")
             yield Label("", id="status-label")
-            yield Label("[dim]快捷键: Space=下一Tick  A=自动  S=保存  Q=退出[/]", id="hint-label")
+            yield Label("[dim]快捷键: Space=下一Tick  A=自动  S=保存  C=场景  Q=退出[/]", id="hint-label")
 
     def on_mount(self) -> None:
         self._update_hint_visibility()
@@ -176,6 +176,8 @@ class SimulationTuiApp(App):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn-next":
             self._next_event.set()
+        elif event.button.id == "btn-scene":
+            self.push_screen(SceneInfoScreen(self.scene, self.world, self.gm, self.config))
         elif event.button.id == "btn-auto":
             self._toggle_auto()
         elif event.button.id == "btn-save":
@@ -192,6 +194,8 @@ class SimulationTuiApp(App):
             self._toggle_auto()
         elif event.key == "s":
             self._save_state()
+        elif event.key == "c":
+            self.push_screen(SceneInfoScreen(self.scene, self.world, self.gm, self.config))
         elif event.key == "q":
             self.exit()
 
@@ -205,7 +209,7 @@ class SimulationTuiApp(App):
         if data.get("type") == "location":
             self.push_screen(LocationInfoScreen(data["name"], self.world))
         elif data.get("type") == "agent":
-            self.push_screen(AgentInfoScreen(data["name"], self.world))
+            self.push_screen(AgentInfoScreen(data["name"], self.world, self.registry))
 
     def on_collapsible_expanded(self, event: Collapsible.Expanded):
         name = getattr(event.collapsible, "_agent_name", None)
@@ -369,7 +373,8 @@ class SimulationTuiApp(App):
             live_names.add(name)
             branch = self._tree_nodes.get(agent.location)
             state_parts = [f"{k}:{_esc(v)}" for k, v in agent.states.items()]
-            label = f"👤 {_esc(name)}  {' | '.join(state_parts)}"
+            icon = "🎭" if name in self.world.npc_names else "👤"
+            label = f"{icon} {_esc(name)}  {' | '.join(state_parts)}"
             node = self._tree_agent_nodes.get(name)
             if node is None:
                 if branch is None:
@@ -412,6 +417,8 @@ class SimulationTuiApp(App):
         for name in self.world.action_order:
             agent = self.world.agents[name]
             title = f"{name} @ {agent.location}"
+            if getattr(agent, "agent_type", "") == "ManualAgent":
+                title += " [手动]"
 
             body_parts = []
             state_str = " | ".join(f"{k}: {_esc(v)}" for k, v in agent.states.items())
