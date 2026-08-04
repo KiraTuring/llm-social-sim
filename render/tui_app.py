@@ -29,8 +29,11 @@ class LocationInfoScreen(ModalScreen):
         align: center middle;
     }
     LocationInfoScreen .dialog {
-        width: 50;
+        width: 60%;
+        max-width: 72;
+        min-width: 40;
         height: auto;
+        max-height: 80%;
         padding: 1 2;
         background: $surface;
         border: thick $primary;
@@ -39,7 +42,6 @@ class LocationInfoScreen(ModalScreen):
         margin: 0 0 1 0;
     }
     LocationInfoScreen Button {
-        dock: bottom;
         margin: 1 0 0 0;
     }
     """
@@ -50,7 +52,7 @@ class LocationInfoScreen(ModalScreen):
         adjacent = self.world.get_adjacent_locations(self.location)
         agents = self.world.get_agents_in_location(self.location)
 
-        with Vertical(classes="dialog"):
+        with VerticalScroll(classes="dialog"):
             yield Static(f"[bold]📍 {_esc(self.location)}[/bold]")
             if env:
                 yield Static(f"[bold]环境:[/bold] {_esc(env)}")
@@ -70,27 +72,105 @@ class LocationInfoScreen(ModalScreen):
         if event.key == "escape":
             self.dismiss()
 
+    def on_click(self, event):
+        if event.widget is self:
+            self.dismiss()
+
+
+class AgentInfoScreen(ModalScreen):
+    """角色详情弹窗"""
+
+    def __init__(self, agent_name, world):
+        super().__init__()
+        self.agent_name = agent_name
+        self.world = world
+
+    CSS = """
+    AgentInfoScreen {
+        align: center middle;
+    }
+    AgentInfoScreen .dialog {
+        width: 60%;
+        max-width: 72;
+        min-width: 40;
+        height: auto;
+        max-height: 80%;
+        padding: 1 2;
+        background: $surface;
+        border: thick $primary;
+    }
+    AgentInfoScreen Static {
+        margin: 0 0 1 0;
+    }
+    AgentInfoScreen Button {
+        margin: 1 0 0 0;
+    }
+    """
+
+    def compose(self):
+        agent = self.world.agents.get(self.agent_name)
+        with VerticalScroll(classes="dialog"):
+            if agent is None:
+                yield Static(f"[bold]{_esc(self.agent_name)}[/bold] 不存在")
+                yield Button("关闭", id="close-btn")
+                return
+            yield Static(f"[bold]👤 {_esc(agent.name)}[/bold]")
+            yield Static(f"[bold]身份:[/bold] {_esc(agent.role)}")
+            yield Static(f"[bold]性格:[/bold] {_esc(agent.personality)}")
+            yield Static(f"[bold]目标:[/bold] {_esc(agent.goal)}")
+            yield Static(f"[bold]位置:[/bold] {_esc(agent.location)}")
+            if agent.states:
+                state_str = " | ".join(f"{k}: {_esc(v)}" for k, v in agent.states.items())
+                yield Static(f"[bold]状态:[/bold] {state_str}")
+            if agent.relationships:
+                rel_lines = []
+                for r_name, r_info in agent.relationships.items():
+                    trust = r_info.get("trust", 0)
+                    impression = r_info.get("impression", "")
+                    rel_lines.append(f"  {_esc(r_name)} (信任 {trust})：{_esc(impression)}")
+                yield Static("[bold]关系:[/bold]\n" + "\n".join(rel_lines))
+            memories = agent.memory._short_term[-8:]
+            if memories:
+                mem_lines = [f"  - {_esc(m['event'])}" for m in memories]
+                yield Static("[bold]🧠 最近记忆:[/bold]\n" + "\n".join(mem_lines))
+            yield Button("关闭", id="close-btn")
+
+    def on_button_pressed(self, event):
+        if event.button.id == "close-btn":
+            self.dismiss()
+
+    def on_key(self, event):
+        if event.key == "escape":
+            self.dismiss()
+
+    def on_click(self, event):
+        if event.widget is self:
+            self.dismiss()
+
 
 class SimulationTuiApp(App):
     """Textual TUI 主应用"""
 
     TITLE = "LLM 社会模拟引擎"
+    MAX_EVENT_ENTRIES = 400  # 事件流保留的最大条目数
     CSS = """
     Horizontal {
         height: 1fr;
+        overflow-x: hidden;
     }
     #left-panel {
-        width: 30%;
-        min-width: 30;
+        width: 1fr;
+        min-width: 24;
         border: solid $primary;
     }
     #center-panel {
-        width: 45%;
+        width: 2fr;
+        min-width: 34;
         border: solid $primary;
     }
     #right-panel {
-        width: 25%;
-        min-width: 20;
+        width: 1fr;
+        min-width: 18;
         border: solid $primary;
     }
     #controls {
@@ -179,6 +259,15 @@ class SimulationTuiApp(App):
         self._next_event = asyncio.Event()
         self._auto_mode = (mode == "auto")
         self._agent_expanded: set[str] = set()
+        self._events_rendered = 0
+        self._tree_nodes: dict = {}
+        self._tree_labels: dict = {}
+        self._tree_agent_nodes: dict = {}
+        self._tree_agent_labels: dict = {}
+        self._agent_panels: dict = {}
+        self._agent_panel_bodies: dict = {}
+        self._agent_panel_sigs: dict = {}
+        self._agent_panel_order: tuple = ()
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -204,9 +293,18 @@ class SimulationTuiApp(App):
             yield Label("[dim]快捷键: Space=下一Tick  A=自动  S=保存  Q=退出[/]", id="hint-label")
 
     def on_mount(self) -> None:
+        self._update_hint_visibility()
         if self._auto_mode:
             self._next_event.set()
         self.run_worker(self._simulation_loop(), exclusive=True)
+
+    def _update_hint_visibility(self) -> None:
+        """窄终端隐藏快捷键提示，避免底部控制条溢出。"""
+        try:
+            hint = self.query_one("#hint-label", Label)
+            hint.display = self.size.width >= 100
+        except Exception:
+            pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn-next":
@@ -217,6 +315,8 @@ class SimulationTuiApp(App):
             self._save_state()
         elif event.button.id == "btn-quit":
             self.exit()
+        # 让按钮失焦，避免 Space/Enter 再次触发刚点过的按钮
+        self.set_focus(None)
 
     def on_key(self, event) -> None:
         if event.key == "space":
@@ -232,9 +332,13 @@ class SimulationTuiApp(App):
         self.query_one("#status-label", Label).update(text)
 
     def on_tree_node_selected(self, event: Tree.NodeSelected):
-        location = event.node.data
-        if location:
-            self.push_screen(LocationInfoScreen(location, self.world))
+        data = event.node.data
+        if not data or not isinstance(data, dict):
+            return
+        if data.get("type") == "location":
+            self.push_screen(LocationInfoScreen(data["name"], self.world))
+        elif data.get("type") == "agent":
+            self.push_screen(AgentInfoScreen(data["name"], self.world))
 
     def on_collapsible_expanded(self, event: Collapsible.Expanded):
         name = getattr(event.collapsible, "_agent_name", None)
@@ -306,7 +410,7 @@ class SimulationTuiApp(App):
                     await agent.act(action, self.world, self.registry)
                     agent_actions[agent_name] = action
 
-                self._update_ui(agent_actions)
+                await self._update_ui(agent_actions)
                 self._set_status("")
 
                 if self.config["simulation"]["rotate_order"]:
@@ -325,34 +429,27 @@ class SimulationTuiApp(App):
         finally:
             logger.close()
 
-    def _update_ui(self, agent_actions):
-        # Left panel: location tree
-        tree = self.query_one("#location-tree", Tree)
-        tree.clear()
-        for loc in self.world.locations:
-            icon = self.scene.render_config.get("location_icons", {}).get(loc, "📍")
-            agents_here = self.world.get_agents_in_location(loc)
-            label = f"{icon} {_esc(loc)}"
-            if agents_here:
-                label += f" ({len(agents_here)}人)"
-            branch = tree.root.add(label, data=loc)
-            for name in agents_here:
-                agent = self.world.agents[name]
-                state_parts = [f"{k}:{_esc(v)}" for k, v in agent.states.items()]
-                branch.add_leaf(f"👤 {_esc(name)}  {' | '.join(state_parts)}")
-        tree.root.expand_all()
+    async def _update_ui(self, agent_actions):
+        self._update_hint_visibility()
+        # Left panel: location tree（原地更新，保留折叠状态）
+        self._sync_location_tree()
 
         # Center panel: append new tick entries
         scroll = self.query_one("#event-scroll", VerticalScroll)
+        new_entries = 1  # tick 分隔线
         tick_label = f"═══ Tick {self.world.tick} "
         panel_width = scroll.size.width or 0
         dash_count = max(20, panel_width - len(tick_label) - 1)
         scroll.mount(Static(tick_label + "═" * dash_count, classes="tick-sep"))
 
-        for event in self.world.event_log:
-            if f"[tick {self.world.tick}]" in event:
-                content = event.replace(f"[tick {self.world.tick}] ", "")
+        # 只渲染自上次更新以来新增的 GM 事件
+        prefix = f"[tick {self.world.tick}] "
+        for event in self.world.event_log[self._events_rendered:]:
+            if event.startswith(prefix):
+                content = event[len(prefix):]
                 scroll.mount(Static(f"[bold yellow]🎲 {_esc(content)}[/bold yellow]", classes="gm-event"))
+                new_entries += 1
+        self._events_rendered = len(self.world.event_log)
 
         for name in self.world.action_order:
             action = agent_actions.get(name)
@@ -381,12 +478,95 @@ class SimulationTuiApp(App):
                 title=summary, collapsed=True,
                 classes="action-collapsible",
             ))
+            new_entries += 1
 
         scroll.scroll_end(animate=False)
+        await self._trim_event_scroll(scroll, new_entries)
 
-        # Right panel: rebuild agent details
+        # Right panel: agent details（原地更新，保留展开/滚动状态）
+        self._sync_agent_panel()
+
+    async def _trim_event_scroll(self, scroll: VerticalScroll, new_entries: int) -> None:
+        """事件流超过上限时从头部移除旧条目，防止长跑内存增长。
+
+        mount 是异步生效的，所以用「当前 children + 本 tick 新增数」估算实际总量。
+        """
+        overflow = len(scroll.children) + new_entries - self.MAX_EVENT_ENTRIES
+        if overflow <= 0:
+            return
+        await scroll.remove_children(scroll.children[:overflow])
+
+    def _sync_location_tree(self) -> None:
+        """原地同步地点树：只更新变化的部分，保留用户的折叠状态。"""
+        tree = self.query_one("#location-tree", Tree)
+
+        for loc in self.world.locations:
+            icon = self.scene.render_config.get("location_icons", {}).get(loc, "📍")
+            agents_here = self.world.get_agents_in_location(loc)
+            label = f"{icon} {_esc(loc)}"
+            if agents_here:
+                label += f" ({len(agents_here)}人)"
+            branch = self._tree_nodes.get(loc)
+            if branch is None:
+                branch = tree.root.add(label, data={"type": "location", "name": loc})
+                branch.expand()
+                self._tree_nodes[loc] = branch
+            elif self._tree_labels.get(loc) != label:
+                branch.label = label
+            self._tree_labels[loc] = label
+
+        # 防御：清理已不存在的地点分支
+        for loc in list(self._tree_nodes):
+            if loc not in self.world.locations:
+                self._tree_nodes.pop(loc).remove()
+                self._tree_labels.pop(loc, None)
+
+        # 同步角色叶子节点：状态变化改 label，移动时摘旧挂新
+        live_names = set()
+        for name, agent in self.world.agents.items():
+            live_names.add(name)
+            branch = self._tree_nodes.get(agent.location)
+            state_parts = [f"{k}:{_esc(v)}" for k, v in agent.states.items()]
+            label = f"👤 {_esc(name)}  {' | '.join(state_parts)}"
+            node = self._tree_agent_nodes.get(name)
+            if node is None:
+                if branch is None:
+                    continue
+                node = branch.add_leaf(label, data={"type": "agent", "name": name})
+                self._tree_agent_nodes[name] = node
+                self._tree_agent_labels[name] = label
+            elif node.parent is not branch:
+                node.remove()
+                if branch is None:
+                    self._tree_agent_nodes.pop(name, None)
+                    self._tree_agent_labels.pop(name, None)
+                    continue
+                node = branch.add_leaf(label, data={"type": "agent", "name": name})
+                self._tree_agent_nodes[name] = node
+                self._tree_agent_labels[name] = label
+            elif self._tree_agent_labels.get(name) != label:
+                node.label = label
+                self._tree_agent_labels[name] = label
+
+        for name in list(self._tree_agent_nodes):
+            if name not in live_names:
+                self._tree_agent_nodes.pop(name).remove()
+                self._tree_agent_labels.pop(name, None)
+
+    def _sync_agent_panel(self) -> None:
+        """原地同步角色状态面板：内容没变不动，变了才更新，保留展开/滚动状态。"""
         right = self.query_one("#agent-scroll", VerticalScroll)
-        right.remove_children()
+        order = tuple(self.world.action_order)
+        if order != self._agent_panel_order:
+            # 行动顺序变化（rotate_order）时整体重建以保持顺序，展开状态保留
+            for w in self._agent_panels.values():
+                w.remove()
+            self._agent_panels.clear()
+            self._agent_panel_bodies.clear()
+            self._agent_panel_sigs.clear()
+            self._agent_panel_order = order
+
+        prev = None
         for name in self.world.action_order:
             agent = self.world.agents[name]
             title = f"{name} @ {agent.location}"
@@ -407,15 +587,37 @@ class SimulationTuiApp(App):
                 for m in memories:
                     mem_parts.append(f"  - {_esc(m['event'])}")
                 body_parts.append(f"[bold]🧠 最近记忆:[/bold]\n" + "\n".join(mem_parts))
+            body = "\n".join(body_parts)
+            sig = f"{title}\n{body}"
 
-            c = Collapsible(
-                Static("\n".join(body_parts)),
-                title=title,
-                collapsed=(name not in self._agent_expanded),
-                classes="agent-collapsible",
-            )
-            c._agent_name = name
-            right.mount(c)
+            c = self._agent_panels.get(name)
+            if c is None:
+                static = Static(body)
+                c = Collapsible(
+                    static,
+                    title=title,
+                    collapsed=(name not in self._agent_expanded),
+                    classes="agent-collapsible",
+                )
+                c._agent_name = name
+                if prev is not None:
+                    right.mount(c, after=prev)
+                else:
+                    right.mount(c)
+                self._agent_panels[name] = c
+                self._agent_panel_bodies[name] = static
+                self._agent_panel_sigs[name] = sig
+                prev = c
+                continue
+
+            if self._agent_panel_sigs.get(name) != sig:
+                static = self._agent_panel_bodies.get(name)
+                if static is not None:
+                    static.update(body)
+                if c.title != title:
+                    c.title = title
+                self._agent_panel_sigs[name] = sig
+            prev = c
 
     def _handle_simulation_error(self, tick: int, error: Exception, logger) -> None:
         """模拟中途异常：记录日志、提示用户并尽力保存崩溃快照。"""
