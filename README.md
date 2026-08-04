@@ -28,6 +28,11 @@ python3 run.py --scene tavern --ticks 20 --mode interactive
 | `--mode` | `-m` | 运行模式 | `--mode interactive` |
 | `--list-scenes` | `-l` | 列出所有场景 | `--list-scenes` |
 | `--config` | `-c` | 配置文件路径 | `--config my_config.yaml` |
+| `--manual` | | 手动控制的 Agent 名称（多个用空格分隔） | `--manual 老巴克` |
+| `--manual-file` | | 手动控制 JSON 文件路径 | `--manual-file my_actions.json` |
+| `--save` | | 运行结束后保存状态到文件 | `--save saves/run.json` |
+| `--load` | | 从存档继续运行（与 `--scene` 互斥） | `--load saves/run.json` |
+| `--tui` | | 使用 Textual TUI 界面 | `--tui` |
 
 ### 示例
 
@@ -79,6 +84,27 @@ class MyScene(Scene):
 ```bash
 python3 run.py --scene myscene
 ```
+
+## 手动控制（测试用）
+
+让指定 Agent 不走 LLM、按 JSON 文件执行预设行动，适合确定性测试场景：
+
+```bash
+python3 run.py --scene tavern --ticks 5 --mode auto --manual 老巴克 --manual-file manual_actions.example.json
+```
+
+JSON 结构为「角色 → tick → 行动」，`"*"` 是通配 tick（未单独配置时重复执行，优先级低于具体 tick）：
+
+```json
+{
+  "老巴克": {
+    "1": {"action_type": "speak", "target": "艾莉娅", "content": "欢迎光临"},
+    "*": {"action_type": "observe", "content": "环顾酒馆"}
+  }
+}
+```
+
+未配置的 tick 自动 `observe`；行动非法（未知 action_type、目标不可达等）会记 warning 并回退为 `observe`。文件缺失或格式错误会在启动时直接报错。
 
 ## 配置
 

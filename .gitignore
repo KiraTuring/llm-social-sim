@@ -36,3 +36,4 @@ transcripts/
 logs/
 saves/
 *.json
+!manual_actions.example.json

@@ -59,7 +59,11 @@ def _init_world(config: dict, scene_name: str, manual_agents: list[str] | None):
     for cfg in scene.agents:
         if cfg["name"] in manual_names:
             manual_file = config["simulation"].get("manual_file")
-            agent = ManualAgent.from_config(scene, cfg, config, file_path=manual_file)
+            try:
+                agent = ManualAgent.from_config(scene, cfg, config, file_path=manual_file)
+            except (FileNotFoundError, ValueError) as e:
+                print(f"❌ 手动控制配置错误: {e}")
+                sys.exit(1)
         else:
             agent = Agent.from_config(scene, cfg, config)
         world.agents[agent.name] = agent

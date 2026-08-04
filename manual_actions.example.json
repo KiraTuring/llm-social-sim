@@ -1,0 +1,52 @@
+{
+  "老巴克": {
+    "1": {
+      "action_type": "speak",
+      "target": "艾莉娅",
+      "content": "欢迎光临，想喝点什么？",
+      "internal_monologue": "来了个生面孔，先招呼一下。"
+    },
+    "2": {
+      "action_type": "speak",
+      "target": "雷恩",
+      "content": "酒钱该结了吧？"
+    },
+    "3": {
+      "action_type": "move",
+      "target": "主厅",
+      "content": "走出吧台招呼客人"
+    },
+    "*": {
+      "action_type": "observe",
+      "content": "环顾酒馆"
+    }
+  },
+  "雷恩": {
+    "1": {
+      "action_type": "move",
+      "target": "吧台",
+      "content": "走向吧台"
+    },
+    "2": {
+      "action_type": "whisper",
+      "target": "老巴克",
+      "content": "今晚有人盯着我吗？",
+      "internal_monologue": "先探探口风"
+    },
+    "*": {
+      "action_type": "observe",
+      "content": "警觉地扫视四周"
+    }
+  },
+  "艾莉娅": {
+    "1": {
+      "action_type": "speak",
+      "content": "请问黑松镇离这儿远吗？",
+      "internal_monologue": "找个机会问路"
+    },
+    "3": {
+      "action_type": "interact",
+      "content": "摩挲着随身的木盒"
+    }
+  }
+}
