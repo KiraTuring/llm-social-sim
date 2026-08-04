@@ -134,7 +134,12 @@ class WorldState:
         self._agents_by_location = index
 
     def move_agent(self, agent_name: str, new_location: str) -> str | None:
-        """移动 Agent 并增量维护位置索引。返回错误信息或 None。"""
+        """移动 Agent 并增量维护位置索引。返回错误信息或 None。
+
+        只校验名字与位置合法性，不校验可达性——「Move 受可达性限制」是
+        MoveAction 的规则（validate_params），世界层保持无策略，
+        传送门/传送魔法/GM 强制移动等能力可直接调用本方法。
+        """
         if agent_name not in self.agents:
             return f"'{agent_name}' 不存在"
         if new_location not in self.locations:
