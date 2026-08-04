@@ -1,5 +1,7 @@
 """场景基类：定义场景接口和通用逻辑。"""
 
+import copy
+
 from core.action import ActionRegistry
 from core.rules import RuleEngine
 from core.world import WorldState
@@ -58,8 +60,10 @@ class Scene:
 
     def get_gm_config(self) -> dict:
         """获取 GM 配置"""
+        # 深拷贝：gm_events 是类属性，GM 触发时会 remove 已触发事件，
+        # 不拷贝会让同一进程里的多个引擎/场景互相干扰（如测试、热加载）。
         return {
-            "events": self.gm_events,
-            "random_events": self.gm_random_events,
+            "events": copy.deepcopy(self.gm_events),
+            "random_events": list(self.gm_random_events),
             "llm_prompt": self.gm_llm_prompt,
         }

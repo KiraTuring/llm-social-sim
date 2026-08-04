@@ -4,6 +4,7 @@
 from render.console import ConsoleRenderer
 from llm.client import LLMClient
 from core.rules import RuleEngine
+from core.engine import SimulationEngine
 from core.gm import GMAgent
 from core.agent import Agent
 from core.manual_agent import ManualAgent
@@ -93,7 +94,7 @@ def _load_world(load_path: str, config: dict, max_ticks: int | None):
 
 
 def _setup_services(config: dict, scene, gm):
-    """创建模拟服务（logger, llm, rule_engine, renderer）"""
+    """创建模拟核心服务（logger, llm, rule_engine）"""
     log_level = getattr(__import__("logging"), config["logging"].get("level", "INFO"))
     logger = SimLogger(
         log_file=config["logging"].get("file", "logs/simulation.log"),
@@ -105,13 +106,16 @@ def _setup_services(config: dict, scene, gm):
     rule_engine = RuleEngine()
     scene.setup_rules(rule_engine)
 
-    renderer = ConsoleRenderer(
+    return logger, llm, rule_engine
+
+
+def _make_renderer(config: dict, scene) -> ConsoleRenderer:
+    """创建控制台渲染器（仅 CLI 路径使用）"""
+    return ConsoleRenderer(
         render_config=scene.render_config,
         show_full_inbox=config["simulation"].get("show_full_inbox", False),
         show_full_monologue=config["simulation"].get("show_full_monologue", True),
     )
-
-    return logger, llm, rule_engine, renderer
 
 
 def _print_scene_header(scene):
@@ -120,60 +124,6 @@ def _print_scene_header(scene):
     print(f"场景: {scene.name}")
     print(f"角色: {', '.join([a['name'] for a in scene.agents])}")
     print(f"{'='*50}\n")
-
-
-async def _run_tick(world, tick: int, llm, gm, registry, rule_engine, logger, renderer, config: dict, mode: str):
-    """执行单个 tick：GM 注入 → Agent 行动 → 渲染"""
-    world.tick = tick
-
-    logger.log_tick_start(tick)
-
-    await gm.check_and_inject(world, llm_client=llm if gm.use_llm else None)
-
-    agent_actions = {}
-    for agent_name in world.action_order:
-        agent = world.agents[agent_name]
-
-        context = await agent.perceive(world, llm_client=llm)
-
-        validation_context = world.build_validation_context(agent_name)
-
-        action = await agent.think(llm, registry, context, tick, validation_context)
-        messages = await agent.act(action, world, registry)
-
-        agent_actions[agent_name] = action
-
-        action_dict = {
-            "action_type": action.action_type,
-            "target": action.target,
-            "content": action.content,
-            "internal_monologue": action.internal_monologue,
-            "result": action.result,
-        } if action else {}
-        logger.log_agent_action(agent_name, tick, action_dict)
-
-        for msg in messages:
-            logger.log_message({
-                "sender": msg.sender,
-                "recipients": msg.recipients,
-                "target": msg.target,
-                "content": msg.content,
-                "msg_type": msg.msg_type,
-                "tick": msg.tick,
-            })
-            rule_engine.trigger(msg.msg_type, msg, world)
-
-    renderer.render_tick(world, agent_actions)
-
-    if config["simulation"]["rotate_order"]:
-        world.rotate_order()
-
-    logger.log_tick_end(tick)
-
-    if mode == "interactive":
-        input("按回车继续下一个 tick...")
-    else:
-        await asyncio.sleep(config["simulation"]["auto_delay"])
 
 
 def _save_state(world, gm, scene, save_path: str):
@@ -195,13 +145,19 @@ async def run_tui_simulation(config: dict, scene_name: str, max_ticks: int | Non
 
     remaining = max_ticks or config["simulation"]["max_ticks"]
 
+    logger, llm, rule_engine = _setup_services(config, scene, gm)
+
     from render.tui_app import SimulationTuiApp
     app = SimulationTuiApp(
         world=world, scene=scene, gm=gm, registry=registry,
         config=config, start_tick=start_tick, remaining=remaining,
         mode=mode, save_path=save_path,
+        logger=logger, llm=llm, rule_engine=rule_engine,
     )
-    await app.run_async()
+    try:
+        await app.run_async()
+    finally:
+        logger.close()
 
 
 async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = None, mode: str | None = None, manual_agents: list[str] | None = None, load_path: str | None = None, save_path: str | None = None):
@@ -215,11 +171,20 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
         start_tick = 1
         _print_scene_header(scene)
 
-    logger, llm, rule_engine, renderer = _setup_services(config, scene, gm)
+    logger, llm, rule_engine = _setup_services(config, scene, gm)
+    renderer = _make_renderer(config, scene)
+    engine = SimulationEngine(
+        world, gm, registry, llm, rule_engine, logger, config
+    )
 
     actual_mode = mode or config["simulation"]["mode"]
     for tick in range(start_tick, start_tick + remaining):
-        await _run_tick(world, tick, llm, gm, registry, rule_engine, logger, renderer, config, actual_mode)
+        actions = await engine.run_tick(tick)
+        renderer.render_tick(world, actions)
+        if actual_mode == "interactive":
+            input("按回车继续下一个 tick...")
+        else:
+            await asyncio.sleep(config["simulation"]["auto_delay"])
 
     renderer.render_summary(world)
     if save_path:

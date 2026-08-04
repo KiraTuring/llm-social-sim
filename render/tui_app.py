@@ -246,13 +246,17 @@ class SimulationTuiApp(App):
     }
 
     def __init__(self, world, scene, gm, registry, config,
-                 start_tick=1, remaining=10, mode=None, save_path=None):
+                 start_tick=1, remaining=10, mode=None, save_path=None,
+                 logger=None, llm=None, rule_engine=None):
         super().__init__()
         self.world = world
         self.scene = scene
         self.gm = gm
         self.registry = registry
         self.config = config
+        self.logger = logger
+        self.llm = llm
+        self.rule_engine = rule_engine
         self.start_tick = start_tick
         self.remaining = remaining
         self.save_path = save_path
@@ -359,62 +363,41 @@ class SimulationTuiApp(App):
             self._next_event.clear()
 
     async def _simulation_loop(self) -> None:
-        from llm.client import LLMClient
-        from core.logger import SimLogger
-        from core.rules import RuleEngine
+        from core.engine import SimulationEngine
 
-        log_level = getattr(__import__("logging"),
-                            self.config["logging"].get("level", "INFO"))
-        logger = SimLogger(
-            log_file=self.config["logging"].get("file", "logs/simulation.log"),
-            level=log_level,
+        engine = SimulationEngine(
+            self.world, self.gm, self.registry,
+            self.llm, self.rule_engine, self.logger, self.config,
         )
-        llm = LLMClient(self.config["llm"], logger)
-        self.gm.logger = logger
-        rule_engine = RuleEngine()
-        self.scene.setup_rules(rule_engine)
 
         end_tick = self.start_tick + self.remaining - 1
         tick_label = self.query_one("#tick-label", Label)
+        total_agents = max(1, len(self.world.action_order))
 
         try:
             for tick in range(self.start_tick, self.start_tick + self.remaining):
-                self.world.tick = tick
                 tick_label.update(f"Tick {tick}/{end_tick}")
 
                 if not self._auto_mode:
                     self._next_event.clear()
 
                 self._set_status("📡 GM 生成事件...")
-                await self.gm.check_and_inject(
-                    self.world, llm_client=llm if self.gm.use_llm else None
-                )
+                await engine.begin_tick(tick)
 
-                agent_actions = {}
-                for agent_name in self.world.action_order:
-                    agent = self.world.agents[agent_name]
-                    self._set_status(f"🤔 {agent_name} 感知环境...")
-                    context = await agent.perceive(self.world, llm_client=llm)
+                # Tick 分隔线 + GM 事件先上屏，面板同步
+                await self._render_tick_start()
 
-                    validation_context = self.world.build_validation_context(agent_name)
+                # 按单个 Agent 步进：每个角色行动完立即刷新 UI
+                while engine.next_agent:
+                    next_name = engine.next_agent
+                    done = total_agents - len(engine.pending_agents)
+                    self._set_status(f"🤔 {next_name} 行动中... ({done}/{total_agents})")
+                    step = await engine.step_agent()
+                    self._set_status("")
+                    await self._render_agent_step(step)
 
-                    self._set_status(f"🧠 {agent_name} 思考中...")
-                    action = await agent.think(
-                        llm, self.registry, context, tick, validation_context
-                    )
-                    self._set_status(f"⚡ {agent_name} 行动中...")
-                    # TODO: 规则引擎在 TUI 模式下尚未接入。
-                    # 参照 run.py `_run_tick`：agent.act() 返回的每条消息都应
-                    # 调用 rule_engine.trigger(msg.msg_type, msg, world)，
-                    # 否则场景规则（如酒馆的信任/情绪变化）在 TUI 下不生效。
-                    await agent.act(action, self.world, self.registry)
-                    agent_actions[agent_name] = action
-
-                await self._update_ui(agent_actions)
+                await engine.end_tick()
                 self._set_status("")
-
-                if self.config["simulation"]["rotate_order"]:
-                    self.world.rotate_order()
 
                 if self._auto_mode:
                     await asyncio.sleep(
@@ -423,75 +406,71 @@ class SimulationTuiApp(App):
                 else:
                     await self._next_event.wait()
         except Exception as e:
-            self._handle_simulation_error(self.world.tick, e, logger)
+            self._handle_simulation_error(self.world.tick, e, self.logger)
         else:
             self._show_summary()
-        finally:
-            logger.close()
 
-    async def _update_ui(self, agent_actions):
+    async def _render_tick_start(self):
+        """渲染 tick 分隔线和本 tick 新增的 GM 事件，同步两侧面板。"""
         self._update_hint_visibility()
-        # Left panel: location tree（原地更新，保留折叠状态）
-        self._sync_location_tree()
-
-        # Center panel: append new tick entries
         scroll = self.query_one("#event-scroll", VerticalScroll)
-        new_entries = 1  # tick 分隔线
         tick_label = f"═══ Tick {self.world.tick} "
         panel_width = scroll.size.width or 0
         dash_count = max(20, panel_width - len(tick_label) - 1)
         scroll.mount(Static(tick_label + "═" * dash_count, classes="tick-sep"))
 
-        # 只渲染自上次更新以来新增的 GM 事件
         prefix = f"[tick {self.world.tick}] "
         for event in self.world.event_log[self._events_rendered:]:
             if event.startswith(prefix):
                 content = event[len(prefix):]
                 scroll.mount(Static(f"[bold yellow]🎲 {_esc(content)}[/bold yellow]", classes="gm-event"))
-                new_entries += 1
         self._events_rendered = len(self.world.event_log)
 
-        for name in self.world.action_order:
-            action = agent_actions.get(name)
-            if not action:
-                continue
-            icon, color = self.ACTION_STYLES.get(action.action_type, ("▶", "white"))
-            summary = f"{icon} [{color}]{_esc(name)}[/] → {_esc(action.action_type)}"
-            if action.target:
-                summary += f" -> [bold]{_esc(action.target)}[/bold]"
-            if action.content:
-                summary += f": {_esc(action.content)}"
-
-            body_parts = []
-            if action.internal_monologue:
-                body_parts.append(f"🧠 {_esc(action.internal_monologue)}")
-            if action.result:
-                for key, value in action.result.items():
-                    label_map = {"observed": "观察"}
-                    prefix = label_map.get(key, key)
-                    body_parts.append(f"{prefix}: {_esc(value)}")
-            if not body_parts:
-                body_parts.append("(无详细信息)")
-
-            scroll.mount(Collapsible(
-                Static("\n".join(body_parts)),
-                title=summary, collapsed=True,
-                classes="action-collapsible",
-            ))
-            new_entries += 1
-
-        scroll.scroll_end(animate=False)
-        await self._trim_event_scroll(scroll, new_entries)
-
-        # Right panel: agent details（原地更新，保留展开/滚动状态）
+        self._sync_location_tree()
         self._sync_agent_panel()
+        scroll.scroll_end(animate=False)
+        await self._trim_event_scroll(scroll)
 
-    async def _trim_event_scroll(self, scroll: VerticalScroll, new_entries: int) -> None:
-        """事件流超过上限时从头部移除旧条目，防止长跑内存增长。
+    async def _render_agent_step(self, step):
+        """单个 Agent 行动完成后增量渲染：事件流追加一条 + 面板同步。"""
+        self._update_hint_visibility()
+        scroll = self.query_one("#event-scroll", VerticalScroll)
+        action = step.action
+        if not action:
+            return
 
-        mount 是异步生效的，所以用「当前 children + 本 tick 新增数」估算实际总量。
-        """
-        overflow = len(scroll.children) + new_entries - self.MAX_EVENT_ENTRIES
+        icon, color = self.ACTION_STYLES.get(action.action_type, ("▶", "white"))
+        summary = f"{icon} [{color}]{_esc(step.agent_name)}[/] → {_esc(action.action_type)}"
+        if action.target:
+            summary += f" -> [bold]{_esc(action.target)}[/bold]"
+        if action.content:
+            summary += f": {_esc(action.content)}"
+
+        body_parts = []
+        if action.internal_monologue:
+            body_parts.append(f"🧠 {_esc(action.internal_monologue)}")
+        if action.result:
+            for key, value in action.result.items():
+                label_map = {"observed": "观察"}
+                prefix = label_map.get(key, key)
+                body_parts.append(f"{prefix}: {_esc(value)}")
+        if not body_parts:
+            body_parts.append("(无详细信息)")
+
+        scroll.mount(Collapsible(
+            Static("\n".join(body_parts)),
+            title=summary, collapsed=True,
+            classes="action-collapsible",
+        ))
+
+        self._sync_agent_panel()
+        self._sync_location_tree()
+        scroll.scroll_end(animate=False)
+        await self._trim_event_scroll(scroll)
+
+    async def _trim_event_scroll(self, scroll: VerticalScroll) -> None:
+        """事件流超过上限时从头部移除旧条目，防止长跑内存增长。"""
+        overflow = len(scroll.children) - self.MAX_EVENT_ENTRIES
         if overflow <= 0:
             return
         await scroll.remove_children(scroll.children[:overflow])

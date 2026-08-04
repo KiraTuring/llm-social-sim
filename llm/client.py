@@ -435,7 +435,7 @@ class LLMClient:
                 try:
                     call_kwargs = dict(self.extra_params)
                     call_kwargs.update({
-                        "model": self.model,
+                        "model": self._model_str,
                         "messages": [{"role": "system", "content": system_prompt}] + messages,
                         "api_key": self.api_key,
                         "api_base": self.base_url,

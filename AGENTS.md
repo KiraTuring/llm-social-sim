@@ -321,6 +321,25 @@ gm:
 
 **同 tick 行动可见性**：排在前面的 agent 说话/行动后，排在后面的 agent 能在本 tick 内看到（通过 perceive 读到的 inbox 消息）；反之，排在前面的 agent 要等到下一 tick 才知道后面的人做了什么。每条消息在 `perceive()` 中恰好被看到一次然后清空，最后一个人的消息存活到下一 tick。
 
+### 模拟引擎（`core/engine.py`）
+
+CLI 与 TUI 共用 `SimulationEngine`，tick 主循环只维护一份，避免两套逻辑漂移：
+
+```python
+engine = SimulationEngine(world, gm, registry, llm, rule_engine, logger, config)
+```
+
+两种用法：
+
+- **完整 tick**（CLI/测试）：`actions = await engine.run_tick(tick)`，返回 `{agent_name: action}`。
+- **Agent 级步进**（TUI）：`begin_tick(tick)` → 循环 `step_agent()`（返回 `AgentStep`，全部执行完返回 `None`）→ `end_tick()`。
+
+引擎负责：设置 `world.tick`、GM 注入、每个 Agent 的 perceive→think→act、逐条消息触发 `rule_engine.trigger()`、行动/消息日志、行动顺序轮换。不感知任何 UI——渲染、延时、等待按键由调用方负责（CLI 在 `run_simulation`，TUI 在 `_simulation_loop`）。
+
+辅助属性：`engine.next_agent` / `engine.pending_agents` 供 UI 显示进度（如 `3/5`）。
+
+服务（logger/LLM/rule_engine）统一由 `run.py::_setup_services` 创建后注入，TUI 不再自行构建。注意 `Scene.get_gm_config()` 会深拷贝 `gm_events`——GM 触发时会移除已触发事件，不拷贝会让同一进程里的多个引擎互相干扰。
+
 ### 上下文顺序
 
 perceive() 构建的 LLM prompt 顺序：
