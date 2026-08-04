@@ -5,9 +5,10 @@ llm:
   api_key: "${DEEPSEEK_API_KEY}"
   response_mode: "tool_call"  # tool_call | text_parse
   extra_params:               # 合并到 litellm.acompletion() 的额外参数，可覆盖 temperature
-    thinking:
-      type: enabled
-    reasoning_effort: high
+    extra_body:
+      thinking:
+        type: disabled
+      # reasoning_effort: high
 
 simulation:
   max_ticks: 20
