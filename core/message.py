@@ -33,7 +33,8 @@ class MessageBus:
     def to_dict(self) -> dict:
         """序列化为可保存的 dict（替代直接访问私有属性）"""
         return {
-            "known_agents": list(self._known_agents),
+            # 排序保证存档输出确定性（set 迭代顺序受哈希随机化影响）
+            "known_agents": sorted(self._known_agents),
             "messages": [
                 {"sender": m.sender, "recipients": m.recipients, "content": m.content,
                  "msg_type": m.msg_type, "tick": m.tick, "target": m.target}

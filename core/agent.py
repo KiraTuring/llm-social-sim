@@ -181,11 +181,34 @@ class Agent:
 
     async def perceive(self, world: "WorldState", llm_client: "LLMClient | None" = None) -> str:
         """感知：收集消息 + 环境 + 记忆"""
+        inbox_lines = self._ingest_inbox(world)
+        result = self._build_context(world, inbox_lines)
+        if self.memory._compress_needed and llm_client:
+            await self._maybe_compress(llm_client)
+        return result
 
-        parts = []
-
+    def _ingest_inbox(self, world: "WorldState") -> list[str]:
+        """读取收件箱：截断写入记忆、记录 _perceived_inbox、清空，返回提示用行。"""
         inbox = world.message_bus.get_inbox(self.name)
         max_len = self.content_max_length
+
+        lines = []
+        for msg in inbox[-self.inbox_limit:]:
+            truncated = msg.content[:max_len]
+            sender_part = f"{msg.sender}" + (f" -> {msg.target}" if msg.target else "")
+            sender_part = sender_part.replace(self.name, "你")
+            msgs_text = f"[{msg.msg_type}] {sender_part}: {truncated}"
+            lines.append(f"- {msgs_text}")
+            self.memory.add(msgs_text, tick=world.tick)
+
+        self._perceived_inbox = [{"sender": msg.sender, "content": msg.content[:max_len], "target": msg.target}
+                                 for msg in inbox]
+        world.message_bus.clear_inbox(self.name)
+        return lines
+
+    def _build_context(self, world: "WorldState", inbox_lines: list[str]) -> str:
+        """组装感知上下文 prompt：环境 → 状态 → 记忆 → 新信息 → 上一行动。"""
+        parts = []
 
         location_agents = world.get_agents_in_location(self.location)
         if self.name in location_agents:
@@ -207,59 +230,42 @@ class Agent:
             if memory_context:
                 parts.append(memory_context)
 
-        if inbox:
-            msgs_text_lines = []
-            recent_inbox = inbox[-self.inbox_limit:]
-            for msg in recent_inbox:
-                truncated = msg.content[:max_len]
-                sender_part = f"{msg.sender}" + (f" -> {msg.target}" if msg.target else "")
-                sender_part = sender_part.replace(self.name, "你")
-                msgs_text = f"[{msg.msg_type}] {sender_part}: {truncated}"
-                msgs_text_lines.append(f"- {msgs_text}")
-
-                self.memory.add(msgs_text, tick=world.tick)
-
-            parts.append(f"【你得到的新信息】\n" + "\n".join(msgs_text_lines))
-
-        self._perceived_inbox = [{"sender": msg.sender, "content": msg.content[:max_len], "target": msg.target}
-                                 for msg in inbox]
-
-        world.message_bus.clear_inbox(self.name)
+        if inbox_lines:
+            parts.append("【你得到的新信息】\n" + "\n".join(inbox_lines))
 
         if self.prompt_format == "text" and self._last_action:
             parts.append(f"【你上一tick的行动】\n{self._last_action} \n不要重复刚才的行动。")
 
-        result = "\n\n".join(parts)
+        return "\n\n".join(parts)
 
-        if self.memory._compress_needed and llm_client:
-            if llm_client.logger:
-                llm_client.logger.debug(
-                    f"{self.name} 触发记忆压缩 ({len(self.memory._short_term)} 条)"
-                )
-            try:
-                rel_updates = await self.memory.compress(llm_client, relationships=self.relationships)
-                if rel_updates and isinstance(rel_updates, dict):
-                    for name, changes in rel_updates.items():
-                        if name not in self.relationships:
-                            continue
-                        old_trust = self.relationships[name].get("trust", 0)
-                        self.relationships[name]["trust"] += changes.get("trust_change", 0)
-                        self.relationships[name]["trust"] = max(-5, min(5, self.relationships[name]["trust"]))
-                        if "impression" in changes:
-                            self.relationships[name]["impression"] = changes["impression"]
-                        if llm_client.logger:
-                            llm_client.logger.debug(
-                                f"关系变化: {self.name}→{name} "
-                                f"信任 {old_trust}→{self.relationships[name]['trust']} "
-                                f"{', 印象更新' if 'impression' in changes else ''}"
-                            )
-            except Exception:
-                pass
+    async def _maybe_compress(self, llm_client: "LLMClient") -> None:
+        """记忆压缩 + 关系更新 + chat 历史截断（LLM 失败静默跳过）。"""
+        if llm_client.logger:
+            llm_client.logger.debug(
+                f"{self.name} 触发记忆压缩 ({len(self.memory._short_term)} 条)"
+            )
+        try:
+            rel_updates = await self.memory.compress(llm_client, relationships=self.relationships)
+            if rel_updates and isinstance(rel_updates, dict):
+                for name, changes in rel_updates.items():
+                    if name not in self.relationships:
+                        continue
+                    old_trust = self.relationships[name].get("trust", 0)
+                    self.relationships[name]["trust"] += changes.get("trust_change", 0)
+                    self.relationships[name]["trust"] = max(-5, min(5, self.relationships[name]["trust"]))
+                    if "impression" in changes:
+                        self.relationships[name]["impression"] = changes["impression"]
+                    if llm_client.logger:
+                        llm_client.logger.debug(
+                            f"关系变化: {self.name}→{name} "
+                            f"信任 {old_trust}→{self.relationships[name]['trust']} "
+                            f"{', 印象更新' if 'impression' in changes else ''}"
+                        )
+        except Exception:
+            pass
 
-            if self.prompt_format == "chat":
-                self._truncate_chat_history()
-
-        return result
+        if self.prompt_format == "chat":
+            self._truncate_chat_history()
 
     def _build_chat_messages(self, current_context: str, tick: int) -> list[dict]:
         """chat 模式：组装多轮消息。summary 插在最前（system 之后），chat_history 居中。"""

@@ -438,6 +438,29 @@ class TestTextModeUnchanged(unittest.TestCase):
         self.assertNotIn("【你上一tick的行动】", context)
         self.assertNotIn("[speak] 你好", context)
 
+    def test_perceive_ingests_inbox(self):
+        """perceive 摄入收件箱：上下文含新信息、记忆写入、inbox 清空、_perceived_inbox 正确"""
+        agent = _make_agent("text")
+        world = WorldState(tick=1, locations=["主厅"])
+        world.message_bus = MessageBus()
+        world.agents["测试"] = agent
+        world.message_bus.send(Message(
+            sender="张三", recipients=["测试"], target="测试",
+            content="你好，测试", msg_type="speech", tick=1,
+        ))
+
+        context = asyncio.run(agent.perceive(world))
+
+        self.assertIn("【你得到的新信息】", context)
+        self.assertIn("你好，测试", context)
+        self.assertEqual(len(world.message_bus.get_inbox("测试")), 0)
+        self.assertEqual(len(agent._perceived_inbox), 1)
+        self.assertEqual(agent._perceived_inbox[0]["sender"], "张三")
+        self.assertTrue(
+            any("你好，测试" in e["event"] for e in agent.memory._short_term),
+            agent.memory._short_term,
+        )
+
 
 class TestPendingUserMsgStale(unittest.TestCase):
     """极端情况：act 失败后 _pending_user_msg 残留的处理"""
