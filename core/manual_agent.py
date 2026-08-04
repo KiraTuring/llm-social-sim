@@ -31,11 +31,19 @@ class ManualAgent(Agent):
     target 不可达等）时记 warning 并回退为 observe，与 LLM 路径行为一致。
     """
 
+    agent_type = "ManualAgent"
+
     def __init__(self, **kwargs):
         file_path = kwargs.pop("file_path", None)
         self._manual_file = Path(file_path) if file_path else _DEFAULT_MANUAL_FILE
         self._manual_plan = self._load_plan()
         super().__init__(**kwargs)
+
+    def to_dict(self) -> dict:
+        """序列化时额外记录 plan 文件路径，恢复时按原文件重新加载计划。"""
+        data = super().to_dict()
+        data["manual_file"] = str(self._manual_file)
+        return data
 
     def _load_plan(self) -> dict:
         """加载并校验手动控制计划，文件缺失/格式错误直接抛错。"""

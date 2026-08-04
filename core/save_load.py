@@ -6,36 +6,22 @@ from pathlib import Path
 from core.message import MessageBus
 from core.agent import Agent
 from core.manual_agent import ManualAgent
-from memory.memory import AgentMemory
 from scenarios.utils import load_scene
 
-
-def serialize_memory(memory: AgentMemory) -> dict:
-    return memory.to_dict()
+SAVE_VERSION = 1
 
 
-def serialize_agent(agent: Agent) -> dict:
-    return {
-        "role": agent.role,
-        "personality": agent.personality,
-        "goal": agent.goal,
-        "location": agent.location,
-        "relationships": agent.relationships,
-        "states": agent.states,
-        "writable_states": list(agent._writable_states) if agent._writable_states else [],
-        "private_states": list(agent._private_states) if agent._private_states else [],
-        "content_max_length": agent.content_max_length,
-        "agent_type": "ManualAgent" if isinstance(agent, ManualAgent) else "Agent",
-        "last_observed_result": getattr(agent, "_last_observed_result", ""),
-        "prompt_format": getattr(agent, "prompt_format", "text"),
-        "chat_history": getattr(agent, "_chat_history", []),
-        "memory": serialize_memory(agent.memory),
-    }
+def _migrate(data: dict) -> dict:
+    """存档版本迁移入口：旧版本在此升级到最新格式，返回迁移后的 dict。
+
+    目前只有 version 1，直接原样返回；未来格式演进只改这一处。
+    """
+    return data
 
 
 def save_simulation_state(world, gm, scene_module: str, scene_display: str, path: str):
     data = {
-        "version": 1,
+        "version": SAVE_VERSION,
         "scene": scene_module,
         "scene_display": scene_display,
         "tick": world.tick,
@@ -45,14 +31,9 @@ def save_simulation_state(world, gm, scene_module: str, scene_display: str, path
         "event_log": world.event_log,
         "environment": world.environment,
         "message_bus": world.message_bus.to_dict(),
-        "gm": {
-            "scheduled_events": [list(item) for item in gm.scheduled_events],
-            "random_events": gm.random_events,
-            "use_llm": gm.use_llm,
-            "history": getattr(gm, "_gm_history", []),
-        },
+        "gm": gm.to_dict(),
         "agents": {
-            name: serialize_agent(agent)
+            name: agent.to_dict()
             for name, agent in world.agents.items()
         },
     }
@@ -67,8 +48,9 @@ def load_simulation_state(path: str, config: dict):
     from core.gm import GMAgent
 
     data = json.loads(Path(path).read_text(encoding="utf-8"))
+    data = _migrate(data)
 
-    if data.get("version") != 1:
+    if data.get("version") != SAVE_VERSION:
         raise ValueError(f"不支持的存档版本: {data.get('version')}")
 
     scene = load_scene(data["scene"])
@@ -92,14 +74,12 @@ def load_simulation_state(path: str, config: dict):
         cfg = agents_by_name[name]
         agent_type = agent_data.get("agent_type", "Agent")
         cls = ManualAgent if agent_type == "ManualAgent" else Agent
-        agent = cls.from_config(scene, cfg, config, saved=agent_data)
+        restore_kwargs = {}
+        if cls is ManualAgent and agent_data.get("manual_file"):
+            restore_kwargs["file_path"] = agent_data["manual_file"]
+        agent = cls.from_config(scene, cfg, config, saved=agent_data, **restore_kwargs)
         world.agents[name] = agent
 
-    gm_data = data["gm"]
-    gm = GMAgent.from_config(scene, config)
-    gm.scheduled_events = [tuple(item) for item in gm_data["scheduled_events"]]
-    gm.random_events = gm_data["random_events"]
-    gm.use_llm = gm_data.get("use_llm", config["gm"]["use_llm"])
-    gm._gm_history = gm_data.get("history", [])
+    gm = GMAgent.from_dict(scene, config, data["gm"])
 
     return world, scene, gm

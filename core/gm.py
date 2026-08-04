@@ -62,6 +62,25 @@ class GMAgent:
             gm_registry=gm_registry,
         )
 
+    def to_dict(self) -> dict:
+        """序列化为可保存的 dict（存档用）。"""
+        return {
+            "scheduled_events": [list(item) for item in self.scheduled_events],
+            "random_events": self.random_events,
+            "use_llm": self.use_llm,
+            "history": self._gm_history,
+        }
+
+    @classmethod
+    def from_dict(cls, scene, config, data: dict) -> "GMAgent":
+        """从存档恢复 GM：from_config 构造后应用运行时字段。"""
+        gm = cls.from_config(scene, config)
+        gm.scheduled_events = [tuple(item) for item in data["scheduled_events"]]
+        gm.random_events = data["random_events"]
+        gm.use_llm = data.get("use_llm", config["gm"]["use_llm"])
+        gm._gm_history = data.get("history", [])
+        return gm
+
     async def check_and_inject(self, world: "WorldState", llm_client: "LLMClient | None" = None):
         """每个 tick 检查是否需要注入事件"""
 

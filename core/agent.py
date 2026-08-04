@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 class Agent:
     """Agent：感知→思考→行动"""
 
+    agent_type = "Agent"
+
     def __init__(
         self,
         name: str,
@@ -109,6 +111,25 @@ class Agent:
             agent._chat_history = saved.get("chat_history", [])
 
         return agent
+
+    def to_dict(self) -> dict:
+        """序列化为可保存的 dict（存档用，格式与 save_load 历史 shape 一致）"""
+        return {
+            "role": self.role,
+            "personality": self.personality,
+            "goal": self.goal,
+            "location": self.location,
+            "relationships": self.relationships,
+            "states": self.states,
+            "writable_states": list(self._writable_states) if self._writable_states else [],
+            "private_states": list(self._private_states) if self._private_states else [],
+            "content_max_length": self.content_max_length,
+            "agent_type": self.agent_type,
+            "last_observed_result": self._last_observed_result,
+            "prompt_format": self.prompt_format,
+            "chat_history": self._chat_history,
+            "memory": self.memory.to_dict(),
+        }
 
     def build_system_prompt(self, registry: "ActionRegistry") -> str:
         """构建 System Prompt"""

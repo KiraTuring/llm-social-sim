@@ -365,7 +365,7 @@ agent = Agent.from_config(scene, cfg, config)
 agent = Agent.from_config(scene, cfg, config, saved=agent_data)
 ```
 
-保存时所有 agent 字段由 `serialize_agent()` 序列化，包括 `states`、`writable_states`、`private_states`、`last_observed_result`。
+保存时所有 agent 字段由 `Agent.to_dict()` 序列化（GM 由 `GMAgent.to_dict()`，存档版本迁移入口为 `save_load._migrate()`），包括 `states`、`writable_states`、`private_states`、`last_observed_result`。
 
 ### inbox 生命周期
 
@@ -437,7 +437,7 @@ perceive() → 压缩触发时调用 _truncate_chat_history() 按 tick 对齐记
 
 **retry 不污染历史**：`think()` 传 `list(_chat_history)` 副本给 LLM，重试消息追加在副本上，不影响持久 `_chat_history`。
 
-**save/load**：`serialize_agent()` 序列化 `prompt_format` 和 `chat_history`，存档恢复时还原。
+**save/load**：`Agent.to_dict()` 序列化 `prompt_format` 和 `chat_history`，存档恢复时还原。
 
 ### chat 模式（GM）
 
