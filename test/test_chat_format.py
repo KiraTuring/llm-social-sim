@@ -190,7 +190,7 @@ class TestThinkChatMode(unittest.TestCase):
                 tick=3,
             ))
         msgs = captured["messages"]
-        # msgs[0] is system prompt (prepended in _call_with_tools)
+        # msgs[0] is system prompt (prepended in LLMClient.call_multi)
         self.assertEqual(len(msgs), 5)
         self.assertEqual(msgs[0]["role"], "system")
         self.assertEqual(msgs[1]["role"], "user")

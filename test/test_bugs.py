@@ -32,7 +32,7 @@ class TestBug1ModelConfig(unittest.TestCase):
         self.assertEqual(self.client._model_str, "openai/gpt-4o")
 
     def test_model_passed_to_acompletion(self):
-        """_call_with_tools 应把 provider/model 传给 litellm.acompletion"""
+        """call() 应把 provider/model 传给 litellm.acompletion"""
         async_mock = AsyncMock(return_value=MagicMock(
             choices=[MagicMock(
                 message=MagicMock(content="", tool_calls=[
