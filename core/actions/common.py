@@ -164,14 +164,8 @@ class MoveAction(ActionSpec):
         target = params.get("target")
         content = params.get("content", "")
 
-        if not target or target not in world.locations:
-            return [], None
-
         agent = world.agents[agent_name]
         old_loc = agent.location
-        adjacent = world.get_adjacent_locations(old_loc)
-        if target not in adjacent:
-            return [], None
 
         old_recipients = world.get_hearable_agents(agent_name)
         error = world.move_agent(agent_name, target)
