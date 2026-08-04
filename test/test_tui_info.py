@@ -50,27 +50,26 @@ def run_tests():
     print("测试 TUI 信息格式化纯函数")
     print("=" * 50)
 
-    # 1. 角色工具列表：名称/描述/参数 + 注入的公共参数
+    # 1. 角色工具列表：只显示名称与描述，不含参数
     registry = ActionRegistry()
     TavernScene().setup(registry)
     tool_lines = format_agent_tools(registry)
     tool_text = "\n".join(tool_lines)
     assert "speak" in tool_text and "move" in tool_text
     assert "interact" in tool_text and "observe" in tool_text
-    assert "internal_monologue(string)" in tool_text
-    assert "state_update(object)" in tool_text
-    assert "target(string)" in tool_text and "content(string)" in tool_text
-    print("[1] 角色工具列表（含注入参数）OK")
+    assert "internal_monologue" not in tool_text
+    assert "target(string)" not in tool_text
+    assert "参数" not in tool_text
+    print("[1] 角色工具列表（仅名称+描述）OK")
 
-    # 2. GM 工具列表：无注入公共参数
+    # 2. GM 工具列表
     gm_registry = ActionRegistry(include_agent_params=False)
     TavernScene().setup_gm(gm_registry)
     gm_tool_text = "\n".join(format_agent_tools(gm_registry))
     assert "npc_speak" in gm_tool_text and "narrate" in gm_tool_text
     assert "modify_environment" in gm_tool_text
     assert "internal_monologue" not in gm_tool_text
-    assert "state_update" not in gm_tool_text
-    print("[2] GM 工具列表（无注入参数）OK")
+    print("[2] GM 工具列表 OK")
 
     # 3. 场景分节：白名单行为 + 剩余事件实时性
     scene = TavernScene()
@@ -93,6 +92,7 @@ def run_tests():
     assert "老巴克" in full_text and "手动控制" in full_text
     assert "prompt 格式: chat" in full_text  # GM 段
     assert "npc_speak" in full_text  # GM 工具名一行
+    assert "\nGM prompt:" in full_text  # GM prompt 前有换行
     assert "tick 6" in full_text and "tick 9" in full_text
     assert "tick 3" not in full_text, "已过 tick 的计划事件不应展示"
     assert "随机事件池" in full_text

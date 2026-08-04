@@ -10,24 +10,11 @@ def is_npc(agent_name: str, world) -> bool:
 
 
 def format_agent_tools(registry) -> list[str]:
-    """把 ActionRegistry 的 tool schema 格式化为展示行（含注入的公共参数）。"""
-    lines = []
-    for schema in registry.get_tool_schemas():
-        func = schema.get("function", {})
-        name = func.get("name", "?")
-        desc = func.get("description", "")
-        params = func.get("parameters", {})
-        props = params.get("properties", {})
-        required = params.get("required", [])
-        line = f"- {name} — {desc}"
-        if props:
-            line += "\n  参数: " + ", ".join(
-                f"{key}({info.get('type', '?')})" for key, info in props.items()
-            )
-        if required:
-            line += "\n  必填: " + ", ".join(required)
-        lines.append(line)
-    return lines
+    """把 ActionRegistry 的 tool schema 格式化为展示行（只显示名称与描述）。"""
+    return [
+        f"- {schema['function']['name']} — {schema['function'].get('description', '')}"
+        for schema in registry.get_tool_schemas()
+    ]
 
 
 def format_scene_sections(scene, world, gm, config) -> list[tuple[str, str]]:
@@ -61,7 +48,7 @@ def format_scene_sections(scene, world, gm, config) -> list[tuple[str, str]]:
     gm_prompt = getattr(gm, "llm_prompt", "") or ""
     if gm_prompt:
         shown = gm_prompt if len(gm_prompt) <= 200 else gm_prompt[:200] + "…"
-        gm_lines.append(f"GM prompt: {shown}")
+        gm_lines.append(f"\nGM prompt: {shown}")
     gm_registry = getattr(gm, "registry", None)
     if gm_registry is not None:
         gm_tool_names = [
