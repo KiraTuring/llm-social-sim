@@ -100,18 +100,27 @@ class SimulationTuiApp(App):
     }
     Tree {
         overflow-x: hidden;
+        background: transparent;
     }
     .gm-event {
         margin: 0 0 0 0;
-    }
-    .action-collapsible {
-        margin: 0 0 0 1;
     }
     .agent-collapsible {
         margin: 0 0 0 0;
     }
     CollapsibleTitle {
         width: 100%;
+    }
+    CollapsibleTitle:hover {
+        background: $accent-darken-1;
+        color: $text;
+    }
+    Collapsible {
+        padding-bottom: 0;
+        background: transparent;
+    }
+    Contents {
+        padding: 1 0 0 3;
     }
     #scene-label {
         margin: 0 2;
@@ -180,7 +189,7 @@ class SimulationTuiApp(App):
             auto_label = "⏸ 暂停" if self._auto_mode else "▶ 自动"
             yield Button(auto_label, id="btn-auto", variant="primary")
             yield Button("⏭ 下一Tick", id="btn-next", variant="default")
-            yield Button("💾 保存", id="btn-save", variant="default")
+            yield Button("💾 保存", id="btn-save", variant="success")
             yield Button("Q 退出", id="btn-quit", variant="error")
             yield Label("Tick 0/0", id="tick-label")
             yield Label("", id="status-label")
@@ -318,7 +327,10 @@ class SimulationTuiApp(App):
 
         # Center panel: append new tick entries
         scroll = self.query_one("#event-scroll", VerticalScroll)
-        scroll.mount(Static(f"═══ Tick {self.world.tick} {'═' * 50}", classes="tick-sep"))
+        tick_label = f"═══ Tick {self.world.tick} "
+        panel_width = scroll.size.width or 0
+        dash_count = max(20, panel_width - len(tick_label) - 1)
+        scroll.mount(Static(tick_label + "═" * dash_count, classes="tick-sep"))
 
         for event in self.world.event_log:
             if f"[tick {self.world.tick}]" in event:
