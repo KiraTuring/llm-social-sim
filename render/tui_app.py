@@ -244,6 +244,10 @@ class SimulationTuiApp(App):
         tick_label = self.query_one("#tick-label", Label)
         total_agents = max(1, len(self.world.action_order))
 
+        # === init 阶段 ===
+        await self._init_ui()
+        # =================
+
         try:
             for tick in range(self.start_tick, self.start_tick + self.remaining):
                 tick_label.update(f"Tick {tick}/{end_tick}")
@@ -279,6 +283,20 @@ class SimulationTuiApp(App):
             self._handle_simulation_error(self.world.tick, e, self.logger)
         else:
             self._show_summary()
+
+    async def _init_ui(self) -> None:
+        """init 阶段：等待首次布局完成，渲染初始世界状态。"""
+        self._update_hint_visibility()
+        scroll = self.query_one("#event-scroll", VerticalScroll)
+        # 首次布局前 virtual_size 为 0，轮询等待就绪（毫秒级，只发生一次）
+        for _ in range(100):
+            if scroll.virtual_size.width:
+                break
+            await asyncio.sleep(0.01)
+        # 渲染初始世界状态，tick 1 开始前即可见
+        self.query_one("#location-tree", Tree).root.expand()
+        self._sync_location_tree()
+        self._sync_agent_panel()
 
     async def _render_tick_start(self):
         """渲染 tick 分隔线和本 tick 新增的 GM 事件，同步两侧面板。"""
