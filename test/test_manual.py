@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from dotenv import load_dotenv
 
 from core.action import ActionRegistry
+from core.actions.common import SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction
 from core.manual_agent import ManualAgent
 from scenarios.tavern import TavernScene
 from scenarios.utils import validate_agent_configs
@@ -19,7 +20,6 @@ load_dotenv()
 
 SCENE = TavernScene()
 REGISTRY = ActionRegistry()
-from core.actions.common import SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction
 
 for action_cls in (SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction):
     REGISTRY.register(action_cls())

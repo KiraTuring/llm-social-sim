@@ -76,7 +76,7 @@ async def test_agent():
     print(f"[感知结果]\n{context[:200]}...")
 
     action = await agent.think(llm, registry, context)
-    print(f"\n[思考结果]")
+    print("\n[思考结果]")
     print(f"  Action: {action.action_type}")
     print(f"  Content: {action.content[:50]}...")
     print(f"  Internal: {action.internal_monologue[:50]}...")

@@ -384,7 +384,7 @@ class TestTextModeUnchanged(unittest.TestCase):
     def test_think_uses_flat_messages(self):
         """text 模式 think 使用 [{"role": "user", "content": context}]"""
         agent = _make_agent("text")
-        messages = agent._build_chat_messages = None  # 不应被调用
+        agent._build_chat_messages = None  # 不应被调用
         self.assertEqual(agent.prompt_format, "text")
 
     def test_perceive_includes_memory_and_last_action(self):

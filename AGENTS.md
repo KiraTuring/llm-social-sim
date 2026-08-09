@@ -696,18 +696,23 @@ def _exec(action):
 
 ## 测试
 
-测试文件: `test/*.py`
+测试文件: `test/*.py`（`python3 -m pytest` 运行，配置见 `pytest.ini` 的 `asyncio_mode=auto`）
 
-运行需要 `.env` 文件中的 `DEEPSEEK_API_KEY`
+其中 `test_model.py`、`test_agent.py`、`test_gm.py` 需要 `.env` 文件中的 `DEEPSEEK_API_KEY`（真实调用 LLM）；其余测试 mock `litellm`，离线可跑。
 
 | 测试文件 | 内容 |
 |---------|------|
-| `test_model.py` | LLM 基础调用和并发测试 |
-| `test_agent.py` | Agent 基本流程 |
-| `test_gm.py` | GM 事件注入 |
+| `test_model.py` | LLM 基础调用和并发测试（需 API key） |
+| `test_agent.py` | Agent 基本流程（需 API key） |
+| `test_gm.py` | GM 事件注入（需 API key） |
 | `test_retry.py` | LLM 重试机制（无 tool call、不合法工具名、不合法参数） |
 | `test_bugs.py` | Bug 修复验证（model 配置、compress 空返回、visibility 安全、message_bus 字段） |
 | `test_chat_format.py` | chat 模式消息结构、截断、retry 隔离、text 模式回归 |
+| `test_engine.py` | SimulationEngine：tick 级与 Agent 级步进、规则触发、GM 注入、顺序轮换 |
+| `test_manual.py` | ManualAgent：默认 observe、通配 tick、行动执行、非法行动回退、文件错误 |
+| `test_save_load.py` | 存档往返：Agent/GMAgent to_dict/from_dict 边界、格式稳定、版本迁移入口 |
+| `test_tui_info.py` | TUI 信息格式化纯函数：工具列表、场景分节白名单、NPC 判断 |
+| `test_world.py` | WorldState 位置索引：重建、副本语义、move_agent 增量维护与自愈 |
 
 ## 调试工具
 

@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .agent import Agent
-    from .message import Message, MessageBus
 
 
 @dataclass
@@ -55,7 +54,7 @@ class WorldState:
     def get_adjacent_locations(self, loc: str) -> list[str]:
         """获取从某个位置可达的相邻位置"""
         if not self.connections:
-            return [l for l in self.locations if l != loc]
+            return [loc2 for loc2 in self.locations if loc2 != loc]
         return list(self._adjacency.get(loc, set()))
 
     def advance_tick(self):
@@ -159,7 +158,7 @@ class WorldState:
 
     def get_hearable_agents(self, target: str, *, exclude: str | None = None, use_location: bool = False) -> list[str]:
         """获取能听到某个位置事件的所有 agent（同位置 + 可见位置）
-        
+
         use_location=False (默认): target 是 agent 名，自动定位其位置
         use_location=True:       target 是位置名
         """

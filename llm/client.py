@@ -3,10 +3,11 @@
 import asyncio
 import logging
 import os
-os.environ["LITELLM_LOG"] = "ERROR"
-logging.getLogger("litellm").setLevel(logging.ERROR)
 
 from core.action import Action, ActionRegistry
+
+os.environ["LITELLM_LOG"] = "ERROR"
+logging.getLogger("litellm").setLevel(logging.ERROR)
 
 
 class LLMClient:

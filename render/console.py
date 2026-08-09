@@ -61,7 +61,7 @@ class ConsoleRenderer:
         if inbox:
             if self.show_full_inbox:
                 lines = [f"  {self._format_inbox_line(m)}" for m in inbox]
-                content += f"[dim](收到:\n" + "\n".join(lines) + ")[/dim]\n"
+                content += "[dim](收到:\n" + "\n".join(lines) + ")[/dim]\n"
             else:
                 content += f"[dim](收到: {self._format_inbox_line(inbox[-1], truncate=True)})[/dim]\n"
 

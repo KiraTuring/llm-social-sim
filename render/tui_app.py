@@ -438,7 +438,7 @@ class SimulationTuiApp(App):
                 mem_parts = []
                 for m in memories:
                     mem_parts.append(f"  - {_esc(m['event'])}")
-                body_parts.append(f"[bold]🧠 最近记忆:[/bold]\n" + "\n".join(mem_parts))
+                body_parts.append("[bold]🧠 最近记忆:[/bold]\n" + "\n".join(mem_parts))
             body = "\n".join(body_parts)
             sig = f"{title}\n{body}"
 

@@ -1,5 +1,12 @@
 """Agent 记忆管理：短期记忆 + 摘要压缩。"""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from llm.client import LLMClient
+
 
 class AgentMemory:
     """Agent 记忆系统"""
@@ -84,7 +91,7 @@ class AgentMemory:
         user_content = ""
         if self._summary:
             user_content += f"已有摘要：{self._summary}\n"
-            user_content += f"请在已有摘要的基础上，概括新的经历，只保留已有摘要中的重要信息。\n\n"
+            user_content += "请在已有摘要的基础上，概括新的经历，只保留已有摘要中的重要信息。\n\n"
             if llm_client.logger:
                 llm_client.logger.info(f"记忆压缩: {self.name} | 已有摘要: {self._summary}")
         user_content += rel_text + "\n" if rel_text else ""

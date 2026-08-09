@@ -1,11 +1,13 @@
 """Agent 类：属性、记忆、perceive/think/act。"""
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 from memory.memory import AgentMemory
 
 if TYPE_CHECKING:
-    from core.action import ActionRegistry
+    from core.action import Action, ActionRegistry
     from core.world import WorldState
     from llm.client import LLMClient
     from memory.memory import AgentMemory

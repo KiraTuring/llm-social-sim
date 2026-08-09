@@ -1,7 +1,7 @@
 """通讯 Action 实现：无线电通讯等远程通信。"""
 
 from core.action import ActionSpec
-from core.message import Message, BROADCAST
+from core.message import Message
 
 
 class RadioAction(ActionSpec):

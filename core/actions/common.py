@@ -162,7 +162,6 @@ class MoveAction(ActionSpec):
 
     def execute(self, agent_name, params, world):
         target = params.get("target")
-        content = params.get("content", "")
 
         agent = world.agents[agent_name]
         old_loc = agent.location

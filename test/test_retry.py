@@ -2,9 +2,8 @@
 """测试 LLM retry 机制：无 tool call + 不合法工具/参数时是否正确重试。"""
 
 import asyncio
-import json
 import unittest
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import patch
 from llm.client import LLMClient
 from core.action import ActionRegistry
 from core.actions.common import SpeakAction, ObserveAction, MoveAction
@@ -98,7 +97,7 @@ class TestLLMRetry(unittest.TestCase):
             "locations": self.locations,
             "agents_by_location": self.agents_by_location,
             "hearable_agents": _hearable,
-            "adjacent_locations": [l for l in self.locations if l != "吧台"],
+            "adjacent_locations": [loc for loc in self.locations if loc != "吧台"],
         }
 
     async def _run(self, text_first, text_second, text_third, validation_context=None):

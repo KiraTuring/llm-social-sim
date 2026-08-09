@@ -1,6 +1,5 @@
 """宇宙飞船场景：封闭空间内的角色张力，适合测试 GM 和 agent 行为。"""
 
-from core.message import BROADCAST
 from core.rules import RuleEngine
 from scenarios.base import Scene
 
