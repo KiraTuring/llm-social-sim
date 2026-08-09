@@ -49,6 +49,9 @@ class SimulationTuiApp(App):
     #location-tree, #event-scroll, #agent-scroll {
         height: 100%;
     }
+    #event-scroll, #agent-scroll {
+        scrollbar-gutter: stable;
+    }
     Tree {
         overflow-x: hidden;
         background: transparent;
@@ -282,7 +285,7 @@ class SimulationTuiApp(App):
         self._update_hint_visibility()
         scroll = self.query_one("#event-scroll", VerticalScroll)
         tick_label = f"═══ Tick {self.world.tick} "
-        panel_width = scroll.size.width or 0
+        panel_width = scroll.virtual_size.width or 0
         dash_count = max(20, panel_width - len(tick_label) - 1)
         scroll.mount(Static(tick_label + "═" * dash_count, classes="tick-sep"))
 
