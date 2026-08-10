@@ -7,6 +7,32 @@ from unittest.mock import patch
 from llm.client import LLMClient
 from core.action import ActionRegistry
 from core.actions.common import SpeakAction, ObserveAction, MoveAction
+from core.gm import GMAgent
+
+CONFIG = {
+    "llm": {
+        "provider": "deepseek",
+        "model": "deepseek-chat",
+        "base_url": "https://api.deepseek.com/v1",
+        "api_key": "test_key",
+        "response_mode": "tool_call",
+    },
+    "agent": {
+        "prompt_format": "text",
+        "memory_short_limit": 10,
+        "memory_compress_threshold": 30,
+        "content_max_length": 200,
+        "inbox_limit": 5,
+    },
+    "gm": {
+        "prompt_format": "text",
+        "chat_history_max_messages": 40,
+        "use_llm": False,
+        "random_event_chance": 0.0,
+        "llm_event_chance": 0.0,
+        "message_limit": 5,
+    },
+}
 
 
 def _make_response(text_content: str, tool_call: bool, func_name: str = "observe", func_args: str = '{"internal_monologue": "测试"}'):
@@ -305,6 +331,166 @@ class TestLLMRetry(unittest.TestCase):
         )
         self.assertEqual(len(actions), 2)
         self.assertEqual(calls, 1)
+
+
+class TestGMChainTools(unittest.TestCase):
+    """GM 同 tick 链式工具：npc_add 后 npc_speak 必须能看到新 NPC（校验上下文实时刷新）。"""
+
+    def setUp(self):
+        from scenarios._test import _TestScene
+        from core.agent import Agent
+
+        self.scene = _TestScene()
+        self.world = self.scene.init_world()
+        for cfg in self.scene.agents:
+            self.world.agents[cfg["name"]] = Agent.from_config(self.scene, cfg, CONFIG)
+
+        self.gm_registry = ActionRegistry(include_agent_params=False)
+        self.scene.setup_gm(self.gm_registry)
+        self.gm = GMAgent.from_config(self.scene, CONFIG, self.gm_registry)
+        self.client = LLMClient(CONFIG["llm"], logger=None)
+
+    async def _run_chain(self, response):
+        async def fake_acompletion(**kwargs):
+            return response
+
+        with patch("litellm.acompletion", new=fake_acompletion):
+            await self.gm._generate_llm_event(self.world, self.client)
+
+    def test_npc_add_then_speak_same_response(self):
+        """同一响应内 [npc_add, npc_speak]：speak 校验必须看到刚添加的 NPC"""
+        asyncio.run(self._run_chain(
+            _make_multi_response([
+                ("npc_add", '{"npc_name": "流浪汉", "location": "大厅"}'),
+                ("npc_speak", '{"npc_name": "流浪汉", "content": "求口吃的"}'),
+            ]),
+        ))
+        self.assertIn("流浪汉", self.world.npcs)
+        self.assertIn("流浪汉", self.world.npc_names)
+        self.assertNotIn("不是 NPC", "\n".join(self.world.event_log))
+
+    def test_npc_add_then_speak_across_turns(self):
+        """跨 turn：turn0 npc_add，turn1 npc_speak（ReAct 循环内校验上下文逐 turn 重建）"""
+        responses = [
+            _make_multi_response([("npc_add", '{"npc_name": "吟游诗人", "location": "花园"}')]),
+            _make_multi_response([("npc_speak", '{"npc_name": "吟游诗人", "content": "唱首歌"}')]),
+            _make_multi_response([("npc_move", '{"npc_name": "吟游诗人", "target": "书房"}')]),
+        ]
+        call_count = 0
+
+        async def fake_acompletion(**kwargs):
+            nonlocal call_count
+            resp = responses[call_count]
+            call_count += 1
+            return resp
+
+        async def run():
+            with patch("litellm.acompletion", new=fake_acompletion):
+                await self.gm._generate_llm_event(self.world, self.client)
+
+        asyncio.run(run())
+        self.assertIn("吟游诗人", self.world.npcs)
+        self.assertEqual(self.world.npcs["吟游诗人"].location, "书房")
+        self.assertNotIn("不是 NPC", "\n".join(self.world.event_log))
+
+    def test_chat_second_trigger_tool_pairing(self):
+        """chat 模式：一次响应多个工具后，_gm_history 必须保持 assistant(tool_calls)/tool 配对，
+        第二次触发不抛 BadRequestError（回归：assistant 声明 id1+id2 却只有 tool(id1) 跟随）。"""
+        chat_config = dict(CONFIG)
+        chat_config["gm"] = dict(CONFIG["gm"])
+        chat_config["gm"]["prompt_format"] = "chat"
+        from scenarios._test import _TestScene
+        from core.agent import Agent
+
+        scene = _TestScene()
+        world = scene.init_world()
+        for cfg in scene.agents:
+            world.agents[cfg["name"]] = Agent.from_config(scene, cfg, chat_config)
+        reg = ActionRegistry(include_agent_params=False)
+        scene.setup_gm(reg)
+        gm = GMAgent.from_config(scene, chat_config, reg)
+        client = LLMClient(chat_config["llm"], logger=None)
+
+        responses = [
+            _make_multi_response([
+                ("npc_add", '{"npc_name": "货郎", "location": "大厅"}'),
+                ("npc_speak", '{"npc_name": "货郎", "content": "卖货了"}'),
+            ]),
+            _make_multi_response([
+                ("npc_move", '{"npc_name": "货郎", "target": "花园"}'),
+            ]),
+        ]
+        call_count = 0
+
+        def assert_pairing(messages):
+            """校验 assistant(tool_calls) 声明的每个 id 都被紧随的 tool 消息配对。"""
+            pending = []
+            for m in messages:
+                if m.get("role") == "assistant" and m.get("tool_calls"):
+                    pending = [tc["id"] for tc in m["tool_calls"]]
+                elif m.get("role") == "tool":
+                    if m.get("tool_call_id") not in pending:
+                        raise AssertionError(f"tool_call_id {m.get('tool_call_id')} 未配对")
+                    pending.remove(m.get("tool_call_id"))
+            self.assertEqual(pending, [], f"未配对的 tool_call_id: {pending}")
+
+        async def fake_acompletion(**kwargs):
+            nonlocal call_count
+            assert_pairing(kwargs["messages"])
+            resp = responses[call_count]
+            call_count += 1
+            return resp
+
+        async def run():
+            with patch("litellm.acompletion", new=fake_acompletion):
+                await gm._generate_llm_event(world, client)
+                await gm._generate_llm_event(world, client)
+
+        asyncio.run(run())
+        self.assertIn("货郎", world.npcs)
+        self.assertEqual(world.npcs["货郎"].location, "花园")
+        assert_pairing(gm._gm_history)
+
+    def test_truncate_history_keeps_pairing(self):
+        """_truncate_gm_history：截断落在 assistant(tool_calls)/tool 之间时，跳过孤立 tool 消息，
+        不残留未配对序列。"""
+        from scenarios._test import _TestScene
+
+        scene = _TestScene()
+        cfg = dict(CONFIG)
+        cfg["gm"] = dict(CONFIG["gm"])
+        cfg["gm"]["prompt_format"] = "chat"
+        cfg["gm"]["chat_history_max_messages"] = 3
+        reg = ActionRegistry(include_agent_params=False)
+        scene.setup_gm(reg)
+        gm = GMAgent.from_config(scene, cfg, reg)
+
+        def tc_msg(call_id, tool_id):
+            return {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"id": call_id, "type": "function",
+                                "function": {"name": "npc_speak", "arguments": "{}"}}],
+            }, {"role": "tool", "tool_call_id": tool_id, "content": "ok"}
+
+        history = [{"role": "user", "content": "u1"}]
+        # 构造：u1 + 一组 tool_calls（assistant+tool+tool），共 3 条 + 一条新 user 触发截断
+        a, t1 = tc_msg("c1", "c1")
+        history += [a, t1, {"role": "tool", "tool_call_id": "c1b", "content": "ok2"},
+                    {"role": "user", "content": "u2"}]
+        gm._gm_history = history
+        gm._truncate_gm_history()
+        # 截断后头部不能是孤立 tool 消息（其 assistant 已被切掉）
+        self.assertNotEqual(gm._gm_history[0].get("role"), "tool")
+        # 若存在 assistant(tool_calls)，其后必须完整配对
+        pending = []
+        for m in gm._gm_history:
+            if m.get("role") == "assistant" and m.get("tool_calls"):
+                pending = [tc["id"] for tc in m["tool_calls"]]
+            elif m.get("role") == "tool":
+                if m.get("tool_call_id") in pending:
+                    pending.remove(m.get("tool_call_id"))
+        self.assertEqual(pending, [])
 
 
 if __name__ == "__main__":

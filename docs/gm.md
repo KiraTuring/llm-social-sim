@@ -29,8 +29,11 @@ GM 使用 `llm_client.call_multi()`（走 tool_call 模式）生成事件，支�
 `_generate_llm_event()` 运行 `MAX_TURNS=3` 的 ReAct 循环：
 
 ```
-call_multi() → dispatch 所有 action → 结果喂回 LLM → 继续或停止
+call_multi() → 逐工具校验并执行 → 结果喂回 LLM → 继续或停止
 ```
+
+- `call_multi` **逐工具校验→执行**（非批量），且每次执行后 `_exec` 原地刷新 `validation_context`（`npc_names`/`npc_locations` 等）——因此同一响应内可链式调用有依赖的工具（如 `npc_add` 后紧跟 `npc_speak`/`npc_move`，后者校验能看到刚添加的 NPC）
+- `validation_context` 每 turn 重建，跨 turn 的工具副作用同样对后续校验可见
 
 停止条件：
 - LLM 返回纯文本（`allow_no_tool=True`，视为合法停止信号）

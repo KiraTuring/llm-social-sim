@@ -142,6 +142,7 @@ class LLMClient:
 
                 actions = []
                 all_valid = True
+                executed = []
                 for tool_call in tool_calls:
                     try:
                         params = json.loads(tool_call.function.arguments)
@@ -186,6 +187,15 @@ class LLMClient:
                             internal_monologue=params.get("internal_monologue", ""),
                         )
                         actions.append(action)
+
+                        # 校验通过后立即执行（若提供回调），使前序工具的副作用
+                        # （如 npc_add 修改 world）对后续 tool call 的校验可见。
+                        # 结果暂存，等全部工具校验通过后统一追加 assistant(tool_calls)+tool
+                        # 消息——保证 assistant 声明的每个 tool_call_id 都被 tool 消息配对，
+                        # 中途校验失败时不会残留未配对的 assistant(tool_calls)。
+                        if execute_action:
+                            result = execute_action(action)
+                            executed.append((tool_call, result))
                     except Exception as e:
                         all_valid = False
                         if retry < max_retries:
@@ -207,6 +217,27 @@ class LLMClient:
                             for tc in tool_calls
                         ]
 
+                    if execute_action and executed:
+                        tc_list = [{
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments,
+                            },
+                        } for tc in tool_calls]
+                        messages.append({
+                            "role": "assistant",
+                            "content": choice.message.content or "",
+                            "tool_calls": tc_list,
+                        })
+                        for tc, result in executed:
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tc.id,
+                                "content": result or f"'{tc.function.name}' 执行完成",
+                            })
+
                     parsed = [{"action_type": a.action_type, "target": a.target, "content": a.content} for a in actions]
                     if self.logger:
                         self.logger.log_llm_call(
@@ -214,30 +245,6 @@ class LLMClient:
                             system_prompt=system_prompt, messages=messages,
                             schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=parsed,
                         )
-
-                    if execute_action and actions:
-                        tc_list = []
-                        for tc in tool_calls:
-                            tc_list.append({
-                                "id": tc.id,
-                                "type": "function",
-                                "function": {
-                                    "name": tc.function.name,
-                                    "arguments": tc.function.arguments,
-                                },
-                            })
-                        messages.append({
-                            "role": "assistant",
-                            "content": choice.message.content or "",
-                            "tool_calls": tc_list,
-                        })
-                        for i, action in enumerate(actions):
-                            result = execute_action(action)
-                            messages.append({
-                                "role": "tool",
-                                "tool_call_id": tc_list[i]["id"],
-                                "content": result or f"'{action.action_type}' 执行完成",
-                            })
 
                     return choice.message.content, actions
             else:

@@ -132,17 +132,22 @@ class GMAgent:
         world.message_bus.send(msg)
 
     def _truncate_gm_history(self):
-        """chat 模式：滑动窗口截断 GM 对话历史"""
+        """chat 模式：滑动窗口截断 GM 对话历史。
+
+        截断只从头部丢弃；若边界正好落在 assistant(tool_calls) 与其 tool 消息之间，
+        会残留孤立 tool 消息（其 assistant 已被切掉），发送给 LLM 会触发
+        "tool_calls 必须被 tool 消息配对"的 BadRequestError。
+        因此截断后跳过开头的孤立 tool 消息，保证历史始终从完整消息组开始。
+        """
         if len(self._gm_history) > self.history_max_messages:
             excess = len(self._gm_history) - self.history_max_messages
             self._gm_history = self._gm_history[excess:]
-        while self._gm_history and self._gm_history[0].get("role") != "user":
+        while self._gm_history and self._gm_history[0].get("role") == "tool":
             self._gm_history.pop(0)
 
     async def _generate_llm_event(self, world: "WorldState", llm_client: "LLMClient") -> None:
         """ReAct 循环：让 LLM 连续调用工具生成事件"""
         system_prompt = self._build_gm_prompt()
-        validation_context = world.build_validation_context("GM")
 
         if self.prompt_format == "chat":
             messages = list(self._gm_history)
@@ -153,11 +158,16 @@ class GMAgent:
         any_actions = False
 
         for turn in range(self.MAX_TURNS):
+            # 每 turn 重建：前序 turn 的工具副作用（如 npc_add）必须对后续校验可见
+            validation_context = world.build_validation_context("GM")
+
             def _exec(action):
                 spec = self.registry.get(action.action_type)
                 if not spec:
                     return f"未知工具: {action.action_type}"
                 _, result = spec.execute("GM", action.params, world)
+                # 执行后原地刷新校验上下文，使同批后续 tool call 能看到本次副作用
+                validation_context.update(world.build_validation_context("GM"))
                 from core.action import format_tool_result
                 summary = format_tool_result(action.action_type, result)
                 if self.logger:
@@ -179,7 +189,7 @@ class GMAgent:
             any_actions = True
 
             messages.append({"role": "user",
-                "content": "如需继续使用工具请调用，否则直接回复'完成'。"})
+                             "content": "如需继续使用工具请调用，否则直接回复'完成'。"})
 
         if self.prompt_format == "chat" and any_actions:
             self._gm_history = [
