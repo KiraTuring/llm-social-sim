@@ -96,7 +96,7 @@ class GMAgent:
             recent = world.message_bus.get_recent(50)
             trigger = any(
                 (m.msg_type == "interact" or
-                 m.msg_type == "speech" and m.target in world.npc_names)
+                 m.target in world.npc_names)
                 and m.tick == world.tick - 1
                 for m in recent
             )
