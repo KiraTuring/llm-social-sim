@@ -102,8 +102,10 @@ class TavernScene(Scene):
         "请根据当前世界状态生成一个符合酒馆氛围的简短随机事件。\n"
         "可以是有趣的小插曲、外面的动静、或是环境细节。\n"
         "不要生成过于戏剧性或破坏世界设定的事件。\n"
-        "避免角色直接互动或替角色说话——你只负责世界环境的变化。\n"
-        "不要引入新人物或新的地点，你没有能力创建新的角色或地点，现有的角色无法和你创造的人物互动。\n"
+        "必要时可以用 add_npc 添加一个贴合酒馆氛围的临时角色（游吟诗人、商贩、醉汉等），"
+        "并用 npc_speak 让他们说话或回应角色——以回应为主，不主动制造大事件。\n"
+        "临时角色不应喧宾夺主，也不要在事件结束后继续赖在场景里制造新情节，"
+        "可用 npc_move 让临时角色走动，或用 npc_remove 让他们离开（离开用 narrate 播报）。\n"
     )
 
     gm_random_events = [
@@ -161,8 +163,9 @@ class TavernScene(Scene):
             registry.register(action_cls())
 
     def setup_gm(self, registry):
-        """酒馆 GM 工具：旁白 + 环境/状态管理（无 NPC，故不用 npc_speak/add_npc）"""
-        from core.actions.gm_tools import NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction
+        """酒馆 GM 工具：旁白 + 环境/状态管理 + NPC 控制（支持临时角色）"""
+        from core.actions.gm_npc import AddNpcAction, NpcMoveAction, NpcSpeakAction, RemoveNpcAction
+        from core.actions.gm_tools import ModifyCharStateAction, ModifyEnvironmentAction, NarrateAction
 
-        for action_cls in [NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction]:
+        for action_cls in [NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction, NpcSpeakAction, AddNpcAction, NpcMoveAction, RemoveNpcAction]:
             registry.register(action_cls())

@@ -152,6 +152,24 @@ class WorldState:
             self._agents_by_location.setdefault(npc.location, []).append(npc.name)
         return None
 
+    def remove_npc(self, name: str) -> str | None:
+        """移除一个 NPC（add_npc 的镜像）。返回错误信息或 None。
+
+        从 npcs、npc_names 与位置索引中同步删除——所有读取点
+        （characters/可见性/校验上下文/存档/TUI）都会自动停止看到它。
+        """
+        npc = self.npcs.get(name)
+        if npc is None:
+            return f"'{name}' 不是 NPC"
+        old_location = npc.location
+        del self.npcs[name]
+        self.npc_names.discard(name)
+        if self._agents_by_location:
+            old_bucket = self._agents_by_location.get(old_location)
+            if old_bucket and name in old_bucket:
+                old_bucket.remove(name)
+        return None
+
     def add_event(self, event: str):
         """记录事件。
 
@@ -178,27 +196,27 @@ class WorldState:
             index.setdefault(npc.location, []).append(name)
         self._agents_by_location = index
 
-    def move_agent(self, agent_name: str, new_location: str) -> str | None:
-        """移动 Agent 并增量维护位置索引。返回错误信息或 None。
+    def move_character(self, name: str, new_location: str) -> str | None:
+        """移动任意角色（Agent 或 NPC）并增量维护位置索引。返回错误信息或 None。
 
         只校验名字与位置合法性，不校验可达性——「Move 受可达性限制」是
         MoveAction 的规则（validate_params），世界层保持无策略，
         传送门/传送魔法/GM 强制移动等能力可直接调用本方法。
         """
-        if agent_name not in self.agents:
-            return f"'{agent_name}' 不存在"
+        if name not in self.characters:
+            return f"'{name}' 不存在"
         if new_location not in self.locations:
             return f"'{new_location}' 不是有效位置"
         if not self._agents_by_location:
             self.rebuild_location_index()
-        agent = self.agents[agent_name]
-        old_location = agent.location
+        char = self.characters[name]
+        old_location = char.location
         if old_location != new_location:
             old_bucket = self._agents_by_location.get(old_location)
-            if old_bucket and agent_name in old_bucket:
-                old_bucket.remove(agent_name)
-            self._agents_by_location.setdefault(new_location, []).append(agent_name)
-            agent.location = new_location
+            if old_bucket and name in old_bucket:
+                old_bucket.remove(name)
+            self._agents_by_location.setdefault(new_location, []).append(name)
+            char.location = new_location
         return None
 
     def get_hearable_agents(self, target: str, *, exclude: str | None = None, use_location: bool = False) -> list[str]:
@@ -232,6 +250,7 @@ class WorldState:
                 "agent_names": list(self.agents.keys()),
                 "locations": self.locations,
                 "npc_names": list(self.npc_names),
+                "npc_locations": {n: self.npcs[n].location for n in self.npcs},
                 "interactable_keys": self.interactable_keys,
             }
         agent_location = self.agents[agent_name].location

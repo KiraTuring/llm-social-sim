@@ -121,7 +121,6 @@ class MurderScene(Scene):
 - npc_speak 不是主动发言工具——只有当玩家来到警卫室用 speak 对警长说话时，你才用 npc_speak 回复
 - 警长不会主动开口，玩家没来找他时你什么都不用做
 - 不要用 narrate 添加新线索或新事件。所有线索已经在各位置的 environment 中
-- 不要用 modify_environment 添加新证据——场景预设的证据已经足够
 - 玩家找不到线索是因为他们没走到正确的位置 observe，不是线索不够
 - 警长不知道凶手是谁，也不知道完整案情——不要以警长的身份透露任何你不知道的信息
 - 裁决原则：只有当玩家推理出全部 4 个关键证据且指向林夫人时，才让警长下令逮捕
@@ -143,7 +142,7 @@ class MurderScene(Scene):
         """庄园 GM 工具：旁白 + NPC 说话 + 角色状态。
 
         故意不注册 add_npc（剧情明确只有 3 人，无其他人物）
-        和 modify_environment（prompt 禁止添加新证据）。
+        和 modify_environment（环境证据是静态线索，无需动态修改）。
         """
         from core.actions.gm_tools import NarrateAction, ModifyCharStateAction
         from core.actions.gm_npc import NpcSpeakAction

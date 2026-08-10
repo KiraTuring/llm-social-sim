@@ -1,4 +1,4 @@
-"""WorldState 位置索引测试：重建、副本语义、move_agent 增量维护与自愈。"""
+"""WorldState 位置索引测试：重建、副本语义、move_character 增量维护与自愈。"""
 
 import sys
 from pathlib import Path
@@ -15,6 +15,14 @@ class _StubAgent:
         self.name = name
         self.location = location
         self.content_max_length = 200
+
+
+class _StubNPC:
+    """NPC 桩：move_character 对 NPC 生效只需 name 与 location。"""
+
+    def __init__(self, name: str, location: str):
+        self.name = name
+        self.location = location
 
 
 def _build_world() -> WorldState:
@@ -50,34 +58,58 @@ def run_tests():
     assert world.get_agents_in_location("吧台") == ["老巴克"]
     print("[2] 返回副本语义 OK")
 
-    # 3a. move_agent 增量维护
+    # 3a. move_character 增量维护
     world = _build_world()
     world.rebuild_location_index()
-    assert world.move_agent("雷恩", "主厅") is None
+    assert world.move_character("雷恩", "主厅") is None
     assert world.agents["雷恩"].location == "主厅"
     assert world.get_agents_in_location("主厅") == ["艾莉娅", "雷恩"]
     assert world.get_agents_in_location("角落") == []
-    print("[3a] move_agent 增量维护 OK")
+    print("[3a] move_character 增量维护 OK")
 
     # 3b. 非法名字/位置返回错误串且不移动
     world = _build_world()
     world.rebuild_location_index()
-    err = world.move_agent("不存在的人", "主厅")
+    err = world.move_character("不存在的人", "主厅")
     assert err is not None and "不存在" in err
-    err = world.move_agent("雷恩", "不存在的位置")
+    err = world.move_character("雷恩", "不存在的位置")
     assert err is not None and "不是有效位置" in err
     assert world.agents["雷恩"].location == "角落"
     assert world.get_agents_in_location("角落") == ["雷恩"]
-    print("[3b] move_agent 非法参数 OK")
+    print("[3b] move_character 非法参数 OK")
 
     # 3c. 索引清空后自愈重建
     world = _build_world()
     world._agents_by_location = {}
     assert world.get_agents_in_location("吧台") == ["老巴克"]
     world._agents_by_location = {}
-    assert world.move_agent("雷恩", "主厅") is None
+    assert world.move_character("雷恩", "主厅") is None
     assert world.get_agents_in_location("主厅") == ["艾莉娅", "雷恩"]
     print("[3c] 空索引懒重建自愈 OK")
+
+    # 3d. move_character 对 NPC 同样生效
+    world = _build_world()
+    world.npcs = {"巡逻兵": _StubNPC("巡逻兵", "主厅")}
+    world.rebuild_location_index()
+    assert world.move_character("巡逻兵", "吧台") is None
+    assert world.npcs["巡逻兵"].location == "吧台"
+    assert world.get_characters_in_location("吧台") == ["老巴克", "巡逻兵"]
+    assert world.get_characters_in_location("主厅") == ["艾莉娅"]
+    err = world.move_character("不存在的人", "吧台")
+    assert err is not None and "不存在" in err
+    print("[3d] move_character 对 NPC 生效 OK")
+
+    # 3e. remove_npc：npcs/npc_names/索引三处同步清理
+    world = _build_world()
+    world.npcs = {"巡逻兵": _StubNPC("巡逻兵", "主厅")}
+    world.npc_names = {"巡逻兵"}
+    world.rebuild_location_index()
+    assert world.remove_npc("巡逻兵") is None
+    assert "巡逻兵" not in world.npcs and "巡逻兵" not in world.npc_names
+    assert "巡逻兵" not in world.get_characters_in_location("主厅")
+    err = world.remove_npc("巡逻兵")
+    assert err is not None and "不是 NPC" in err
+    print("[3e] remove_npc 三处同步清理 OK")
 
     # 4. build_validation_context 与 get_agents_in_location 一致
     world = _build_world()

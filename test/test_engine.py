@@ -148,7 +148,7 @@ async def run_tests():
     logger.close()
     print("[5] 未 begin_tick 步进报错 OK")
 
-    # 6. move 后位置索引一致（MoveAction 走 world.move_agent 增量维护）
+    # 6. move 后位置索引一致（MoveAction 走 world.move_character 增量维护）
     engine, world, logger = await build_engine({
         "雷恩": {"1": {"action_type": "move", "target": "主厅"}},
     })

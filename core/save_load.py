@@ -91,6 +91,10 @@ def load_simulation_state(path: str, config: dict):
         npc = NPC.from_dict(npc_data)
         world.add_npc(npc)
 
+    # 校正 npc_names：删除的静态 NPC（npc_remove）不能被 scene 基线重新播种，
+    # npc_names 必须与实际 npcs 实体完全一致（add_npc/remove_npc 保持该不变量）。
+    world.npc_names = set(world.npcs.keys())
+
     gm = GMAgent.from_dict(scene, config, data["gm"])
 
     return world, scene, gm

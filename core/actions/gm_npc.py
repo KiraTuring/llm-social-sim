@@ -1,4 +1,4 @@
-"""GM NPC 控制 Action：GM 通过工具控制 NPC 说话和行动。"""
+"""GM NPC 控制 Action：GM 通过工具控制 NPC 说话、移动、添加和移除。"""
 
 from core.action import ActionSpec
 from core.character import NPC
@@ -108,3 +108,103 @@ class NpcSpeakAction(ActionSpec):
         suffix = f" -> {target}" if target else ""
         world.add_event(f"NPC {npc_name}{suffix}: {content}")
         return [msg], None
+
+
+class NpcMoveAction(ActionSpec):
+    name = "npc_move"
+    description = "移动一个 NPC 到任意有效位置（GM 全能，不受连通性限制），用于角色走动或事件结束后离场"
+    parameters = {"npc_name": {"type": "string"}, "target": {"type": "string"}, "content": {"type": "string"}}
+    text_format = "[ACTION]npc_move[/ACTION]\n[TARGET]{NPC名}[/TARGET]\n[CONTENT]{目标位置}[/CONTENT]"
+
+    def get_tool_schema(self):
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "npc_name": {"type": "string", "description": "要移动的 NPC 角色名"},
+                        "target": {"type": "string", "description": "目标位置（任意有效位置，不受连通性限制）"},
+                        "content": {"type": "string", "description": "移动描述（可选）"},
+                    },
+                    "required": ["npc_name", "target"],
+                },
+            },
+        }
+
+    def validate_params(self, params, context):
+        npc_name = params.get("npc_name", "")
+        target = params.get("target", "")
+        npc_names = context.get("npc_names", [])
+        npc_locations = context.get("npc_locations", {})
+        locations = context.get("locations", [])
+        if npc_name not in npc_names:
+            return f"'{npc_name}' 不是 NPC，可选 NPC: {', '.join(npc_names)}"
+        if target not in locations:
+            return f"'{target}' 不是有效位置，可选: {', '.join(locations)}"
+        if npc_name in npc_locations and target == npc_locations[npc_name]:
+            return f"NPC '{npc_name}' 已经在 '{target}'，无需移动"
+        return None
+
+    def execute(self, agent_name, params, world):
+        npc_name = params["npc_name"]
+        target = params["target"]
+
+        old_recipients = world.get_hearable_agents(npc_name)
+        old_loc = world.npcs[npc_name].location
+        error = world.move_character(npc_name, target)
+        if error is not None:
+            return [], {"result": error}
+        new_recipients = world.get_hearable_agents(npc_name)
+        recipients = list(set(old_recipients + new_recipients))
+
+        msg = Message(
+            sender=npc_name,
+            recipients=recipients,
+            content=f"从{old_loc}移动到了{target}",
+            msg_type="action",
+            tick=world.tick,
+        )
+        world.message_bus.send(msg)
+        world.add_event(f"NPC {npc_name}: 从{old_loc}移动到了{target}")
+        return [msg], {"result": f"NPC '{npc_name}' 已从{old_loc}移动到{target}"}
+
+
+class RemoveNpcAction(ActionSpec):
+    name = "npc_remove"
+    description = "移除一个 NPC（叙事上表现为'xx离开了'）。静默执行，离开的播报请用 narrate 自行描述"
+    parameters = {"npc_name": {"type": "string"}}
+    text_format = "[ACTION]npc_remove[/ACTION]\n[TARGET]{NPC名}[/TARGET]\n[CONTENT]离开描述（可选）[/CONTENT]"
+
+    def get_tool_schema(self):
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "npc_name": {"type": "string", "description": "要移除的 NPC 角色名"},
+                    },
+                    "required": ["npc_name"],
+                },
+            },
+        }
+
+    def validate_params(self, params, context):
+        npc_name = params.get("npc_name", "")
+        npc_names = context.get("npc_names", [])
+        if npc_name not in npc_names:
+            return f"'{npc_name}' 不是 NPC，可选 NPC: {', '.join(npc_names)}"
+        return None
+
+    def execute(self, agent_name, params, world):
+        npc_name = params["npc_name"]
+        error = world.remove_npc(npc_name)
+        if error is not None:
+            return [], {"result": error}
+        world.add_event(f"NPC {npc_name} 离开了")
+        return [], {"result": f"NPC '{npc_name}' 已移除"}

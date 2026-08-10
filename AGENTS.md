@@ -48,6 +48,10 @@ Agent 配置 `<list[dict]>` 每个元素必须包含: `name`, `role`, `personali
 
 场景类自动被 `--list-scenes` 识别（排除 `_` 开头和 `base.py`、`utils.py`）
 
+**测试专用场景 `scenarios/_test.py`**：`_TestScene`（2 agent + 1 静态 NPC + 全量 7 个 GM 工具），
+仅测试用，`_` 前缀使其不被 `--list-scenes` 收录，但 `load_scene("_test")` 可解析（存档往返测试用）。
+测试不应耦合到生产场景（tavern/murder/spaceship），通用机制测试统一用 `_TestScene`。
+
 ### 地点连通性
 
 未定义 `connections` 时所有地点互相可达（向前兼容）。有定义时 `MoveAction` 只能移动到相邻地点：
@@ -123,8 +127,8 @@ GM 工具的注册方式与角色 Action 相同，由场景的 `setup_gm()` 方�
 ```python
 def setup_gm(self, registry: ActionRegistry):
     from core.actions.gm_tools import NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction
-    from core.actions.gm_npc import NpcSpeakAction, AddNpcAction
-    for action_cls in [NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction, NpcSpeakAction, AddNpcAction]:
+    from core.actions.gm_npc import NpcSpeakAction, AddNpcAction, NpcMoveAction, RemoveNpcAction
+    for action_cls in [NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction, NpcSpeakAction, AddNpcAction, NpcMoveAction, RemoveNpcAction]:
         registry.register(action_cls())
 ```
 
@@ -630,8 +634,10 @@ GM 拥有自己的 `ActionRegistry`，由场景的 `setup_gm()` 方法全量白�
 | `modify_char_state` | `core/actions/gm_tools.py` | 修改角色非主观状态（精力、体力、伤势） |
 | `npc_speak` | `core/actions/gm_npc.py` | 控制 NPC 说话，消息流对 Agent 透明（sender=NPC名） |
 | `add_npc` | `core/actions/gm_npc.py` | 动态创建新 NPC（name/location/role/personality/goal），可在运行中添加角色 |
+| `npc_move` | `core/actions/gm_npc.py` | 移动 NPC 到任意有效位置（GM 全能，不受连通性限制），用于走动或事件后离场 |
+| `npc_remove` | `core/actions/gm_npc.py` | 移除 NPC（叙事上表现为"xx离开了"），静默执行，离开播报由 GM 用 `narrate` 描述 |
 
-场景按需注册（murder 只有 3 人故不注册 `add_npc`，spaceship/tavern 无 NPC 故不注册 `npc_speak`）。
+场景按需注册（murder 只有 3 人故不注册 `add_npc`/`modify_environment`；spaceship 无 NPC 故不注册 `npc_speak`；tavern 注册全部 7 工具，支持 GM 添加临时角色并让其说话/回应/走动/移除离场）。
 
 GM 使用 `llm_client.call_multi()`（走 tool_call 模式）生成事件，支持一次响应多个工具。
 
@@ -670,7 +676,7 @@ class MyScene(Scene):
 
 ### 校验上下文
 
-GM 的 `validation_context` 通过 `world.build_validation_context("GM")` 构建，包含 `agent_name`、`agent_names`、`locations`、`npc_names` 和 `interactable_keys`，便于 GM Action 做参数校验（如 `npc_speak` 验证 `npc_name` 合法性）。
+GM 的 `validation_context` 通过 `world.build_validation_context("GM")` 构建，包含 `agent_name`、`agent_names`、`locations`、`npc_names`、`npc_locations` 和 `interactable_keys`，便于 GM Action 做参数校验（如 `npc_speak` 验证 `npc_name` 合法性、`npc_move` 验证目标位置与"已在原位置"）。
 
 ### Dispatch 机制
 
@@ -714,6 +720,8 @@ Character                     # 基类：name / location / states / role / perso
 - `world.characters`（property）为只读统一视图（agents + npcs 合并）
 - 位置索引 `_agents_by_location` 同时索引两者；`get_characters_in_location()` 返回全部，`get_agents_in_location()` 只返回 Agent
 - `get_hearable_agents(target)` / `get_visible_locations` / `build_validation_context` 对 Agent 和 NPC 一视同仁——`agent_names` 与 `agents_by_location` 均纳入 NPC，因此 speak/whisper/narrate/modify_char_state 无需区分角色类型
+- `move_character(name, location)` 统一移动 Agent 与 NPC（`npc_move` GM 工具直接复用，无 `move_npc` 单独方法）
+- `add_npc()` / `remove_npc()` 成对：增删均同时维护 `npcs`、`npc_names`、位置索引；存档加载后 `npc_names` 校正为实际 npcs 实体（删除的静态 NPC 不会被 scene 基线重新播种）
 - 存档 `npcs` 字段序列化全部 NPC（静态 + 动态），加载时经 `world.add_npc()` 恢复并合并进 `npc_names`
 
 ## 测试
@@ -734,8 +742,8 @@ Character                     # 基类：name / location / states / role / perso
 | `test_manual.py` | ManualAgent：默认 observe、通配 tick、行动执行、非法行动回退、文件错误 |
 | `test_save_load.py` | 存档往返：Agent/GMAgent to_dict/from_dict 边界、格式稳定、版本迁移入口 |
 | `test_tui_info.py` | TUI 信息格式化纯函数：工具列表、场景分节白名单、NPC 判断 |
-| `test_world.py` | WorldState 位置索引：重建、副本语义、move_agent 增量维护与自愈 |
-| `test_npc.py` | 动态 NPC：Character 继承、AddNpcAction、hearable/observe/speak 兼容、murder 迁移、存档往返 |
+| `test_world.py` | WorldState 位置索引：重建、副本语义、move_character/remove_npc 增量维护与自愈 |
+| `test_npc.py` | 动态 NPC：Character 继承、AddNpcAction、npc_move、npc_remove、hearable/observe/speak 兼容、静态 NPC、存档往返 |
 
 ## 调试工具
 
