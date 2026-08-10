@@ -223,11 +223,11 @@ class ObserveAction(ActionSpec):
 
         seen = []
         for loc in visible_locs:
-            for name in world.get_agents_in_location(loc):
+            for name in world.get_characters_in_location(loc):
                 if name == agent_name:
                     continue
-                other = world.agents[name]
-                visible = {k: v for k, v in other.states.items() if k not in other._private_states}
+                other = world.characters[name]
+                visible = {k: v for k, v in other.states.items() if k not in getattr(other, "_private_states", set())}
                 state_str = " ".join(f"{k}:{v}" for k, v in visible.items())
                 seen.append(f"{name}({other.role})在{loc} - {state_str}")
 

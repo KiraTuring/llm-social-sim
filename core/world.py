@@ -4,6 +4,8 @@ import copy
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from core.character import NPC
+
 if TYPE_CHECKING:
     from .agent import Agent
 
@@ -19,6 +21,7 @@ class WorldState:
     _visibility: dict[str, list[str]] = field(default_factory=dict)
     _reverse_visibility: dict[str, list[str]] = field(default_factory=dict)
     agents: dict[str, "Agent"] = field(default_factory=dict)
+    npcs: dict[str, NPC] = field(default_factory=dict)
     event_log: list[str] = field(default_factory=list)
     action_order: list[str] = field(default_factory=list)
     message_bus: Any = None
@@ -110,7 +113,44 @@ class WorldState:
         self.set_visibility(scene.visibility or {})
         self.environment = {k: dict(v) for k, v in scene.initial_environment.items()}
         self._protected_env_keys = self.compute_protected_env_keys(scene.initial_environment)
+        # 静态 NPC 名作为基线；运行时动态添加的 NPC 名（add_npc）需要保留，
+        # 因此这里只追加不覆盖。
         self.npc_names = set(scene.npc_names or [])
+
+    @property
+    def characters(self) -> dict[str, Any]:
+        """统一视图：所有角色（自主 Agent + GM 控制的 NPC）。
+
+        返回只读视图；增删角色请分别操作 self.agents / self.npcs。
+        """
+        merged = dict(self.agents)
+        merged.update(self.npcs)
+        return merged
+
+    def _resolve_location(self, name: str) -> str:
+        """解析任意角色（Agent 或 NPC）的位置。不存在时抛 KeyError。"""
+        agent = self.agents.get(name)
+        if agent is not None:
+            return agent.location
+        npc = self.npcs.get(name)
+        if npc is not None:
+            return npc.location
+        raise KeyError(name)
+
+    def add_npc(self, npc: NPC) -> str | None:
+        """添加一个 NPC（动态或初始化）。返回错误信息或 None。
+
+        自动：登记到 npcs 与 npc_names、增量更新位置索引。
+        """
+        if npc.name in self.agents or npc.name in self.npcs:
+            return f"角色 '{npc.name}' 已存在"
+        if npc.location not in self.locations:
+            return f"'{npc.location}' 不是有效位置，可选: {', '.join(self.locations)}"
+        self.npcs[npc.name] = npc
+        self.npc_names.add(npc.name)
+        if self._agents_by_location:
+            self._agents_by_location.setdefault(npc.location, []).append(npc.name)
+        return None
 
     def add_event(self, event: str):
         """记录事件。
@@ -119,17 +159,23 @@ class WorldState:
         """
         self.event_log.append(f"[tick {self.tick}] {event}")
 
-    def get_agents_in_location(self, location: str) -> list[str]:
-        """获取某个位置的所有 Agent（返回副本，调用方可安全修改）"""
-        if not self._agents_by_location and self.agents:
+    def get_characters_in_location(self, location: str) -> list[str]:
+        """获取某个位置的所有角色（Agent + NPC，返回副本，调用方可安全修改）"""
+        if not self._agents_by_location and (self.agents or self.npcs):
             self.rebuild_location_index()
         return list(self._agents_by_location.get(location, ()))
 
+    def get_agents_in_location(self, location: str) -> list[str]:
+        """获取某个位置的所有 Agent（不含 NPC，返回副本）。"""
+        return [n for n in self.get_characters_in_location(location) if n not in self.npcs]
+
     def rebuild_location_index(self) -> None:
-        """按当前 agents 的位置重建索引（引擎启动/存档加载后调用）。"""
+        """按当前角色的位置重建索引（引擎启动/存档加载后调用）。"""
         index: dict[str, list[str]] = {}
         for name, agent in self.agents.items():
             index.setdefault(agent.location, []).append(name)
+        for name, npc in self.npcs.items():
+            index.setdefault(npc.location, []).append(name)
         self._agents_by_location = index
 
     def move_agent(self, agent_name: str, new_location: str) -> str | None:
@@ -145,7 +191,6 @@ class WorldState:
             return f"'{new_location}' 不是有效位置"
         if not self._agents_by_location:
             self.rebuild_location_index()
-
         agent = self.agents[agent_name]
         old_location = agent.location
         if old_location != new_location:
@@ -157,16 +202,16 @@ class WorldState:
         return None
 
     def get_hearable_agents(self, target: str, *, exclude: str | None = None, use_location: bool = False) -> list[str]:
-        """获取能听到某个位置事件的所有 agent（同位置 + 可见位置）
+        """获取能听到某个位置事件的所有角色（Agent + NPC，同位置 + 可见位置）
 
-        use_location=False (默认): target 是 agent 名，自动定位其位置
+        use_location=False (默认): target 是角色名（Agent 或 NPC），自动定位其位置
         use_location=True:       target 是位置名
         """
-        base_loc = target if use_location else self.agents[target].location
+        base_loc = target if use_location else self._resolve_location(target)
         hearable_locs = [base_loc] + self._reverse_visibility.get(base_loc, [])
         result = []
         for loc in hearable_locs:
-            for name in self.get_agents_in_location(loc):
+            for name in self.get_characters_in_location(loc):
                 if not use_location and name == target:
                     continue
                 if name == exclude:
@@ -190,11 +235,12 @@ class WorldState:
                 "interactable_keys": self.interactable_keys,
             }
         agent_location = self.agents[agent_name].location
-        agents_by_location = {loc: self.get_agents_in_location(loc) for loc in self.locations}
+        agent_names = list(self.agents.keys()) + [n for n in self.npcs if n != agent_name]
+        agents_by_location = {loc: self.get_characters_in_location(loc) for loc in self.locations}
         return {
             "agent_name": agent_name,
             "agent_location": agent_location,
-            "agent_names": list(self.agents.keys()),
+            "agent_names": agent_names,
             "locations": self.locations,
             "agents_by_location": agents_by_location,
             "hearable_agents": self.get_hearable_agents(agent_name),

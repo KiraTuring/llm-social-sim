@@ -159,3 +159,10 @@ class TavernScene(Scene):
 
         for action_cls in [SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction]:
             registry.register(action_cls())
+
+    def setup_gm(self, registry):
+        """酒馆 GM 工具：旁白 + 环境/状态管理（无 NPC，故不用 npc_speak/add_npc）"""
+        from core.actions.gm_tools import NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction
+
+        for action_cls in [NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction]:
+            registry.register(action_cls())

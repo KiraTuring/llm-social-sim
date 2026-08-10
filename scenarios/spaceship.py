@@ -153,3 +153,10 @@ class SpaceshipScene(Scene):
         for action_cls in [SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction]:
             registry.register(action_cls())
         registry.register(RadioAction())
+
+    def setup_gm(self, registry):
+        """飞船 GM 工具：旁白 + 环境/状态管理（系统 AI，无 NPC）"""
+        from core.actions.gm_tools import NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction
+
+        for action_cls in [NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction]:
+            registry.register(action_cls())

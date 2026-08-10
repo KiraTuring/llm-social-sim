@@ -4,8 +4,7 @@ import random
 from typing import TYPE_CHECKING
 
 from core.action import ActionRegistry
-from core.actions.gm_tools import NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction
-from core.actions.gm_npc import NpcSpeakAction
+from core.actions.gm_tools import NarrateAction
 
 if TYPE_CHECKING:
     from core.world import WorldState
@@ -38,11 +37,10 @@ class GMAgent:
         if gm_registry is not None:
             self.registry = gm_registry
         else:
+            # 兜底：与 Scene.setup_gm 基类默认一致，只注册 narrate。
+            # 正常路径总是由场景的 setup_gm() 传入完整 registry。
             self.registry = ActionRegistry(include_agent_params=False)
             self.registry.register(NarrateAction())
-            self.registry.register(ModifyEnvironmentAction())
-            self.registry.register(ModifyCharStateAction())
-            self.registry.register(NpcSpeakAction())
 
     @classmethod
     def from_config(cls, scene, config, gm_registry=None):
@@ -222,14 +220,14 @@ class GMAgent:
         parts = [f"当前是第 {world.tick} 个时间步。"]
 
         locs = {}
-        for name, agent in world.agents.items():
-            locs.setdefault(agent.location, []).append(name)
+        for name, char in world.characters.items():
+            locs.setdefault(char.location, []).append(name)
 
         parts.append("\n角色位置与状态：")
         for loc, names in locs.items():
             statuses = []
             for n in names:
-                state_str = ", ".join(f"{k}:{v}" for k, v in world.agents[n].states.items())
+                state_str = ", ".join(f"{k}:{v}" for k, v in world.characters[n].states.items())
                 statuses.append(f"{n}({state_str})")
             parts.append(f"  {loc}: {', '.join(statuses)}")
 

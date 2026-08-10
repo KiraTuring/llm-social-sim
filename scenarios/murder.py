@@ -9,6 +9,17 @@ class MurderScene(Scene):
 
     npc_names = ["警长"]
 
+    npcs = [
+        {
+            "name": "警长",
+            "role": "本地警长",
+            "personality": "经验丰富但谨慎，不会轻易下结论",
+            "goal": "收集足够证据后才能逮捕嫌疑人",
+            "location": "警卫室",
+            "states": {"情绪": "平静", "精力": 100},
+        },
+    ]
+
     connections = [
         ("庄园大厅", "书房"),
         ("庄园大厅", "厨房"),
@@ -81,17 +92,6 @@ class MurderScene(Scene):
                 "警长": {"trust": 1, "impression": "官方的办案人，掌握着现场封锁权"},
             },
         },
-        {
-            "name": "警长",
-            "role": "本地警长",
-            "personality": "经验丰富但谨慎，不会轻易下结论",
-            "goal": "收集足够证据后才能逮捕嫌疑人",
-            "location": "警卫室",
-            "relationships": {
-                "艾莉娅": {"trust": 0, "impression": "私家侦探，希望她不要妨碍办案"},
-                "雷恩": {"trust": 0, "impression": "记者，总是问太多问题"},
-            },
-        },
     ]
 
     gm_llm_prompt = """## 你是谁
@@ -137,4 +137,16 @@ class MurderScene(Scene):
         from core.actions.common import InteractAction, MoveAction, ObserveAction, SpeakAction, ThinkAction, WhisperAction
 
         for action_cls in [SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction, ThinkAction]:
+            registry.register(action_cls())
+
+    def setup_gm(self, registry):
+        """庄园 GM 工具：旁白 + NPC 说话 + 角色状态。
+
+        故意不注册 add_npc（剧情明确只有 3 人，无其他人物）
+        和 modify_environment（prompt 禁止添加新证据）。
+        """
+        from core.actions.gm_tools import NarrateAction, ModifyCharStateAction
+        from core.actions.gm_npc import NpcSpeakAction
+
+        for action_cls in [NarrateAction, ModifyCharStateAction, NpcSpeakAction]:
             registry.register(action_cls())

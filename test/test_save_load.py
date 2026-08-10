@@ -49,6 +49,7 @@ AGENT_KEYS = {
 TOP_LEVEL_KEYS = {
     "version", "scene", "scene_display", "tick", "locations", "connections",
     "action_order", "event_log", "environment", "message_bus", "gm", "agents",
+    "npcs",
 }
 GM_KEYS = {"scheduled_events", "random_events", "use_llm", "history"}
 

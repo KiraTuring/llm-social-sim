@@ -66,8 +66,9 @@ def run_tests():
     gm_registry = ActionRegistry(include_agent_params=False)
     TavernScene().setup_gm(gm_registry)
     gm_tool_text = "\n".join(format_agent_tools(gm_registry))
-    assert "npc_speak" in gm_tool_text and "narrate" in gm_tool_text
+    assert "narrate" in gm_tool_text
     assert "modify_environment" in gm_tool_text
+    assert "npc_speak" not in gm_tool_text  # tavern 无 NPC，白名单不含
     assert "internal_monologue" not in gm_tool_text
     print("[2] GM 工具列表 OK")
 
@@ -91,7 +92,7 @@ def run_tests():
     assert "tool_call" in full_text
     assert "老巴克" in full_text and "手动控制" in full_text
     assert "prompt 格式: chat" in full_text  # GM 段
-    assert "npc_speak" in full_text  # GM 工具名一行
+    assert "narrate" in full_text and "modify_environment" in full_text  # GM 工具名
     assert "\nGM prompt:" in full_text  # GM prompt 前有换行
     assert "tick 6" in full_text and "tick 9" in full_text
     assert "tick 3" not in full_text, "已过 tick 的计划事件不应展示"

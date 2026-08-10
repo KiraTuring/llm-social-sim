@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from core.character import Character
 from memory.memory import AgentMemory
 
 if TYPE_CHECKING:
@@ -13,8 +14,8 @@ if TYPE_CHECKING:
     from memory.memory import AgentMemory
 
 
-class Agent:
-    """Agent：感知→思考→行动"""
+class Agent(Character):
+    """Agent：感知→思考→行动（自主行动者，继承 Character 的位置/状态）"""
 
     agent_type = "Agent"
 
@@ -36,11 +37,10 @@ class Agent:
         instruction: str = "",
         prompt_format: str = "text",
     ):
-        self.name = name
-        self.role = role
-        self.personality = personality
-        self.goal = goal
-        self.location = location
+        super().__init__(
+            name=name, location=location, role=role,
+            personality=personality, goal=goal, states=states,
+        )
         self.relationships = relationships
         self.memory = memory
         self.content_max_length = content_max_length
@@ -49,7 +49,6 @@ class Agent:
         self.instruction = instruction
         self.prompt_format = prompt_format
 
-        self.states = dict(states) if states else {}
         self._writable_states = set(writable_states) if writable_states else set()
         self._private_states = set(private_states) if private_states else set()
         self._last_action = None
@@ -212,7 +211,7 @@ class Agent:
         """组装感知上下文 prompt：环境 → 状态 → 记忆 → 新信息 → 上一行动。"""
         parts = []
 
-        location_agents = world.get_agents_in_location(self.location)
+        location_agents = world.get_characters_in_location(self.location)
         if self.name in location_agents:
             location_agents.remove(self.name)
 

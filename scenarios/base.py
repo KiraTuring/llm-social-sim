@@ -27,19 +27,28 @@ class Scene:
     writable_states: list = []
     private_states: list = []
     npc_names: list[str] = []
+    npcs: list[dict] = []
 
     def setup(self, registry: ActionRegistry) -> None:
         """注册场景特定的 actions"""
         pass
 
     def setup_gm(self, registry: ActionRegistry) -> None:
-        """注册 GM 可用工具。场景覆盖此方法可添加自定义 GM 工具。"""
-        from core.actions.gm_tools import NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction
-        from core.actions.gm_npc import NpcSpeakAction
+        """注册 GM 可用工具。基类默认只注册 narrate（最基础的 GM 能力）。
+
+        场景需要更多工具时覆盖本方法做全量白名单注册（与 setup() 的
+        Agent 工具格式一致）——要什么就注册什么，不要则不注册：
+        ```
+        def setup_gm(self, registry):
+            from core.actions.gm_tools import NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction
+            from core.actions.gm_npc import NpcSpeakAction, AddNpcAction
+            for action_cls in [NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction, NpcSpeakAction, AddNpcAction]:
+                registry.register(action_cls())
+        ```
+        """
+        from core.actions.gm_tools import NarrateAction
+
         registry.register(NarrateAction())
-        registry.register(ModifyEnvironmentAction())
-        registry.register(ModifyCharStateAction())
-        registry.register(NpcSpeakAction())
 
     def setup_rules(self, engine: RuleEngine) -> None:
         """注册场景特定的规则"""
@@ -48,6 +57,7 @@ class Scene:
     def init_world(self) -> WorldState:
         """初始化世界状态"""
         from core.message import MessageBus
+        from core.character import NPC
 
         world = WorldState()
         world.message_bus = MessageBus()
@@ -55,6 +65,16 @@ class Scene:
 
         for agent_cfg in self.agents:
             world.message_bus.register_agent(agent_cfg["name"])
+
+        for npc_cfg in self.npcs:
+            world.add_npc(NPC(
+                name=npc_cfg["name"],
+                location=npc_cfg["location"],
+                role=npc_cfg.get("role", ""),
+                personality=npc_cfg.get("personality", ""),
+                goal=npc_cfg.get("goal", ""),
+                states=npc_cfg.get("states"),
+            ))
 
         return world
 

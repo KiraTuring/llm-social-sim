@@ -378,7 +378,7 @@ class SimulationTuiApp(App):
 
         for loc in self.world.locations:
             icon = self.scene.render_config.get("location_icons", {}).get(loc, "📍")
-            agents_here = self.world.get_agents_in_location(loc)
+            agents_here = self.world.get_characters_in_location(loc)
             label = f"{icon} {_esc(loc)}"
             if agents_here:
                 label += f" ({len(agents_here)}人)"
@@ -399,10 +399,10 @@ class SimulationTuiApp(App):
 
         # 同步角色叶子节点：状态变化改 label，移动时摘旧挂新
         live_names = set()
-        for name, agent in self.world.agents.items():
+        for name, char in self.world.characters.items():
             live_names.add(name)
-            branch = self._tree_nodes.get(agent.location)
-            state_parts = [f"{k}:{_esc(v)}" for k, v in agent.states.items()]
+            branch = self._tree_nodes.get(char.location)
+            state_parts = [f"{k}:{_esc(v)}" for k, v in char.states.items()]
             icon = "🎭" if name in self.world.npc_names else "👤"
             label = f"{icon} {_esc(name)}  {' | '.join(state_parts)}"
             node = self._tree_agent_nodes.get(name)

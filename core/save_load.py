@@ -36,6 +36,10 @@ def save_simulation_state(world, gm, scene_module: str, scene_display: str, path
             name: agent.to_dict()
             for name, agent in world.agents.items()
         },
+        "npcs": {
+            name: npc.to_dict()
+            for name, npc in world.npcs.items()
+        },
     }
 
     path_obj = Path(path)
@@ -79,6 +83,13 @@ def load_simulation_state(path: str, config: dict):
             restore_kwargs["file_path"] = agent_data["manual_file"]
         agent = cls.from_config(scene, cfg, config, saved=agent_data, **restore_kwargs)
         world.agents[name] = agent
+
+    # 恢复 NPC（静态 + 运行时动态添加的），并合并进 npc_names
+    from core.character import NPC
+
+    for name, npc_data in data.get("npcs", {}).items():
+        npc = NPC.from_dict(npc_data)
+        world.add_npc(npc)
 
     gm = GMAgent.from_dict(scene, config, data["gm"])
 

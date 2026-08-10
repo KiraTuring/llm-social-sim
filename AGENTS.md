@@ -40,8 +40,11 @@ class MyScene(Scene):
     writable_states: list = []           # LLM 可修改的状态 key
     private_states: list = []            # 对其他角色隐藏的状态 key
     npc_names: list[str] = []            # GM 控制的 NPC 角色名
+    npcs: list[dict] = []                # 静态 NPC 详细配置（name/location/role/personality/goal/states）
 ```
 Agent 配置 `<list[dict]>` 每个元素必须包含: `name`, `role`, `personality`, `goal`, `location`, `relationships`（启动时自动校验，缺字段立即报错）。
+
+`npcs` 与 `npc_names`：静态 NPC 由 `npcs` 列表定义（`init_world()` 自动创建轻量 NPC 实体），名字同时出现在 `npc_names` 中。GM 可在运行中通过 `add_npc` 工具动态添加新 NPC。
 
 场景类自动被 `--list-scenes` 识别（排除 `_` 开头和 `base.py`、`utils.py`）
 
@@ -115,23 +118,23 @@ class MyAction(ActionSpec):
 
 ### GM Action 注册
 
-GM 工具的注册方式与角色 Action 相同，由场景的 `setup_gm()` 方法定义：
+GM 工具的注册方式与角色 Action 相同，由场景的 `setup_gm()` 方法定义。**格式与 Agent 的 `setup()` 一致——全量白名单**：要什么就注册什么，不要则不注册：
 
 ```python
 def setup_gm(self, registry: ActionRegistry):
-    registry.register(NarrateAction())           # GM 旁白
-    registry.register(ModifyEnvironmentAction()) # 修改环境指标
-    registry.register(ModifyCharStateAction())   # 修改角色状态
-    registry.register(NpcSpeakAction())          # 控制 NPC 说话
+    from core.actions.gm_tools import NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction
+    from core.actions.gm_npc import NpcSpeakAction, AddNpcAction
+    for action_cls in [NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction, NpcSpeakAction, AddNpcAction]:
+        registry.register(action_cls())
 ```
 
-基类 Scene 默认注册以上 4 个工具。场景可覆盖以添加自定义 GM 工具：
+基类 `Scene.setup_gm()` **默认只注册 `narrate`**（最基础的 GM 能力）。场景覆盖 `setup_gm()` 时全量声明自己需要的工具——例如 murder 场景明确只有 3 个角色、无其他人物，就**不注册 `add_npc`**，也不注册 `modify_environment`（prompt 禁止添加新证据）。自定义 GM 工具同样在此注册：
 
 ```python
 class MyScene(Scene):
     def setup_gm(self, registry):
-        super().setup_gm(registry)  # 保留默认工具
-        registry.register(MyCustomGMAction())
+        for action_cls in [NarrateAction, ModifyEnvironmentAction, NpcSpeakAction, MyCustomGMAction()]:
+            registry.register(action_cls())
 ```
 
 GM 使用的 `ActionRegistry` 使用 `include_agent_params=False`（不含 `internal_monologue` 和 `state_update`）。
@@ -618,7 +621,7 @@ GM 负责向世界注入外部事件，分三级触发（互不阻塞，各自�
 
 ### LLM 动态事件
 
-GM 拥有自己的 `ActionRegistry`，由场景的 `setup_gm()` 方法定义。基类默认注册以下工具：
+GM 拥有自己的 `ActionRegistry`，由场景的 `setup_gm()` 方法全量白名单定义（基类默认只注册 `narrate`）。可用工具池：
 
 | Action | 文件 | 用途 |
 |--------|------|------|
@@ -626,6 +629,9 @@ GM 拥有自己的 `ActionRegistry`，由场景的 `setup_gm()` 方法定义。�
 | `modify_environment` | `core/actions/gm_tools.py` | 修改位置环境指标，`value="delete"` 删除非预定义指标 |
 | `modify_char_state` | `core/actions/gm_tools.py` | 修改角色非主观状态（精力、体力、伤势） |
 | `npc_speak` | `core/actions/gm_npc.py` | 控制 NPC 说话，消息流对 Agent 透明（sender=NPC名） |
+| `add_npc` | `core/actions/gm_npc.py` | 动态创建新 NPC（name/location/role/personality/goal），可在运行中添加角色 |
+
+场景按需注册（murder 只有 3 人故不注册 `add_npc`，spaceship/tavern 无 NPC 故不注册 `npc_speak`）。
 
 GM 使用 `llm_client.call_multi()`（走 tool_call 模式）生成事件，支持一次响应多个工具。
 
@@ -694,6 +700,22 @@ def _exec(action):
 - 上一 tick 有 `speech` 消息且 target 是 NPC 名 → **强制触发**
 - 以上都没有 → 以 `llm_event_chance` 概率随机触发
 
+## 角色框架（Character）
+
+`core/character.py` 定义角色基类，统一 Agent 与 NPC 的位置/状态接口：
+
+```
+Character                     # 基类：name / location / states / role / personality / goal
+├── Agent(Character)          # 自主行动者：memory/relationships/perceive/think/act
+└── NPC(Character)            # GM 控制的轻量角色：无记忆、无自主行动、不进入 action_order
+```
+
+- `world.agents: dict[str, Agent]` 存自主 Agent；`world.npcs: dict[str, NPC]` 存 NPC
+- `world.characters`（property）为只读统一视图（agents + npcs 合并）
+- 位置索引 `_agents_by_location` 同时索引两者；`get_characters_in_location()` 返回全部，`get_agents_in_location()` 只返回 Agent
+- `get_hearable_agents(target)` / `get_visible_locations` / `build_validation_context` 对 Agent 和 NPC 一视同仁——`agent_names` 与 `agents_by_location` 均纳入 NPC，因此 speak/whisper/narrate/modify_char_state 无需区分角色类型
+- 存档 `npcs` 字段序列化全部 NPC（静态 + 动态），加载时经 `world.add_npc()` 恢复并合并进 `npc_names`
+
 ## 测试
 
 测试文件: `test/*.py`（`python3 -m pytest` 运行，配置见 `pytest.ini` 的 `asyncio_mode=auto`）
@@ -713,6 +735,7 @@ def _exec(action):
 | `test_save_load.py` | 存档往返：Agent/GMAgent to_dict/from_dict 边界、格式稳定、版本迁移入口 |
 | `test_tui_info.py` | TUI 信息格式化纯函数：工具列表、场景分节白名单、NPC 判断 |
 | `test_world.py` | WorldState 位置索引：重建、副本语义、move_agent 增量维护与自愈 |
+| `test_npc.py` | 动态 NPC：Character 继承、AddNpcAction、hearable/observe/speak 兼容、murder 迁移、存档往返 |
 
 ## 调试工具
 

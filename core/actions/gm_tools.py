@@ -38,10 +38,11 @@ class NarrateAction(ActionSpec):
         if not target:
             return None
         agent_names = context.get("agent_names", [])
+        npc_names = context.get("npc_names", [])
         locations = context.get("locations", [])
-        if target in agent_names or target in locations:
+        if target in agent_names or target in npc_names or target in locations:
             return None
-        return f"'{target}' 不是有效的角色或位置，可选角色: {', '.join(agent_names)}，可选位置: {', '.join(locations)}"
+        return f"'{target}' 不是有效的角色或位置，可选角色: {', '.join(agent_names + npc_names)}，可选位置: {', '.join(locations)}"
 
     def execute(self, agent_name, params, world):
         content = params.get("content", "")
@@ -49,7 +50,7 @@ class NarrateAction(ActionSpec):
             return [], {"result": "事件描述为空"}
         target = params.get("target", "")
 
-        if target in world.agents:
+        if target in world.characters:
             recipients = [target]
         elif target in world.locations:
             recipients = world.get_hearable_agents(target, use_location=True)
@@ -155,8 +156,9 @@ class ModifyCharStateAction(ActionSpec):
     def validate_params(self, params, context):
         target = params.get("target", "")
         agent_names = context.get("agent_names", [])
-        if target and target not in agent_names:
-            return f"'{target}' 不是有效角色名，可选: {', '.join(agent_names)}"
+        npc_names = context.get("npc_names", [])
+        if target and target not in agent_names and target not in npc_names:
+            return f"'{target}' 不是有效角色名，可选: {', '.join(agent_names + npc_names)}"
         return None
 
     def execute(self, agent_name, params, world):
@@ -165,8 +167,9 @@ class ModifyCharStateAction(ActionSpec):
         value = params.get("value", "")
         if not target or not key or not value:
             return [], {"result": "参数不完整，需要 target/key/value"}
-        if target not in world.agents:
+        char = world.characters.get(target)
+        if char is None:
             return [], {"result": f"未找到角色 {target}"}
-        world.agents[target].states[key] = value
+        char.states[key] = value
         world.add_event(f"角色状态: {target}.{key} → {value}")
         return [], None

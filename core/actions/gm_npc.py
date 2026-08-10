@@ -1,7 +1,61 @@
 """GM NPC 控制 Action：GM 通过工具控制 NPC 说话和行动。"""
 
 from core.action import ActionSpec
+from core.character import NPC
 from core.message import Message
+
+
+class AddNpcAction(ActionSpec):
+    name = "add_npc"
+    description = "动态创建一个新的 NPC 角色，使其出现在指定位置并可由 GM 通过 npc_speak 控制。用于剧情需要临时登场的角色"
+    parameters = {"npc_name": {"type": "string"}, "location": {"type": "string"}, "role": {"type": "string"}, "personality": {"type": "string"}, "goal": {"type": "string"}}
+    text_format = "[ACTION]add_npc[/ACTION]\n[CONTENT]{NPC名} 在 {位置}，身份:{角色}[/CONTENT]"
+
+    def get_tool_schema(self):
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "npc_name": {"type": "string", "description": "新 NPC 的角色名，不能与现有角色重名"},
+                        "location": {"type": "string", "description": "NPC 出现的位置"},
+                        "role": {"type": "string", "description": "身份/职业，如杂货商、卫兵"},
+                        "personality": {"type": "string", "description": "性格描述（可选）"},
+                        "goal": {"type": "string", "description": "目标/动机（可选）"},
+                    },
+                    "required": ["npc_name", "location"],
+                },
+            },
+        }
+
+    def validate_params(self, params, context):
+        npc_name = params.get("npc_name", "")
+        location = params.get("location", "")
+        agent_names = context.get("agent_names", [])
+        npc_names = context.get("npc_names", [])
+        locations = context.get("locations", [])
+        if npc_name in agent_names or npc_name in npc_names:
+            return f"'{npc_name}' 已存在，不可重复创建"
+        if location not in locations:
+            return f"'{location}' 不是有效位置，可选: {', '.join(locations)}"
+        return None
+
+    def execute(self, agent_name, params, world):
+        npc = NPC(
+            name=params["npc_name"],
+            location=params["location"],
+            role=params.get("role", ""),
+            personality=params.get("personality", ""),
+            goal=params.get("goal", ""),
+        )
+        error = world.add_npc(npc)
+        if error is not None:
+            return [], {"result": error}
+        world.add_event(f"新 NPC 出现: {npc.name}（{npc.role or '身份未知'}）在{npc.location}")
+        return [], {"result": f"NPC '{npc.name}' 已出现在{npc.location}"}
 
 
 class NpcSpeakAction(ActionSpec):
