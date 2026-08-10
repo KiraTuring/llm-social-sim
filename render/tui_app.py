@@ -38,7 +38,7 @@ class SimulationTuiApp(App):
     }
     #controls {
         dock: bottom;
-        height: 3;
+        height: 4;
         background: $surface;
         border-top: solid $primary;
         align: center middle;
@@ -47,7 +47,7 @@ class SimulationTuiApp(App):
         margin: 0 1;
     }
     #location-tree, #event-scroll, #agent-scroll {
-        height: 100%;
+        height: 1fr;
     }
     #event-scroll, #agent-scroll {
         scrollbar-gutter: stable;
@@ -275,6 +275,7 @@ class SimulationTuiApp(App):
 
                 await engine.end_tick()
                 self._set_status("")
+                self.query_one("#event-scroll", VerticalScroll).mount(Static("", classes="tick-gap"))
 
                 if self._auto_mode:
                     await asyncio.sleep(
