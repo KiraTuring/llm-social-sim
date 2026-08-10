@@ -255,11 +255,14 @@ class SimulationTuiApp(App):
                 if not self._auto_mode:
                     self._next_event.clear()
 
+                # 分割线先上屏，UI 立即响应（不等 GM LLM）
+                await self._render_tick_sep(tick)
+
                 self._set_status("📡 GM 生成事件...")
                 await engine.begin_tick(tick)
 
-                # Tick 分隔线 + GM 事件先上屏，面板同步
-                await self._render_tick_start()
+                # GM 事件随后追加
+                await self._render_gm_events()
 
                 # 按单个 Agent 步进：每个角色行动完立即刷新 UI
                 while engine.next_agent:
@@ -289,33 +292,41 @@ class SimulationTuiApp(App):
         self._update_hint_visibility()
         scroll = self.query_one("#event-scroll", VerticalScroll)
         # 首次布局前 virtual_size 为 0，轮询等待就绪（毫秒级，只发生一次）
+        self._set_status("⏳ 场景加载中… 等待界面布局...")
         for _ in range(100):
             if scroll.virtual_size.width:
                 break
-            await asyncio.sleep(0.01)
+            await asyncio.sleep(0.1)
         # 渲染初始世界状态，tick 1 开始前即可见
         self.query_one("#location-tree", Tree).root.expand()
         self._sync_location_tree()
         self._sync_agent_panel()
+        self._set_status("")
 
-    async def _render_tick_start(self):
-        """渲染 tick 分隔线和本 tick 新增的 GM 事件，同步两侧面板。"""
+    async def _render_tick_sep(self, tick: int):
+        """渲染 tick 分隔线并同步两侧面板。不依赖 GM，先上屏保证 UI 立即响应。"""
         self._update_hint_visibility()
         scroll = self.query_one("#event-scroll", VerticalScroll)
-        tick_label = f"═══ Tick {self.world.tick} "
+        tick_label = f"═══ Tick {tick} "
         panel_width = scroll.virtual_size.width or 0
         dash_count = max(20, panel_width - len(tick_label) - 1)
         scroll.mount(Static(tick_label + "═" * dash_count, classes="tick-sep"))
 
+        self._sync_location_tree()
+        self._sync_agent_panel()
+        scroll.scroll_end(animate=False)
+        await self._trim_event_scroll(scroll)
+
+    async def _render_gm_events(self):
+        """begin_tick 后追加渲染本 tick 新增的 GM 事件。"""
+        self._update_hint_visibility()
+        scroll = self.query_one("#event-scroll", VerticalScroll)
         prefix = f"[tick {self.world.tick}] "
         for event in self.world.event_log[self._events_rendered:]:
             if event.startswith(prefix):
                 content = event[len(prefix):]
                 scroll.mount(Static(f"[bold yellow]🎲 {_esc(content)}[/bold yellow]", classes="gm-event"))
         self._events_rendered = len(self.world.event_log)
-
-        self._sync_location_tree()
-        self._sync_agent_panel()
         scroll.scroll_end(animate=False)
         await self._trim_event_scroll(scroll)
 
@@ -334,20 +345,17 @@ class SimulationTuiApp(App):
         if action.content:
             summary += f": {_esc(action.content)}"
 
-        body_parts = []
-        if action.internal_monologue:
-            body_parts.append(f"🧠 {_esc(action.internal_monologue)}")
+        title_parts = [summary]
         if action.result:
             for key, value in action.result.items():
                 label_map = {"observed": "观察"}
                 prefix = label_map.get(key, key)
-                body_parts.append(f"{prefix}: {_esc(value)}")
-        if not body_parts:
-            body_parts.append("(无详细信息)")
+                title_parts.append(f"  {prefix}: {_esc(value)}")
 
+        monologue = action.internal_monologue or "(无心理活动)"
         scroll.mount(Collapsible(
-            Static("\n".join(body_parts)),
-            title=summary, collapsed=True,
+            Static(f"🧠 {_esc(monologue)}"),
+            title="\n".join(title_parts), collapsed=True,
             classes="action-collapsible",
         ))
 
