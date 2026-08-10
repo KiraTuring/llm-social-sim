@@ -274,7 +274,7 @@ def run_tests():
         return {s["function"]["name"] for s in reg.get_tool_schemas()}
 
     test_tools = _gm_tool_names(SCENE)
-    assert {"narrate", "modify_environment", "modify_char_state", "npc_speak", "add_npc", "npc_move", "npc_remove"} <= test_tools
+    assert {"narrate", "modify_environment", "modify_char_state", "npc_speak", "npc_add", "npc_move", "npc_remove"} <= test_tools
 
     from scenarios.base import Scene
 

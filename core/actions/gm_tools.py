@@ -6,7 +6,7 @@ from core.message import BROADCAST, Message
 
 class NarrateAction(ActionSpec):
     name = "narrate"
-    description = "GM 旁白：向角色发出世界叙事或事件公告。target=留空（世界广播）、角色名（私信）、位置名（该位置及能观察到该位置的所有人）。避免全知视角，只描述角色能感知到的内容"
+    description = "GM 旁白：向角色发出世界叙事或事件公告。target=留空（世界广播）、角色名（私信）、位置名（该位置及能观察到该位置的所有人）。避免全知视角，只描述角色能感知到的内容。严禁用 narrate 替角色说话或移动角色——本工具只描述环境与事件，角色言行由专门工具处理"
     parameters = {"event_description": {"type": "string"}}
     text_format = "[ACTION]narrate[/ACTION]\n[CONTENT]{叙事内容，一句话，中文}[/CONTENT]"
 

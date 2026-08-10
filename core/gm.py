@@ -197,23 +197,40 @@ class GMAgent:
             lines.append("")
             lines.append(self.world_description)
 
-        gm_rule_prompt = """
+        has_npc = bool({"npc_speak", "npc_move", "npc_remove"} & set(self.registry.get_action_names()))
+
+        response_rule = (
+            "- 留意角色最近的消息，基于角色与环境的互动产生合理的事件响应或后续影响。"
+            "注意你要回应的是交互行为(interact)和角色对 NPC 的对话(speech)，普通聊天不需要回应"
+            if has_npc
+            else "- 留意角色最近的消息，基于角色与环境的互动产生合理的事件响应或后续影响。"
+            "注意你要回应的是交互行为(interact)，普通聊天不需要回应"
+        )
+        gm_rule_prompt = f"""
 重要规则：
 - 不要生成和近期事件冲突或简单重复的事件，可以是新事件或对近期事件的后续
-- 禁止替玩家做决定或直接控制玩家的行为
-- 禁止替玩家发言
-- 禁止改变玩家的位置
 - 禁止创造场景中不存在的位置——所有可用位置已在世界描述中列出
-- 留意角色最近的消息，基于角色与环境的互动产生合理的事件响应或后续影响。注意你要回应的是交互行为(interact)和角色对 NPC 的对话(speech)，普通聊天不需要回应
+{response_rule}
 - 事件要简短自然，一句话
 - 最多同时生成一个新事件。可以多次调用工具，但所有调用都围绕同一个事件
 """
+        lines.append(self._gm_role_rules())
         lines.append(gm_rule_prompt)
         lines.append("")
         lines.append("注意：你在调用工具之前输出的任何对话文字都不会被其他角色看到，也不会对模拟产生任何影响，相当于内心独白。只有工具调用本身会影响环境和其他角色。")
         lines.append("你可以使用以下工具（可一次调用多个）：")
         lines.append(self.registry.describe(indent="  "))
         return "\n".join(lines)
+
+    def _gm_role_rules(self) -> str:
+        """按场景是否有 NPC 生成角色控制权规则（无 NPC 场景不自相矛盾）。"""
+        tool_names = set(self.registry.get_action_names())
+        if {"npc_speak", "npc_move", "npc_remove"} & tool_names:
+            return (
+                "角色分两类：NPC 由你控制（说话用 npc_speak、移动用 npc_move、"
+                "移除用 npc_remove）；Player（玩家）是自主角色，禁止替其做决定、发言或改变位置"
+            )
+        return "本场景没有 NPC，所有角色都是自主 Player，禁止替任何角色做决定、发言或改变位置"
 
     def _build_world_context(self, world: "WorldState") -> str:
         """构建世界状态上下文（中等粒度）"""
@@ -223,12 +240,17 @@ class GMAgent:
         for name, char in world.characters.items():
             locs.setdefault(char.location, []).append(name)
 
-        parts.append("\n角色位置与状态：")
+        has_npc = bool(world.npcs)
+        if has_npc:
+            parts.append("\n角色位置与状态（Player 自主行动，NPC 由你控制）：")
+        else:
+            parts.append("\n角色位置与状态（Player 自主行动）：")
         for loc, names in locs.items():
             statuses = []
             for n in names:
                 state_str = ", ".join(f"{k}:{v}" for k, v in world.characters[n].states.items())
-                statuses.append(f"{n}({state_str})")
+                tag = " [NPC]" if (has_npc and n in world.npcs) else (" [Player]" if has_npc else "")
+                statuses.append(f"{n}{tag}({state_str})")
             parts.append(f"  {loc}: {', '.join(statuses)}")
 
         env_lines = []

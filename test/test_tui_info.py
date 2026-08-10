@@ -67,7 +67,7 @@ def run_tests():
     gm_tool_text = "\n".join(format_agent_tools(gm_registry))
     assert "narrate" in gm_tool_text
     assert "modify_environment" in gm_tool_text
-    assert "npc_speak" in gm_tool_text and "add_npc" in gm_tool_text
+    assert "npc_speak" in gm_tool_text and "npc_add" in gm_tool_text
     assert "internal_monologue" not in gm_tool_text
     print("[2] GM 工具列表 OK")
 

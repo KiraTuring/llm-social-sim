@@ -6,10 +6,10 @@ from core.message import Message
 
 
 class AddNpcAction(ActionSpec):
-    name = "add_npc"
+    name = "npc_add"
     description = "动态创建一个新的 NPC 角色，使其出现在指定位置并可由 GM 通过 npc_speak 控制。用于剧情需要临时登场的角色"
     parameters = {"npc_name": {"type": "string"}, "location": {"type": "string"}, "role": {"type": "string"}, "personality": {"type": "string"}, "goal": {"type": "string"}}
-    text_format = "[ACTION]add_npc[/ACTION]\n[CONTENT]{NPC名} 在 {位置}，身份:{角色}[/CONTENT]"
+    text_format = "[ACTION]npc_add[/ACTION]\n[CONTENT]{NPC名} 在 {位置}，身份:{角色}[/CONTENT]"
 
     def get_tool_schema(self):
         return {
