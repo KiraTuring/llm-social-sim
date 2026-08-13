@@ -127,7 +127,7 @@ class NpcMoveAction(ActionSpec):
                     "properties": {
                         "npc_name": {"type": "string", "description": "要移动的 NPC 角色名"},
                         "target": {"type": "string", "description": "目标位置（任意有效位置，不受连通性限制）"},
-                        "content": {"type": "string", "description": "移动描述（可选）"},
+                        "content": {"type": "string", "description": "移动时的行为表现（可选，别人能看到；不要写内心想法）"},
                     },
                     "required": ["npc_name", "target"],
                 },
@@ -160,15 +160,20 @@ class NpcMoveAction(ActionSpec):
         new_recipients = world.get_hearable_agents(npc_name)
         recipients = list(set(old_recipients + new_recipients))
 
+        desc = f"从{old_loc}移动到了{target}"
+        content = params.get("content", "").strip()
+        if content:
+            desc = f"{desc}，{content}"
+
         msg = Message(
             sender=npc_name,
             recipients=recipients,
-            content=f"从{old_loc}移动到了{target}",
+            content=desc,
             msg_type="action",
             tick=world.tick,
         )
         world.message_bus.send(msg)
-        world.add_event(f"NPC {npc_name}: 从{old_loc}移动到了{target}")
+        world.add_event(f"NPC {npc_name}: {desc}")
         return [msg], {"result": f"NPC '{npc_name}' 已从{old_loc}移动到{target}"}
 
 

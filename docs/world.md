@@ -57,7 +57,7 @@ class TavernScene(Scene):
   - 环境信息仅限当前位置（不再包含可见位置的环境）
   - `_last_observed_result` 字符串比对去重，结果相同时返回"没有新的发现"
 - `SpeakAction` 对特定目标说话时，能看到说话者的旁观者也会收到消息（**反向**：谁能看到我）
-- `MoveAction` 通知发送到出发位置和到达位置的 hearable agents 并集（而非全局广播）
+- `MoveAction` 通知发送到出发位置和到达位置的 hearable agents 并集（而非全局广播）。消息内容固定为"从X移动到了Y"，若提供 `content`（移动时的行为表现，别人能看到）则追加在后面
 
 ## 环境状态系统（Environment）
 

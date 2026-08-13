@@ -124,8 +124,8 @@ class WhisperAction(ActionSpec):
 class MoveAction(ActionSpec):
     name = "move"
     description = "移动到另一个位置"
-    parameters = {"target": {"type": "string"}}
-    text_format = "[ACTION]move[/ACTION]\n[TARGET]{目标位置}[/TARGET]\n[CONTENT]{移动描述}[/CONTENT]\n[THOUGHT]{内心独白}[/THOUGHT]"
+    parameters = {"target": {"type": "string"}, "content": {"type": "string"}}
+    text_format = "[ACTION]move[/ACTION]\n[TARGET]{目标位置}[/TARGET]\n[CONTENT]{移动时的行为表现（别人能看到，如「快步走过去」）}[/CONTENT]\n[THOUGHT]{内心独白}[/THOUGHT]"
 
     def get_tool_schema(self):
         return {
@@ -137,7 +137,7 @@ class MoveAction(ActionSpec):
                     "type": "object",
                     "properties": {
                         "target": {"type": "string", "description": "目标位置"},
-                        "content": {"type": "string", "description": "移动描述（可选）"},
+                        "content": {"type": "string", "description": "移动时的行为表现（可选，别人能看到；不要写内心想法）"},
                     },
                     "required": ["target"],
                 },
@@ -174,10 +174,15 @@ class MoveAction(ActionSpec):
         new_recipients = world.get_hearable_agents(agent_name)
         recipients = list(set(old_recipients + new_recipients))
 
+        desc = f"从{old_loc}移动到了{target}"
+        content = params.get("content", "").strip()
+        if content:
+            desc = f"{desc}，{content}"
+
         msg = Message(
             sender=agent_name,
             recipients=recipients,
-            content=f"从{old_loc}移动到了{target}",
+            content=desc,
             msg_type="action",
             tick=world.tick,
         )
