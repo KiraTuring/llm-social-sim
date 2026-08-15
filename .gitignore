@@ -37,3 +37,4 @@ logs/
 saves/
 *.json
 !manual_actions.example.json
+!dsh-plugins/**/package.json

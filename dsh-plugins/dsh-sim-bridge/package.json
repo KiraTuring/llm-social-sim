@@ -1,0 +1,8 @@
+{
+  "name": "dsh-sim-bridge",
+  "version": "0.1.0",
+  "description": "LLM 社会模拟引擎的 DSH 持久插件：注册 sim_* 模型工具，通过 scripts/sim_bridge.py 桥接本仓库模拟引擎。",
+  "private": true,
+  "main": "lib/index.js",
+  "license": "MIT"
+}
