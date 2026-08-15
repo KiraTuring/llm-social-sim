@@ -18,6 +18,8 @@ class Agent(Character):
     """Agent：感知→思考→行动（自主行动者，继承 Character 的位置/状态）"""
 
     agent_type = "Agent"
+    # 关系属性边界：声明 (min, max) 的数值属性采用增量语义并夹取；未声明的属性直接赋值
+    relationship_attr_bounds: dict[str, tuple[int, int]] = {"trust": (-5, 5)}
 
     def __init__(
         self,
@@ -165,8 +167,8 @@ class Agent(Character):
         desc_lines = registry.describe()
 
         relations_text = "\n".join(
-            [f"- {name}: 信任度 {rel.get('trust', 0)}，印象「{rel.get('impression', '')}」"
-             for name, rel in self.relationships.items()]
+            f"- {name}: " + "，".join(f"{key}: {value}" for key, value in rel.items())
+            for name, rel in self.relationships.items()
         )
 
         world_part = f"\n\n## 世界\n{self.world_description}" if self.world_description else ""
@@ -276,16 +278,14 @@ class Agent(Character):
                 for name, changes in rel_updates.items():
                     if name not in self.relationships:
                         continue
-                    old_trust = self.relationships[name].get("trust", 0)
-                    self.relationships[name]["trust"] += changes.get("trust_change", 0)
-                    self.relationships[name]["trust"] = max(-5, min(5, self.relationships[name]["trust"]))
-                    if "impression" in changes:
-                        self.relationships[name]["impression"] = changes["impression"]
+                    # 兼容旧版压缩输出的 trust_change 键
+                    if "trust_change" in changes:
+                        changes = dict(changes)
+                        changes["trust"] = changes.pop("trust_change")
+                    self.update_relationship(name, changes)
                     if llm_client.logger:
                         llm_client.logger.debug(
-                            f"关系变化: {self.name}→{name} "
-                            f"信任 {old_trust}→{self.relationships[name]['trust']} "
-                            f"{', 印象更新' if 'impression' in changes else ''}"
+                            f"关系变化: {self.name}→{name} {changes}"
                         )
         except Exception:
             pass
@@ -466,7 +466,19 @@ class Agent(Character):
         """从 action.result 构建工具返回摘要"""
         return format_tool_result(action.action_type, action.result, self.content_max_length)
 
-    def modify_trust(self, other: str, delta: int):
-        """修改对某人的信任度"""
-        if other in self.relationships:
-            self.relationships[other]["trust"] = max(-5, min(5, self.relationships[other].get("trust", 0) + delta))
+    def update_relationship(self, other: str, changes: dict) -> None:
+        """通用关系属性更新：有界数值属性按增量累加并夹取，其余属性直接赋值。
+
+        边界由类级 relationship_attr_bounds 声明（如 trust: (-5, 5)）；
+        未声明的属性（如 impression）直接赋值。
+        """
+        if other not in self.relationships:
+            return
+        for key, value in changes.items():
+            bounds = self.relationship_attr_bounds.get(key)
+            if bounds is not None and isinstance(value, (int, float)):
+                lo, hi = bounds
+                current = self.relationships[other].get(key, 0)
+                self.relationships[other][key] = max(lo, min(hi, current + value))
+            else:
+                self.relationships[other][key] = value

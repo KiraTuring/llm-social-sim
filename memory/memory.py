@@ -85,17 +85,18 @@ class AgentMemory:
         if relationships:
             lines = []
             for name, rel in relationships.items():
-                lines.append(f"- {name}: trust={rel.get('trust', 0)}, 印象=\"{rel.get('impression', '')}\"")
+                attrs = ", ".join(f"{k}={v}" for k, v in rel.items())
+                lines.append(f"- {name}: {attrs}" if attrs else f"- {name}")
             rel_text = "\n当前关系：\n" + "\n".join(lines)
 
         system_prompt = (
             f"你正在为角色{self.name}整理记忆摘要。\n"
             f"请用3-5句话概括以下经历，保留关键人物和重要事件。\n"
             f"经历中的\"你\"指代角色{self.name}，请用第二人称视角（\"你\"）展开描述。\n"
-            f"如果有关系变化（信任增减、印象改变），也在 JSON 中返回。\n"
+            f"如果有关系属性变化，也在 JSON 中返回（数值属性给增量，文本属性给新值）。\n"
             f"没有明显变化则 omit relations。\n\n"
             f"请严格以 JSON 格式回复，不要添加任何额外内容或格式标记：\n"
-            f'{{"summary": "摘要内容", "relations": {{"角色名": {{"trust_change": 整数, "impression": "新印象（可选）"}}}}}}'
+            f'{{"summary": "摘要内容", "relations": {{"角色名": {{"属性名": "增量或新值"}}}}}}'
         )
         user_content = ""
         if self._summary:

@@ -18,6 +18,17 @@ class Message:
     tick: int
     target: str | None = None
 
+    def to_dict(self) -> dict:
+        """序列化为可保存的 dict"""
+        return {
+            "sender": self.sender,
+            "recipients": self.recipients,
+            "content": self.content,
+            "msg_type": self.msg_type,
+            "tick": self.tick,
+            "target": self.target,
+        }
+
 
 class MessageBus:
     """消息总线，负责消息分发和存储。
@@ -35,17 +46,9 @@ class MessageBus:
         return {
             # 排序保证存档输出确定性（set 迭代顺序受哈希随机化影响）
             "known_agents": sorted(self._known_agents),
-            "messages": [
-                {"sender": m.sender, "recipients": m.recipients, "content": m.content,
-                 "msg_type": m.msg_type, "tick": m.tick, "target": m.target}
-                for m in self._messages
-            ],
+            "messages": [m.to_dict() for m in self._messages],
             "inboxes": {
-                name: [
-                    {"sender": m.sender, "recipients": m.recipients, "content": m.content,
-                     "msg_type": m.msg_type, "tick": m.tick, "target": m.target}
-                    for m in msgs
-                ]
+                name: [m.to_dict() for m in msgs]
                 for name, msgs in self._inboxes.items()
             },
         }

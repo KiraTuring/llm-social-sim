@@ -159,6 +159,27 @@ async def run_tests():
     logger.close()
     print("[6] move 后位置索引一致 OK")
 
+    # 7. update_relationship 通用关系属性操作：增量夹取、无界赋值、未知角色 no-op
+    from core.agent import Agent
+    from memory.memory import AgentMemory
+
+    mem = AgentMemory(name="测试", short_limit=10, compress_threshold=30)
+    rel_agent = Agent(
+        name="测试", role="测试角色", personality="p", goal="g", location="主厅",
+        relationships={"乙": {"trust": 0, "impression": ""}}, memory=mem,
+    )
+    rel_agent.update_relationship("乙", {"trust": -2})
+    assert rel_agent.relationships["乙"]["trust"] == -2, rel_agent.relationships["乙"]
+    rel_agent.update_relationship("乙", {"trust": -10})
+    assert rel_agent.relationships["乙"]["trust"] == -5, rel_agent.relationships["乙"]
+    rel_agent.update_relationship("乙", {"trust": 100})
+    assert rel_agent.relationships["乙"]["trust"] == 5, rel_agent.relationships["乙"]
+    rel_agent.update_relationship("乙", {"impression": "新印象"})
+    assert rel_agent.relationships["乙"]["impression"] == "新印象"
+    rel_agent.update_relationship("不存在", {"trust": 1})
+    assert rel_agent.relationships["乙"]["trust"] == 5, rel_agent.relationships["乙"]
+    print("[7] update_relationship 增量/夹取/无界赋值/no-op OK")
+
     print("=" * 50)
     print("全部 SimulationEngine 测试通过")
 

@@ -128,16 +128,14 @@ class TavernScene(Scene):
                 agent = world.agents[target]
                 sender = msg.sender
                 if sender in agent.relationships:
-                    trust = agent.relationships[sender].get("trust", 0)
-
                     lower_words = ["笨", "蠢", "滚", "闭嘴"]
                     if any(word in msg.content for word in lower_words):
-                        agent.relationships[sender]["trust"] = max(-5, trust - 2)
+                        agent.update_relationship(sender, {"trust": -2})
                         agent.states["情绪"] = "愤怒"
 
                     praise_words = ["不错", "好", "谢谢", "佩服"]
                     if any(word in msg.content for word in praise_words):
-                        agent.relationships[sender]["trust"] = min(5, trust + 1)
+                        agent.update_relationship(sender, {"trust": 1})
 
         # TODO: 未来添加贸易 Action 后启用
         @engine.on("trade_offer")
@@ -146,7 +144,7 @@ class TavernScene(Scene):
                 target = world.agents[msg.recipients[0]]
                 sender = msg.sender
                 if sender in target.relationships:
-                    target.relationships[sender]["trust"] = min(5, target.relationships[sender].get("trust", 0) + 1)
+                    target.update_relationship(sender, {"trust": 1})
 
         @engine.on("system_event")
         def _on_system_event(msg, world):

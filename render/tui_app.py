@@ -458,7 +458,8 @@ class SimulationTuiApp(App):
             if rels:
                 rel_parts = []
                 for r_name, r_info in rels.items():
-                    rel_parts.append(f"{_esc(r_name)}({r_info.get('trust', 0)})")
+                    attrs = "，".join(f"{_esc(k)}:{_esc(v)}" for k, v in r_info.items())
+                    rel_parts.append(f"{_esc(r_name)}({attrs})" if attrs else f"{_esc(r_name)}")
                 body_parts.append(f"[bold]关系:[/bold] {', '.join(rel_parts)}")
             memories = agent.recent_memories(5)
             if memories:
@@ -548,7 +549,8 @@ class SimulationTuiApp(App):
             rels = agent.relationships
             if rels:
                 for r_name, r_info in rels.items():
-                    lines.append(f"  {_esc(r_name)}: {r_info.get('trust', 0)}")
+                    attrs = "，".join(f"{_esc(k)}: {_esc(v)}" for k, v in r_info.items())
+                    lines.append(f"  {_esc(r_name)}: {attrs}" if attrs else f"  {_esc(r_name)}")
             else:
                 lines.append("  无关系记录")
             scroll.mount(Static("\n".join(lines)))

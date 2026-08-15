@@ -122,10 +122,13 @@ ObserveAction 读取当前位置的环境数据 + 所有可见位置的 agent �
 @engine.on("speech")
 def _on_insult(msg, world):
     if contains_insult(msg.content):
-        world.agents[msg.target].modify_trust(msg.sender, -2)
+        world.agents[msg.target].update_relationship(msg.sender, {"trust": -2})
 ```
 
 规则必须在场景的 `setup_rules()` 中注册，核心引擎不包含任何场景数据。可用 msg_type: `speech`, `whisper`, `system_event`, `action`, `trade_offer`...
+
+关系属性通过 `Agent.update_relationship(other, changes)` 统一更新：声明了边界的数值属性
+（如 `trust: (-5, 5)`）按增量累加并夹取，未声明的属性（如 `impression`）直接赋值。
 
 ## 角色框架（Character）
 

@@ -95,10 +95,13 @@ class ConsoleRenderer:
 
         for name in world.action_order:
             agent = world.agents[name]
-            trust_text = "\n".join([f"  {k}: {v.get('trust', 0)}" for k, v in agent.relationships.items()])
+            rel_lines = []
+            for r_name, rel in agent.relationships.items():
+                attrs = "，".join(f"{k}: {v}" for k, v in rel.items())
+                rel_lines.append(f"  {r_name}: {attrs}" if attrs else f"  {r_name}")
             self.console.print(f"[bold]{name}[/bold]")
-            if trust_text:
-                self.console.print(f"[dim]信任度:[/dim]\n{trust_text}")
+            if rel_lines:
+                self.console.print("[dim]关系:[/dim]\n" + "\n".join(rel_lines))
             else:
                 self.console.print("[dim]无关系记录[/dim]")
             self.console.print()

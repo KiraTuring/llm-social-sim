@@ -128,13 +128,12 @@ class AgentInfoScreen(ModalScreen):
             yield Static(f"[bold]目标:[/bold] {_esc(agent.goal)}")
 
             if agent.relationships:
-                imp_lines = [
-                    f"  {_esc(r_name)}：{_esc(r_info.get('impression', ''))}"
+                rel_lines = [
+                    f"  {_esc(r_name)}：" + "，".join(f"{_esc(k)}: {_esc(v)}" for k, v in r_info.items())
                     for r_name, r_info in agent.relationships.items()
-                    if r_info.get("impression")
                 ]
-                if imp_lines:
-                    yield Static("[bold]关系印象:[/bold]\n" + "\n".join(imp_lines))
+                if rel_lines:
+                    yield Static("[bold]关系属性:[/bold]\n" + "\n".join(rel_lines))
 
             cap_parts = []
             writable = getattr(agent, "writable_states", None)

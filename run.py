@@ -93,6 +93,18 @@ def _load_world(load_path: str, config: dict, max_ticks: int | None):
     return world, scene, gm, registry, start_tick
 
 
+def _prepare_world(config: dict, scene_name: str, manual_agents: list[str] | None,
+                   load_path: str | None, max_ticks: int | None):
+    """统一装配世界与场景：从存档恢复或新初始化，返回运行所需的全部上下文。"""
+    if load_path:
+        world, scene, gm, registry, start_tick = _load_world(load_path, config, max_ticks)
+    else:
+        world, scene, gm, registry = _init_world(config, scene_name, manual_agents)
+        start_tick = 1
+    remaining = max_ticks or config["simulation"]["max_ticks"]
+    return world, scene, gm, registry, start_tick, remaining
+
+
 def _setup_services(config: dict, scene, gm):
     """创建模拟核心服务（logger, llm, rule_engine）"""
     log_level = getattr(__import__("logging"), config["logging"].get("level", "INFO"))
@@ -137,13 +149,9 @@ def _save_state(world, gm, scene, save_path: str):
 
 async def run_tui_simulation(config: dict, scene_name: str, max_ticks: int | None = None, mode: str | None = None, manual_agents: list[str] | None = None, load_path: str | None = None, save_path: str | None = None):
     """使用 Textual TUI 运行模拟"""
-    if load_path:
-        world, scene, gm, registry, start_tick = _load_world(load_path, config, max_ticks)
-    else:
-        world, scene, gm, registry = _init_world(config, scene_name, manual_agents)
-        start_tick = 1
-
-    remaining = max_ticks or config["simulation"]["max_ticks"]
+    world, scene, gm, registry, start_tick, remaining = _prepare_world(
+        config, scene_name, manual_agents, load_path, max_ticks
+    )
 
     logger, llm, rule_engine = _setup_services(config, scene, gm)
 
@@ -162,13 +170,10 @@ async def run_tui_simulation(config: dict, scene_name: str, max_ticks: int | Non
 
 async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = None, mode: str | None = None, manual_agents: list[str] | None = None, load_path: str | None = None, save_path: str | None = None):
     """运行模拟"""
-    remaining = max_ticks or config["simulation"]["max_ticks"]
-
-    if load_path:
-        world, scene, gm, registry, start_tick = _load_world(load_path, config, max_ticks)
-    else:
-        world, scene, gm, registry = _init_world(config, scene_name, manual_agents)
-        start_tick = 1
+    world, scene, gm, registry, start_tick, remaining = _prepare_world(
+        config, scene_name, manual_agents, load_path, max_ticks
+    )
+    if not load_path:
         _print_scene_header(scene)
 
     logger, llm, rule_engine = _setup_services(config, scene, gm)
