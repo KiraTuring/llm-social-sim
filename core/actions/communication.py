@@ -1,6 +1,6 @@
 """通讯 Action 实现：无线电通讯等远程通信。"""
 
-from core.action import ActionSpec
+from core.action import ActionSpec, validate_content_length
 from core.message import Message
 
 
@@ -38,9 +38,8 @@ class RadioAction(ActionSpec):
 
     def validate_params(self, params, context):
         content = params.get("content", "")
-        max_len = context.get("content_max_length", 200)
-        if len(content) > max_len:
-            return f"内容过长（{len(content)}字），超出限制（{max_len}字），请精简到{max_len}字以内"
+        if error := validate_content_length(content, context):
+            return error
         target = params.get("target", "")
         if not target:
             return "通话对象不能为空"

@@ -146,3 +146,11 @@ def format_tool_result(action_type: str, result: dict | None, max_length: int = 
     if not result:
         return f"'{action_type}' 已执行"
     return " | ".join(str(v)[:max_length] for v in result.values())
+
+
+def validate_content_length(content: str, context: dict, max_default: int = 200) -> str | None:
+    """校验内容长度，返回错误信息或 None（各 content 型工具共用）。"""
+    max_len = context.get("content_max_length", max_default)
+    if len(content) > max_len:
+        return f"内容过长（{len(content)}字），超出限制（{max_len}字），请精简到{max_len}字以内"
+    return None

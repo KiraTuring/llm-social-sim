@@ -1,6 +1,6 @@
 """通用 Action 实现：speak, whisper, move, observe, interact。"""
 
-from core.action import ActionSpec
+from core.action import ActionSpec, validate_content_length
 from core.message import Message, BROADCAST
 
 
@@ -29,9 +29,8 @@ class SpeakAction(ActionSpec):
 
     def validate_params(self, params, context):
         content = params.get("content", "")
-        max_len = context.get("content_max_length", 200)
-        if len(content) > max_len:
-            return f"内容过长（{len(content)}字），超出限制（{max_len}字），请精简到{max_len}字以内"
+        if error := validate_content_length(content, context):
+            return error
         target = params.get("target", "")
         agent_names = context.get("agent_names", [])
         agent_name = context.get("agent_name", "")
@@ -83,9 +82,8 @@ class WhisperAction(ActionSpec):
 
     def validate_params(self, params, context):
         content = params.get("content", "")
-        max_len = context.get("content_max_length", 200)
-        if len(content) > max_len:
-            return f"内容过长（{len(content)}字），超出限制（{max_len}字），请精简到{max_len}字以内"
+        if error := validate_content_length(content, context):
+            return error
         target = params.get("target", "")
         agent_names = context.get("agent_names", [])
         agent_name = context.get("agent_name", "")
@@ -315,9 +313,8 @@ class InteractAction(ActionSpec):
 
     def validate_params(self, params, context):
         content = params.get("content", "")
-        max_len = context.get("content_max_length", 200)
-        if len(content) > max_len:
-            return f"内容过长（{len(content)}字），超出限制（{max_len}字），请精简到{max_len}字以内"
+        if error := validate_content_length(content, context):
+            return error
         modifications = params.get("modifications")
         if not modifications:
             return None
