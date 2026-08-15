@@ -155,11 +155,13 @@ class TradeAction(ActionSpec):
                        give_money, give_items, take_money, take_items)
 
         detail = self._describe(give_money, give_items, take_money, take_items)
+        # 对手方视角：其「付出」= 行动者 take 走的，其「获得」= 行动者 give 的（镜像）
+        detail_for_target = self._describe(take_money, take_items, give_money, give_items)
 
-        # 1. 对手方私信（含金额与物品明细）
+        # 1. 对手方私信（含金额与物品明细，用对手方自己的视角）
         deal_msg = Message(
             sender=agent_name, recipients=[target], target=target,
-            content=detail, msg_type="trade", tick=world.tick,
+            content=f"你{detail_for_target}", msg_type="trade", tick=world.tick,
         )
         world.message_bus.send(deal_msg)
         messages = [deal_msg]
@@ -178,7 +180,8 @@ class TradeAction(ActionSpec):
             world.message_bus.send(notice)
             messages.append(notice)
 
-        world.add_event(f"交易: {agent_name} ↔ {target}: {detail}")
+        # 事件日志：显式带上行动者名，避免无主语的「付出/获得」产生歧义
+        world.add_event(f"交易: {agent_name} ↔ {target}: {agent_name}{detail}")
         return messages, {"summary": f"交易完成: {detail}"}
 
     @staticmethod

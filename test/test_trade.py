@@ -73,11 +73,13 @@ def test_money_transfer():
     assert world.agents["测试乙"].states["金钱"] == 60
     assert msgs and msgs[0].msg_type == "trade" and msgs[0].recipients == ["测试乙"]
     assert "金钱10" in result["summary"]
+    # 纯 give（无 take）：对手方视角只有获得，没有付出
+    assert "你获得金钱10" in msgs[0].content
     assert any("交易" in e for e in world.event_log)
 
 
 def test_items_both_ways():
-    """give 物品 + take 物品：双向转移，归零的键被删除"""
+    """give 物品 + take 物品：双向转移，归零的键被删除；双方视角互为镜像"""
     world = _build_world()
     ctx = _ctx(world, "测试甲")
     params = {"target": "测试乙", "give_items": {"干粮": 1}, "take_items": {"酒壶": 1}}
@@ -85,7 +87,11 @@ def test_items_both_ways():
     msgs, result = ACTION.execute("测试甲", params, world)
     assert world.agents["测试甲"].states["物品"] == {"干粮": 1, "药草": 3, "酒壶": 1}
     assert world.agents["测试乙"].states["物品"] == {"干粮": 2}
-    assert "干粮×1" in result["summary"] and "酒壶×1" in result["summary"]
+    # 行动者记忆：自己的视角（付出干粮，获得酒壶）
+    assert "付出干粮×1" in result["summary"] and "获得酒壶×1" in result["summary"]
+    # 对手方私信：镜像视角（你付出酒壶，获得干粮）
+    trade_msg = [m for m in msgs if m.msg_type == "trade"][0]
+    assert "你付出酒壶×1" in trade_msg.content and "获得干粮×1" in trade_msg.content
 
 
 def test_trade_with_npc():
@@ -160,15 +166,18 @@ def test_execute_rejects_insufficient_target():
 # ---------- 消息流与规则 ----------
 
 def test_bystander_notice_hides_money():
-    """对手方私信含金额明细；旁观者通知只列物品，不含金额"""
+    """对手方私信含金额明细且为对手方视角；旁观者通知只列物品，不含金额"""
     world = _build_world()
     params = {"target": "测试乙", "give_money": 10, "give_items": {"干粮": 1}, "take_items": {"酒壶": 1}}
     msgs, _ = ACTION.execute("测试甲", params, world)
     trade_msg = [m for m in msgs if m.msg_type == "trade"]
     notice = [m for m in msgs if m.msg_type == "action"]
     assert trade_msg and trade_msg[0].recipients == ["测试乙"]
-    assert "金钱10" in trade_msg[0].content
-    assert "干粮×1" in trade_msg[0].content
+    # 对手方视角（镜像）：付出的是被拿走的酒壶，获得的是对方给的金钱与干粮
+    assert "你付出酒壶×1" in trade_msg[0].content
+    assert "获得金钱10" in trade_msg[0].content and "获得干粮×1" in trade_msg[0].content
+    # 不能出现行动者视角的「付出金钱」——防止对手方误读为自己付钱
+    assert "付出金钱" not in trade_msg[0].content
     assert notice and notice[0].recipients
     assert "测试乙" in notice[0].content
     assert "干粮" in notice[0].content and "酒壶" in notice[0].content
