@@ -2,13 +2,10 @@
 
 import json
 import os
-import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from dotenv import load_dotenv
-
+import pytest
 from conftest import write_plan
 from core.action import ActionRegistry
 from core.agent import Agent
@@ -18,8 +15,6 @@ from core.message import Message, BROADCAST
 from core.save_load import SAVE_VERSION, save_simulation_state, load_simulation_state
 from scenarios.tavern import TavernScene
 from scenarios.utils import validate_agent_configs
-
-load_dotenv()
 
 SCENE = TavernScene()
 CFG = {c["name"]: c for c in SCENE.agents}
@@ -89,16 +84,18 @@ def build_world(plan_path: str):
     return world, gm
 
 
-def run_tests():
-    print("测试存档往返（save_load）")
-    print("=" * 50)
-
+def _save_world():
+    """构建世界并保存，返回 (save_path, plan_path, world, gm)。"""
     plan_path = write_plan({"老巴克": {"1": {"action_type": "observe"}}})
     world, gm = build_world(plan_path)
     save_path = os.path.join(tempfile.mkdtemp(), "roundtrip.json")
     save_simulation_state(world, gm, "tavern", SCENE.name, save_path)
+    return save_path, plan_path, world, gm
 
-    # 1. 往返一致
+
+def test_roundtrip():
+    """往返一致：world/agent/gm/ManualAgent"""
+    save_path, _, world, gm = _save_world()
     world2, scene2, gm2 = load_simulation_state(save_path, CONFIG)
     assert scene2.name == SCENE.name
     assert world2.tick == world.tick
@@ -129,9 +126,11 @@ def run_tests():
     assert gm2.random_events == gm.random_events
     assert gm2.use_llm == gm.use_llm
     assert gm2._gm_history == gm._gm_history
-    print("[1] 往返一致（world/agent/gm/ManualAgent）OK")
 
-    # 2. 格式稳定：key 逐项匹配现有 schema
+
+def test_format_stable():
+    """存档格式稳定：key 逐项匹配现有 schema"""
+    save_path, plan_path, _, _ = _save_world()
     raw = json.loads(Path(save_path).read_text(encoding="utf-8"))
     assert raw["version"] == SAVE_VERSION == 1
     assert set(raw.keys()) == TOP_LEVEL_KEYS, set(raw.keys())
@@ -139,20 +138,11 @@ def run_tests():
     assert set(raw["agents"]["雷恩"].keys()) == AGENT_KEYS
     assert set(raw["agents"]["老巴克"].keys()) == AGENT_KEYS | {"manual_file"}
     assert raw["agents"]["老巴克"]["manual_file"] == plan_path
-    print("[2] 存档格式稳定（version 1 schema）OK")
 
-    # 3. 未知版本号 → ValueError
+
+def test_unknown_version_raises():
+    """未知版本号 → ValueError"""
     bad_path = os.path.join(tempfile.mkdtemp(), "bad.json")
     Path(bad_path).write_text(json.dumps({"version": 99}), encoding="utf-8")
-    try:
+    with pytest.raises(ValueError):
         load_simulation_state(bad_path, CONFIG)
-        raise AssertionError("应当抛出 ValueError")
-    except ValueError:
-        pass
-    print("[3] 未知版本号报错 OK")
-
-    print("=" * 50)
-    print("全部存档往返测试通过")
-
-
-run_tests()

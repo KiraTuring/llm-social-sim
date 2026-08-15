@@ -1,10 +1,5 @@
 """WorldState 位置索引测试：重建、副本语义、move_character 增量维护与自愈。"""
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 from core.world import WorldState
 
 
@@ -36,38 +31,35 @@ def _build_world() -> WorldState:
     return world
 
 
-def run_tests():
-    print("测试 WorldState 位置索引")
-    print("=" * 50)
-
-    # 1. 索引重建：分组正确，空位置返回 []
+def test_index_rebuild():
+    """索引重建：分组正确，空位置返回 []"""
     world = _build_world()
     world.rebuild_location_index()
     assert world.get_agents_in_location("吧台") == ["老巴克"], world.get_agents_in_location("吧台")
     assert world.get_agents_in_location("主厅") == ["艾莉娅"]
     assert world.get_agents_in_location("角落") == ["雷恩"]
     assert world.get_agents_in_location("不存在的位置") == []
-    print("[1] 索引重建分组 OK")
 
-    # 2. 副本语义：修改返回值不影响索引
+def test_get_agents_returns_copy():
+    """副本语义：修改返回值不影响索引"""
     world = _build_world()
     world.rebuild_location_index()
     result = world.get_agents_in_location("吧台")
     result.remove("老巴克")
     result.append("伪造")
     assert world.get_agents_in_location("吧台") == ["老巴克"]
-    print("[2] 返回副本语义 OK")
 
-    # 3a. move_character 增量维护
+def test_move_character_incremental():
+    """move_character 增量维护位置索引"""
     world = _build_world()
     world.rebuild_location_index()
     assert world.move_character("雷恩", "主厅") is None
     assert world.agents["雷恩"].location == "主厅"
     assert world.get_agents_in_location("主厅") == ["艾莉娅", "雷恩"]
     assert world.get_agents_in_location("角落") == []
-    print("[3a] move_character 增量维护 OK")
 
-    # 3b. 非法名字/位置返回错误串且不移动
+def test_move_character_invalid():
+    """非法名字/位置返回错误串且不移动"""
     world = _build_world()
     world.rebuild_location_index()
     err = world.move_character("不存在的人", "主厅")
@@ -76,18 +68,18 @@ def run_tests():
     assert err is not None and "不是有效位置" in err
     assert world.agents["雷恩"].location == "角落"
     assert world.get_agents_in_location("角落") == ["雷恩"]
-    print("[3b] move_character 非法参数 OK")
 
-    # 3c. 索引清空后自愈重建
+def test_empty_index_self_heals():
+    """索引清空后懒重建自愈"""
     world = _build_world()
     world._agents_by_location = {}
     assert world.get_agents_in_location("吧台") == ["老巴克"]
     world._agents_by_location = {}
     assert world.move_character("雷恩", "主厅") is None
     assert world.get_agents_in_location("主厅") == ["艾莉娅", "雷恩"]
-    print("[3c] 空索引懒重建自愈 OK")
 
-    # 3d. move_character 对 NPC 同样生效
+def test_move_character_npc():
+    """move_character 对 NPC 同样生效"""
     world = _build_world()
     world.npcs = {"巡逻兵": _StubNPC("巡逻兵", "主厅")}
     world.rebuild_location_index()
@@ -97,9 +89,9 @@ def run_tests():
     assert world.get_characters_in_location("主厅") == ["艾莉娅"]
     err = world.move_character("不存在的人", "吧台")
     assert err is not None and "不存在" in err
-    print("[3d] move_character 对 NPC 生效 OK")
 
-    # 3e. remove_npc：npcs/npc_names/索引三处同步清理
+def test_remove_npc_sync_cleanup():
+    """remove_npc：npcs/npc_names/索引三处同步清理"""
     world = _build_world()
     world.npcs = {"巡逻兵": _StubNPC("巡逻兵", "主厅")}
     world.npc_names = {"巡逻兵"}
@@ -109,19 +101,12 @@ def run_tests():
     assert "巡逻兵" not in world.get_characters_in_location("主厅")
     err = world.remove_npc("巡逻兵")
     assert err is not None and "不是 NPC" in err
-    print("[3e] remove_npc 三处同步清理 OK")
 
-    # 4. build_validation_context 与 get_agents_in_location 一致
+def test_validation_context_matches_index():
+    """build_validation_context 与 get_agents_in_location 一致"""
     world = _build_world()
     world.rebuild_location_index()
     ctx = world.build_validation_context("老巴克")
     for loc in world.locations:
         assert ctx["agents_by_location"][loc] == world.get_agents_in_location(loc), loc
     assert ctx["hearable_agents"] == world.get_hearable_agents("老巴克")
-    print("[4] validation_context 与索引一致 OK")
-
-    print("=" * 50)
-    print("全部 WorldState 位置索引测试通过")
-
-
-run_tests()

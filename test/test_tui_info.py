@@ -1,10 +1,5 @@
 """TUI 信息格式化纯函数测试：工具列表、场景分节白名单、NPC 判断。"""
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 from core.action import ActionRegistry
 from core.gm import GMAgent
 from render.tui_info import format_agent_tools, format_scene_sections, is_npc
@@ -45,11 +40,8 @@ def _config() -> dict:
     }
 
 
-def run_tests():
-    print("测试 TUI 信息格式化纯函数")
-    print("=" * 50)
-
-    # 1. 角色工具列表：只显示名称与描述，不含参数
+def test_agent_tools_only_names_and_descriptions():
+    """角色工具列表：只显示名称与描述，不含参数"""
     registry = ActionRegistry()
     _TestScene().setup(registry)
     tool_lines = format_agent_tools(registry)
@@ -59,9 +51,9 @@ def run_tests():
     assert "internal_monologue" not in tool_text
     assert "target(string)" not in tool_text
     assert "参数" not in tool_text
-    print("[1] 角色工具列表（仅名称+描述）OK")
 
-    # 2. GM 工具列表
+def test_gm_tools_list():
+    """GM 工具列表"""
     gm_registry = ActionRegistry(include_agent_params=False)
     _TestScene().setup_gm(gm_registry)
     gm_tool_text = "\n".join(format_agent_tools(gm_registry))
@@ -69,13 +61,15 @@ def run_tests():
     assert "modify_environment" in gm_tool_text
     assert "npc_speak" in gm_tool_text and "npc_add" in gm_tool_text
     assert "internal_monologue" not in gm_tool_text
-    print("[2] GM 工具列表 OK")
 
-    # 3. 场景分节：白名单行为 + 剩余事件实时性
+def test_scene_sections_whitelist():
+    """场景分节：白名单行为 + 剩余事件实时性 + 敏感信息不泄漏"""
     scene = _TestScene()
     config = _config()
     world = scene.init_world()
     world.tick = 6
+    gm_registry = ActionRegistry(include_agent_params=False)
+    scene.setup_gm(gm_registry)
     gm = GMAgent.from_config(scene, config, gm_registry)
 
     sections = format_scene_sections(scene, world, gm, config)
@@ -97,16 +91,9 @@ def run_tests():
     assert "tick 3" not in full_text, "已过 tick 的计划事件不应展示"
     assert "随机事件池" in full_text
     assert "世界设定" in full_text and "测试场景" in full_text
-    print("[3] 场景分节白名单 + 剩余事件过滤 OK")
 
-    # 4. NPC 判断：在/不在 world.npc_names
+def test_npc_judgement():
+    """NPC 判断：在/不在 world.npc_names"""
     test_world = _TestScene().init_world()
     assert is_npc("测试守卫", test_world)
     assert not is_npc("测试甲", test_world)
-    print("[4] NPC 判断 OK")
-
-    print("=" * 50)
-    print("全部 TUI 信息格式化测试通过")
-
-
-run_tests()

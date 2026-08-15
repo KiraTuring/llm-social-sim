@@ -1,38 +1,42 @@
-"""测试 GM Agent 事件注入。"""
+"""GM 事件注入测试：计划事件确定性注入、随机事件按概率注入（离线，不调 LLM）。"""
 
-import asyncio
-import pytest
 from core.gm import GMAgent
 from core.world import WorldState
 from core.message import MessageBus
 
 
-@pytest.mark.llm
-async def test_gm():
-    """测试 GM Agent 事件注入"""
-
+def _build_world() -> WorldState:
     world = WorldState(tick=1, locations=["酒馆"])
     world.message_bus = MessageBus()
+    return world
 
+
+async def test_scheduled_events_injected_at_tick():
+    """计划事件在指定 tick 确定性注入"""
+    world = _build_world()
     gm = GMAgent(
         events=[(2, "一个穿黑甲的士兵推门进来"), (4, "外面传来马蹄声")],
-        random_events=["醉汉开始唱歌", "壁炉火噼啪作响"],
-        chance=0.3,
+        random_events=[],
+        chance=0.0,
     )
-
-    print("测试 GM 事件注入")
-    print("=" * 50)
-
     for tick in range(1, 6):
         world.tick = tick
-
         await gm.check_and_inject(world)
-
-        if world.event_log:
-            print(f"Tick {tick}: {world.event_log[-1]}")
-
-    print("\n测试完成 ✅")
+    log = "\n".join(world.event_log)
+    assert "穿黑甲的士兵" in log and "[tick 2]" in log
+    assert "马蹄声" in log and "[tick 4]" in log
 
 
-if __name__ == "__main__":
-    asyncio.run(test_gm())
+async def test_random_event_injected_with_chance_1():
+    """random_chance=1.0 时每个 tick 都注入随机事件"""
+    world = _build_world()
+    gm = GMAgent(
+        events=[],
+        random_events=["醉汉开始唱歌", "壁炉火噼啪作响"],
+        chance=1.0,
+    )
+    for tick in range(1, 4):
+        world.tick = tick
+        await gm.check_and_inject(world)
+    log = "\n".join(world.event_log)
+    assert any(name in log for name in ("醉汉", "壁炉")), log

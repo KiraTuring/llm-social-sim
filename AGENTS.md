@@ -47,19 +47,18 @@ test/           测试
 
 测试文件: `test/*.py`（`python3 -m pytest` 运行，配置见 `pytest.ini`）
 
-- **离线集（默认）**: `pytest -q` 一键运行全部离线测试；`test_model.py`、`test_agent.py`、`test_gm.py` 带 `llm` 标记（需 `.env` 中的 `DEEPSEEK_API_KEY` 真实调用），默认跳过
+- **离线集（默认）**: `pytest -q` 一键运行全部离线测试；`test_live_llm.py` 带 `llm` 标记（需 `.env` 中的 `DEEPSEEK_API_KEY` 真实调用），默认跳过
 - **在线集**: `pytest -m llm` 运行需要 API key 的测试
-- 共享脚手架在 `test/conftest.py`（离线配置、fake litellm 响应、手动计划写入），pytest 与脚本式测试共用
+- 共享脚手架在 `test/conftest.py`（离线配置、fake litellm 响应、手动计划写入）
 
 | 测试文件 | 内容 |
 |---------|------|
-| `test_model.py` | LLM 基础调用和并发测试（需 API key） |
-| `test_agent.py` | Agent 基本流程（需 API key） |
-| `test_gm.py` | GM 事件注入（需 API key） |
+| `test_live_llm.py` | 真实 LLM：text_parse 解析、并发调用、Agent perceive/think（需 API key） |
+| `test_regressions.py` | 回归：model 配置、记忆压缩、visibility 安全、message_bus、registry 防护 |
 | `test_retry.py` | LLM 重试机制（无 tool call、不合法工具名、不合法参数） |
-| `test_bugs.py` | Bug 修复验证（model 配置、compress 空返回、visibility 安全、message_bus 字段） |
 | `test_chat_format.py` | chat 模式消息结构、截断、retry 隔离、text 模式回归 |
 | `test_engine.py` | SimulationEngine：tick 级与 Agent 级步进、规则触发、GM 注入、顺序轮换 |
+| `test_gm.py` | GM 事件注入：计划事件确定性、随机事件概率 |
 | `test_manual.py` | ManualAgent：默认 observe、通配 tick、行动执行、非法行动回退、文件错误 |
 | `test_save_load.py` | 存档往返：Agent/GMAgent to_dict/from_dict 边界、格式稳定、版本迁移入口 |
 | `test_tui_info.py` | TUI 信息格式化纯函数：工具列表、场景分节白名单、NPC 判断 |

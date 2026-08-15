@@ -1,22 +1,15 @@
 """ManualAgent 测试：默认 observe、通配 tick、行动执行、非法行动回退、文件错误。"""
 
-import asyncio
 import os
-import sys
 import tempfile
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from dotenv import load_dotenv
-
+import pytest
 from conftest import write_plan
 from core.action import ActionRegistry
 from core.actions.common import SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction
 from core.manual_agent import ManualAgent
 from scenarios.tavern import TavernScene
 from scenarios.utils import validate_agent_configs
-
-load_dotenv()
 
 SCENE = TavernScene()
 REGISTRY = ActionRegistry()
@@ -58,17 +51,15 @@ async def think(agent, world, tick):
     )
 
 
-async def run_tests():
-    print("测试 ManualAgent")
-    print("=" * 50)
-
-    # 1. 无配置 → observe
+async def test_no_config_falls_back_to_observe():
+    """无配置 → observe"""
     world, agents = await build_world()
     action = await think(agents["老巴克"], world, 1)
     assert action.action_type == "observe", action
-    print("[1] 无配置 tick → observe OK")
 
-    # 2. 通配 *
+
+async def test_wildcard_tick():
+    """通配 *：未单独配置的 tick 重复执行"""
     world, agents = await build_world({
         "老巴克": {"*": {"action_type": "speak", "content": "欢迎光临"}},
     })
@@ -76,9 +67,10 @@ async def run_tests():
     for tick in (1, 7):
         action = await think(agent, world, tick)
         assert action.action_type == "speak", action
-    print("[2] 通配 * OK")
 
-    # 3. 具体 tick 优先于通配
+
+async def test_specific_tick_overrides_wildcard():
+    """具体 tick 优先于通配"""
     world, agents = await build_world({
         "老巴克": {
             "1": {"action_type": "move", "target": "主厅"},
@@ -90,9 +82,10 @@ async def run_tests():
     assert a1.action_type == "move", a1
     a2 = await think(agent, world, 2)
     assert a2.action_type == "observe", a2
-    print("[3] 具体 tick 优先于通配 OK")
 
-    # 4. speak 执行并产生消息
+
+async def test_speak_executes_and_produces_message():
+    """speak 执行并产生消息"""
     world, agents = await build_world({
         "老巴克": {"1": {"action_type": "speak", "target": "艾莉娅", "content": "你好"}},
     })
@@ -101,9 +94,10 @@ async def run_tests():
     messages = await agent.act(action, world, REGISTRY)
     assert action.action_type == "speak", action
     assert any(m.msg_type == "speech" for m in messages), messages
-    print("[4] speak 执行 OK")
 
-    # 5. move 执行并改变位置
+
+async def test_move_executes_and_changes_location():
+    """move 执行并改变位置"""
     world, agents = await build_world({
         "雷恩": {"1": {"action_type": "move", "target": "主厅"}},
     })
@@ -111,55 +105,55 @@ async def run_tests():
     action = await think(agent, world, 1)
     await agent.act(action, world, REGISTRY)
     assert agent.location == "主厅", agent.location
-    print("[5] move 执行 OK")
 
-    # 6. 未知 action_type → observe
+
+async def test_unknown_action_type_falls_back():
+    """未知 action_type → observe"""
     world, agents = await build_world({
         "老巴克": {"1": {"action_type": "fly"}},
     })
     agent = agents["老巴克"]
     action = await think(agent, world, 1)
     assert action.action_type == "observe", action
-    print("[6] 未知 action_type 回退 OK")
 
-    # 7. 目标不可达 → observe
+
+async def test_unreachable_target_falls_back():
+    """目标不可达 → observe"""
     world, agents = await build_world({
         "雷恩": {"1": {"action_type": "move", "target": "后厨"}},
     })
     agent = agents["雷恩"]
     action = await think(agent, world, 1)
     assert action.action_type == "observe", action
-    print("[7] 不可达目标回退 OK")
 
-    # 8. whisper 非同位置 → observe
+
+async def test_whisper_cross_location_falls_back():
+    """whisper 非同位置 → observe"""
     world, agents = await build_world({
         "雷恩": {"1": {"action_type": "whisper", "target": "老巴克", "content": "嘘"}},
     })
     agent = agents["雷恩"]
     action = await think(agent, world, 1)
     assert action.action_type == "observe", action
-    print("[8] whisper 非同位置回退 OK")
 
-    # 9. 文件缺失 → FileNotFoundError
-    try:
+
+def test_missing_file_raises():
+    """文件缺失 → FileNotFoundError"""
+    with pytest.raises(FileNotFoundError):
         ManualAgent.from_config(SCENE, CFG["老巴克"], CONFIG, file_path="/nonexistent/manual.json")
-        raise AssertionError("应当抛出 FileNotFoundError")
-    except FileNotFoundError:
-        pass
-    print("[9] 文件缺失报错 OK")
 
-    # 10. JSON 格式错误 → ValueError
+
+def test_invalid_json_raises():
+    """JSON 格式错误 → ValueError"""
     fd, path = tempfile.mkstemp(suffix=".json")
     with os.fdopen(fd, "w") as f:
         f.write("{not valid json")
-    try:
+    with pytest.raises(ValueError):
         ManualAgent.from_config(SCENE, CFG["老巴克"], CONFIG, file_path=path)
-        raise AssertionError("应当抛出 ValueError")
-    except ValueError:
-        pass
-    print("[10] JSON 格式错误报错 OK")
 
-    # 11. 内容含标签文本 → 直接构造 Action，不被 parse_text 截断，params 原样保留
+
+async def test_content_with_tags_not_parsed():
+    """内容含标签文本 → 直接构造 Action，不被 parse_text 截断，params 原样保留"""
     world, agents = await build_world({
         "老巴克": {"1": {
             "action_type": "speak",
@@ -172,10 +166,3 @@ async def run_tests():
     assert action.action_type == "speak", action
     assert action.content == "甲说[/CONTENT]乙说[/ACTION]", action.content
     assert action.params == {"tone": "轻声"}, action.params
-    print("[11] 内容含标签文本 OK")
-
-    print("=" * 50)
-    print("全部 ManualAgent 测试通过")
-
-
-asyncio.run(run_tests())

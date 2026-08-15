@@ -4,6 +4,7 @@
 import asyncio
 import unittest
 from unittest.mock import patch
+
 from conftest import OFFLINE_CONFIG as CONFIG, make_response as _make_response, make_multi_response as _make_multi_response
 from llm.client import LLMClient
 from core.action import ActionRegistry
@@ -120,89 +121,31 @@ class TestLLMRetry(unittest.TestCase):
         self.assertIsNone(action)
         self.assertEqual(calls, 3)
 
-    # ── 新增：不合法的工具/参数 ──
+    # ── 不合法的工具/参数：重试一次后成功 ──
 
-    def test_invalid_tool_name_then_success(self):
-        """第一次调用不存在的工具，第二次正常 → 重试 1 次"""
-        action, calls = asyncio.run(
-            self._run(
-                _make_response("", tool_call=True, func_name="fly"),
-                _make_response("", tool_call=True, func_name="observe"),
-                None,
-                validation_context=self.base_context,
-            )
-        )
-        self.assertIsNotNone(action)
-        self.assertEqual(action.action_type, "observe")
-        self.assertEqual(calls, 2)
-
-    def test_speak_to_self_rejected(self):
-        """对自己说话 → 重试"""
-        action, calls = asyncio.run(
-            self._run(
-                _make_response("", tool_call=True, func_name="speak",
-                               func_args='{"target": "TestAgent", "content": "hi"}'),
-                _make_response("", tool_call=True, func_name="speak",
-                               func_args='{"target": "张三", "content": "hi"}'),
-                None,
-                validation_context=self.base_context,
-            )
-        )
-        self.assertIsNotNone(action)
-        self.assertEqual(action.action_type, "speak")
-        self.assertEqual(action.target, "张三")
-        self.assertEqual(calls, 2)
-
-    def test_move_to_same_location_rejected(self):
-        """移到当前位置 → 重试"""
-        action, calls = asyncio.run(
-            self._run(
-                _make_response("", tool_call=True, func_name="move",
-                               func_args='{"target": "吧台", "content": "go"}'),
-                _make_response("", tool_call=True, func_name="move",
-                               func_args='{"target": "主厅", "content": "go"}'),
-                None,
-                validation_context=self.base_context,
-            )
-        )
-        self.assertIsNotNone(action)
-        self.assertEqual(action.action_type, "move")
-        self.assertEqual(action.target, "主厅")
-        self.assertEqual(calls, 2)
-
-    def test_invalid_speak_target_then_success(self):
-        """第一次对不存在的人说话，第二次对正确的人 → 重试 1 次"""
-        action, calls = asyncio.run(
-            self._run(
-                _make_response("", tool_call=True, func_name="speak",
-                               func_args='{"target": "王五", "content": "hi"}'),
-                _make_response("", tool_call=True, func_name="speak",
-                               func_args='{"target": "张三", "content": "hi"}'),
-                None,
-                validation_context=self.base_context,
-            )
-        )
-        self.assertIsNotNone(action)
-        self.assertEqual(action.action_type, "speak")
-        self.assertEqual(action.target, "张三")
-        self.assertEqual(calls, 2)
-
-    def test_invalid_move_target_then_success(self):
-        """第一次移到不存在的位置，第二次移到正确位置 → 重试 1 次"""
-        action, calls = asyncio.run(
-            self._run(
-                _make_response("", tool_call=True, func_name="move",
-                               func_args='{"target": "后院", "content": "go"}'),
-                _make_response("", tool_call=True, func_name="move",
-                               func_args='{"target": "主厅", "content": "go"}'),
-                None,
-                validation_context=self.base_context,
-            )
-        )
-        self.assertIsNotNone(action)
-        self.assertEqual(action.action_type, "move")
-        self.assertEqual(action.target, "主厅")
-        self.assertEqual(calls, 2)
+    def test_invalid_then_success(self):
+        """非法工具/参数（不存在、对自己、原地、不存在的目标）→ 重试一次后成功"""
+        cases = [
+            ("fly", '{"internal_monologue": "测试"}', "observe", '{"internal_monologue": "测试"}', "observe", None),
+            ("speak", '{"target": "TestAgent", "content": "hi"}', "speak", '{"target": "张三", "content": "hi"}', "speak", "张三"),
+            ("move", '{"target": "吧台", "content": "go"}', "move", '{"target": "主厅", "content": "go"}', "move", "主厅"),
+            ("speak", '{"target": "王五", "content": "hi"}', "speak", '{"target": "张三", "content": "hi"}', "speak", "张三"),
+            ("move", '{"target": "后院", "content": "go"}', "move", '{"target": "主厅", "content": "go"}', "move", "主厅"),
+        ]
+        for bad_func, bad_args, good_func, good_args, exp_type, exp_target in cases:
+            with self.subTest(bad_func=bad_func, bad_args=bad_args):
+                action, calls = asyncio.run(
+                    self._run(
+                        _make_response("", tool_call=True, func_name=bad_func, func_args=bad_args),
+                        _make_response("", tool_call=True, func_name=good_func, func_args=good_args),
+                        None,
+                        validation_context=self.base_context,
+                    )
+                )
+                self.assertIsNotNone(action)
+                self.assertEqual(action.action_type, exp_type)
+                self.assertEqual(action.target, exp_target)
+                self.assertEqual(calls, 2)
 
     def test_invalid_params_exhausted(self):
         """三次参数都不合法 → 返回 None"""

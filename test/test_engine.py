@@ -1,25 +1,19 @@
 """SimulationEngine 测试：tick 级与 Agent 级步进、规则触发、GM 注入、顺序轮换。"""
 
-import asyncio
 import os
-import sys
 import tempfile
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from dotenv import load_dotenv
 
 from conftest import write_plan
 from core.action import ActionRegistry
+from core.agent import Agent
 from core.engine import SimulationEngine
 from core.gm import GMAgent
 from core.logger import SimLogger
 from core.manual_agent import ManualAgent
 from core.rules import RuleEngine
+from memory.memory import AgentMemory
 from scenarios.tavern import TavernScene
 from scenarios.utils import validate_agent_configs
-
-load_dotenv()
 
 SCENE = TavernScene()
 REGISTRY = ActionRegistry()
@@ -77,11 +71,8 @@ async def build_engine(plans: dict | None = None, rotate_order: bool = False) ->
     return engine, world, logger
 
 
-async def run_tests():
-    print("测试 SimulationEngine")
-    print("=" * 50)
-
-    # 1. run_tick 完整执行：所有 Agent 行动、规则触发（酒馆辱骂降信任）
+async def test_run_tick_full_execution_with_rules():
+    """run_tick 完整执行：所有 Agent 行动、规则触发（酒馆辱骂降信任）"""
     engine, world, logger = await build_engine({
         "老巴克": {"1": {"action_type": "speak", "target": "艾莉娅", "content": "闭嘴，蠢货"}},
     })
@@ -94,9 +85,10 @@ async def run_tests():
     assert trust == -1, trust  # 初始 1 → -2 → -1
     assert world.agents["艾莉娅"].states["情绪"] == "愤怒", world.agents["艾莉娅"].states
     logger.close()
-    print("[1] run_tick 完整执行 + 规则触发 OK")
 
-    # 2. Agent 级步进：begin_tick → step_agent 逐个返回 → None → end_tick
+
+async def test_agent_level_steps_then_engine_reusable():
+    """Agent 级步进：begin_tick → step_agent 逐个返回 → None → end_tick；引擎可复用"""
     engine, world, logger = await build_engine()
     await engine.begin_tick(2)
     assert engine.next_agent == world.action_order[0]
@@ -112,26 +104,29 @@ async def run_tests():
     actions = await engine.run_tick(3)
     assert set(actions) == set(world.action_order)
     logger.close()
-    print("[2] Agent 级步进 + 引擎复用 OK")
 
-    # 3. GM 计划事件注入（tick 3 酒馆闷雷）
+
+async def test_gm_scheduled_event_injected():
+    """GM 计划事件注入（tick 3 酒馆闷雷）"""
     engine, world, logger = await build_engine()
     await engine.begin_tick(3)
     assert any("闷雷" in e for e in world.event_log), world.event_log
     assert world.environment["壁炉旁"].get("火焰大小") == "旺盛"
     await engine.end_tick()
     logger.close()
-    print("[3] GM 计划事件注入 OK")
 
-    # 4. rotate_order 轮换行动顺序
+
+async def test_rotate_order_rotates_action_order():
+    """rotate_order 轮换行动顺序"""
     engine, world, logger = await build_engine(rotate_order=True)
     original = list(world.action_order)
     await engine.run_tick(4)
     assert world.action_order == original[1:] + original[:1], world.action_order
     logger.close()
-    print("[4] rotate_order 轮换 OK")
 
-    # 5. begin_tick 未调用就 step_agent → RuntimeError
+
+async def test_step_without_begin_tick_raises():
+    """begin_tick 未调用就 step_agent → RuntimeError"""
     engine, world, logger = await build_engine()
     try:
         await engine.step_agent()
@@ -139,9 +134,10 @@ async def run_tests():
     except RuntimeError:
         pass
     logger.close()
-    print("[5] 未 begin_tick 步进报错 OK")
 
-    # 6. move 后位置索引一致（MoveAction 走 world.move_character 增量维护）
+
+async def test_move_keeps_location_index_consistent():
+    """move 后位置索引一致（MoveAction 走 world.move_character 增量维护）"""
     engine, world, logger = await build_engine({
         "雷恩": {"1": {"action_type": "move", "target": "主厅"}},
     })
@@ -150,12 +146,10 @@ async def run_tests():
     assert "雷恩" in world.get_agents_in_location("主厅"), world.get_agents_in_location("主厅")
     assert "雷恩" not in world.get_agents_in_location("角落"), world.get_agents_in_location("角落")
     logger.close()
-    print("[6] move 后位置索引一致 OK")
 
-    # 7. update_relationship 通用关系属性操作：增量夹取、无界赋值、未知角色 no-op
-    from core.agent import Agent
-    from memory.memory import AgentMemory
 
+def test_update_relationship_generalized():
+    """update_relationship 通用关系属性操作：增量夹取、无界赋值、未知角色 no-op"""
     mem = AgentMemory(name="测试", short_limit=10, compress_threshold=30)
     rel_agent = Agent(
         name="测试", role="测试角色", personality="p", goal="g", location="主厅",
@@ -171,10 +165,3 @@ async def run_tests():
     assert rel_agent.relationships["乙"]["impression"] == "新印象"
     rel_agent.update_relationship("不存在", {"trust": 1})
     assert rel_agent.relationships["乙"]["trust"] == 5, rel_agent.relationships["乙"]
-    print("[7] update_relationship 增量/夹取/无界赋值/no-op OK")
-
-    print("=" * 50)
-    print("全部 SimulationEngine 测试通过")
-
-
-asyncio.run(run_tests())

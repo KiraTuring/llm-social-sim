@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""测试 Bug 1-4 修复: model 硬编码 / compress 空返回 / visibility 安全 / message_bus 字段"""
+"""回归测试：model 配置 / 记忆压缩 / visibility 安全 / message_bus / registry 防护"""
 
 import asyncio
 import unittest
@@ -13,8 +13,8 @@ from memory.memory import AgentMemory
 from scenarios.base import Scene
 
 
-class TestBug1ModelConfig(unittest.TestCase):
-    """Bug 1: llm/client.py model 应从 config 读取，而非硬编码"""
+class TestModelConfig(unittest.TestCase):
+    """回归：llm/client.py model 应从 config 读取，而非硬编码"""
 
     def setUp(self):
         config = make_llm_config(
@@ -59,9 +59,16 @@ class TestBug1ModelConfig(unittest.TestCase):
             _, kwargs = async_mock.call_args
             self.assertEqual(kwargs["model"], "openai/gpt-4o")
 
+    def test_model_with_slash_used_as_is(self):
+        """model 已包含 / 时不做拼接"""
+        config = make_llm_config(model="deepseek/deepseek-chat")
+        from llm.client import LLMClient
+        client = LLMClient(config, logger=None)
+        self.assertEqual(client._model_str, "deepseek/deepseek-chat")
 
-class TestBug2CompressNoop(unittest.TestCase):
-    """Bug 2: memory.compress() 暂不调用 LLM"""
+
+class TestCompressNoop(unittest.TestCase):
+    """回归：memory.compress() 暂不调用 LLM"""
 
     def test_compress_returns_without_calling(self):
         """compress() 不应调用任何外部方法，直接返回"""
@@ -83,8 +90,8 @@ class TestBug2CompressNoop(unittest.TestCase):
         self.assertIsNone(result)
 
 
-class TestBug3VisibilitySafe(unittest.TestCase):
-    """Bug 3: WorldState 默认 visible_locations 为自身"""
+class TestVisibilitySafe(unittest.TestCase):
+    """回归：WorldState 默认 visible_locations 为自身"""
 
     def test_world_default_visible_locations(self):
         """WorldState 默认 get_visible_locations 应只返回自身"""
@@ -140,23 +147,18 @@ class TestBug3VisibilitySafe(unittest.TestCase):
         self.assertEqual(w.get_visible_locations("不存在"), ["不存在"])
 
 
-class TestBug4MessageBusField(unittest.TestCase):
-    """Bug 4: message_bus 是 WorldState 的 dataclass 字段"""
+class TestMessageBusField(unittest.TestCase):
+    """回归：message_bus 是 WorldState 的 dataclass 字段"""
 
-    def test_message_bus_default_none(self):
-        """WorldState 默认 message_bus = None"""
+    def test_message_bus_lifecycle(self):
+        """默认 None → 可赋值为 MessageBus → init_world 自动设置"""
         w = WorldState()
         self.assertIsNone(w.message_bus)
 
-    def test_message_bus_can_be_set(self):
-        """message_bus 可赋值为 MessageBus 实例"""
-        w = WorldState()
         bus = MessageBus()
         w.message_bus = bus
         self.assertIs(w.message_bus, bus)
 
-    def test_message_bus_from_init_world(self):
-        """Scene.init_world() 设置 message_bus"""
         class TestScene(Scene):
             name = "test"
             locations = ["a"]
@@ -167,14 +169,6 @@ class TestBug4MessageBusField(unittest.TestCase):
         world = TestScene().init_world()
         self.assertIsNotNone(world.message_bus)
         self.assertIsInstance(world.message_bus, MessageBus)
-
-
-    def test_model_with_slash_used_as_is(self):
-        """model 已包含 / 时不做拼接"""
-        config = make_llm_config(model="deepseek/deepseek-chat")
-        from llm.client import LLMClient
-        client = LLMClient(config, logger=None)
-        self.assertEqual(client._model_str, "deepseek/deepseek-chat")
 
 
 class TestMemoryCompression(unittest.TestCase):
