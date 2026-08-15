@@ -5,6 +5,7 @@ import asyncio
 import unittest
 from unittest.mock import patch, MagicMock, AsyncMock
 
+from conftest import make_llm_config
 from core.world import WorldState
 from core.message import MessageBus
 from core.action import ActionRegistry
@@ -16,13 +17,11 @@ class TestBug1ModelConfig(unittest.TestCase):
     """Bug 1: llm/client.py model 应从 config 读取，而非硬编码"""
 
     def setUp(self):
-        config = {
-            "provider": "openai",
-            "model": "gpt-4o",
-            "base_url": "https://api.openai.com/v1",
-            "api_key": "test_key",
-            "response_mode": "tool_call",
-        }
+        config = make_llm_config(
+            provider="openai",
+            model="gpt-4o",
+            base_url="https://api.openai.com/v1",
+        )
         from llm.client import LLMClient
         self.client = LLMClient(config, logger=None)
 
@@ -172,13 +171,7 @@ class TestBug4MessageBusField(unittest.TestCase):
 
     def test_model_with_slash_used_as_is(self):
         """model 已包含 / 时不做拼接"""
-        config = {
-            "provider": "deepseek",
-            "model": "deepseek/deepseek-chat",
-            "base_url": "https://api.deepseek.com/v1",
-            "api_key": "test_key",
-            "response_mode": "tool_call",
-        }
+        config = make_llm_config(model="deepseek/deepseek-chat")
         from llm.client import LLMClient
         client = LLMClient(config, logger=None)
         self.assertEqual(client._model_str, "deepseek/deepseek-chat")
@@ -302,13 +295,7 @@ class TestActionRegistryNoneGuard(unittest.TestCase):
 
     def test_call_with_none_registry_returns_none(self):
         """action_registry=None 时 call 应返回 (None, None)"""
-        config = {
-            "provider": "deepseek",
-            "model": "deepseek-chat",
-            "base_url": "https://api.deepseek.com/v1",
-            "api_key": "test_key",
-            "response_mode": "tool_call",
-        }
+        config = make_llm_config()
         from llm.client import LLMClient
         client = LLMClient(config, logger=None)
 
@@ -325,13 +312,7 @@ class TestActionRegistryNoneGuard(unittest.TestCase):
 
     def test_call_with_none_in_text_mode(self):
         """text_parse 模式下 action_registry=None 也应防护"""
-        config = {
-            "provider": "deepseek",
-            "model": "deepseek-chat",
-            "base_url": "https://api.deepseek.com/v1",
-            "api_key": "test_key",
-            "response_mode": "text_parse",
-        }
+        config = make_llm_config(response_mode="text_parse")
         from llm.client import LLMClient
         client = LLMClient(config, logger=None)
 

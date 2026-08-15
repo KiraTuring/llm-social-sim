@@ -45,9 +45,11 @@ test/           测试
 
 ## 测试
 
-测试文件: `test/*.py`（`python3 -m pytest` 运行，配置见 `pytest.ini` 的 `asyncio_mode=auto`）
+测试文件: `test/*.py`（`python3 -m pytest` 运行，配置见 `pytest.ini`）
 
-其中 `test_model.py`、`test_agent.py`、`test_gm.py` 需要 `.env` 文件中的 `DEEPSEEK_API_KEY`（真实调用 LLM）；其余测试 mock `litellm`，离线可跑。
+- **离线集（默认）**: `pytest -q` 一键运行全部离线测试；`test_model.py`、`test_agent.py`、`test_gm.py` 带 `llm` 标记（需 `.env` 中的 `DEEPSEEK_API_KEY` 真实调用），默认跳过
+- **在线集**: `pytest -m llm` 运行需要 API key 的测试
+- 共享脚手架在 `test/conftest.py`（离线配置、fake litellm 响应、手动计划写入），pytest 与脚本式测试共用
 
 | 测试文件 | 内容 |
 |---------|------|

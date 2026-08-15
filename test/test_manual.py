@@ -1,7 +1,6 @@
 """ManualAgent 测试：默认 observe、通配 tick、行动执行、非法行动回退、文件错误。"""
 
 import asyncio
-import json
 import os
 import sys
 import tempfile
@@ -10,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from dotenv import load_dotenv
 
+from conftest import write_plan
 from core.action import ActionRegistry
 from core.actions.common import SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction
 from core.manual_agent import ManualAgent
@@ -35,13 +35,6 @@ CONFIG = {
 }
 
 CFG = {c["name"]: c for c in SCENE.agents}
-
-
-def write_plan(plan: dict) -> str:
-    fd, path = tempfile.mkstemp(suffix=".json")
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump(plan, f, ensure_ascii=False)
-    return path
 
 
 async def build_world(plans: dict | None = None) -> tuple:

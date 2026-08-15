@@ -4,97 +4,14 @@
 import asyncio
 import unittest
 from unittest.mock import patch
+from conftest import OFFLINE_CONFIG as CONFIG, make_response as _make_response, make_multi_response as _make_multi_response
 from llm.client import LLMClient
 from core.action import ActionRegistry
 from core.actions.common import SpeakAction, ObserveAction, MoveAction
 from core.gm import GMAgent
 
-CONFIG = {
-    "llm": {
-        "provider": "deepseek",
-        "model": "deepseek-chat",
-        "base_url": "https://api.deepseek.com/v1",
-        "api_key": "test_key",
-        "response_mode": "tool_call",
-    },
-    "agent": {
-        "prompt_format": "text",
-        "memory_short_limit": 10,
-        "memory_compress_threshold": 30,
-        "content_max_length": 200,
-        "inbox_limit": 5,
-    },
-    "gm": {
-        "prompt_format": "text",
-        "chat_history_max_messages": 40,
-        "use_llm": False,
-        "random_event_chance": 0.0,
-        "llm_event_chance": 0.0,
-        "message_limit": 5,
-    },
-}
-
-
-def _make_response(text_content: str, tool_call: bool, func_name: str = "observe", func_args: str = '{"internal_monologue": "测试"}'):
-    """构造模拟的 litellm 响应，可自定义工具名和参数"""
-    class FakeFunction:
-        name = func_name
-        arguments = func_args
-
-    class FakeMessage:
-        content = text_content
-        tool_calls = None
-
-    if tool_call:
-        FakeMessage.tool_calls = [type("FakeToolCall", (), {
-            "id": f"call_test_{func_name}",
-            "type": "function",
-            "function": FakeFunction(),
-        })()]
-
-    class FakeChoice:
-        message = FakeMessage()
-
-    class FakeResponse:
-        choices = [FakeChoice()]
-
-        def model_dump_json(self):
-            return '{"mock": true}'
-
-    return FakeResponse()
-
-
-def _make_multi_response(calls):
-    """构造含多个 tool call 的模拟响应。calls: [(func_name, func_args), ...]"""
-    class FakeFunction:
-        def __init__(self, name, arguments):
-            self.name = name
-            self.arguments = arguments
-
-    class FakeToolCall:
-        def __init__(self, name, arguments):
-            self.id = f"call_{name}_{id(self)}"
-            self.type = "function"
-            self.function = FakeFunction(name, arguments)
-
-    class FakeMessage:
-        content = ""
-        tool_calls = [FakeToolCall(n, a) for n, a in calls]
-
-    class FakeChoice:
-        message = FakeMessage()
-
-    class FakeResponse:
-        choices = [FakeChoice()]
-
-        def model_dump_json(self):
-            return '{"mock": true}'
-
-    return FakeResponse()
-
 
 class TestLLMRetry(unittest.TestCase):
-
     def setUp(self):
         config = {
             "provider": "deepseek",

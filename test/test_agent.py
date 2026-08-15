@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import pytest
 from dotenv import load_dotenv
 
 from core.agent import Agent
@@ -31,6 +32,7 @@ class TestSpeakAction(ActionSpec):
         return [msg]
 
 
+@pytest.mark.llm
 async def test_agent():
     """测试 Agent perceive → think → act 流程"""
 

@@ -5,6 +5,7 @@ import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from conftest import make_response
 from core.agent import Agent
 from core.action import ActionRegistry, ActionSpec, Action
 from core.message import Message, MessageBus
@@ -28,31 +29,12 @@ class _DummyAction(ActionSpec):
 
 
 def _make_llm_response(content: str = "", tool_call: bool = True):
-    """模拟 litellm.acompletion 返回"""
-    class FakeFunction:
-        name = "speak"
-        arguments = '{"target": "张三", "internal_monologue": "嗯", "content": "你好"}'
-
-    tc = None
-    if tool_call:
-        tc = [type("FakeToolCall", (), {
-            "id": "call_test_01",
-            "type": "function",
-            "function": FakeFunction(),
-        })()]
-
-    FakeMessage = type("FakeMessage", (), {"content": content, "tool_calls": tc})
-
-    class FakeChoice:
-        message = FakeMessage()
-
-    class FakeResponse:
-        choices = [FakeChoice()]
-
-        def model_dump_json(self):
-            return '{"mock": true}'
-
-    return FakeResponse()
+    """模拟 litellm.acompletion 返回（固定 speak 工具，参数与历史实现一致）"""
+    return make_response(
+        content, tool_call,
+        func_name="speak",
+        func_args='{"target": "张三", "internal_monologue": "嗯", "content": "你好"}',
+    )
 
 
 def _make_agent(prompt_format: str = "chat") -> Agent:

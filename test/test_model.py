@@ -3,6 +3,7 @@
 
 import asyncio
 import os
+import pytest
 from dotenv import load_dotenv
 from llm.client import LLMClient
 from core.action import ActionSpec, ActionRegistry
@@ -19,6 +20,7 @@ class TestSpeakAction(ActionSpec):
         return []
 
 
+@pytest.mark.llm
 async def test_model():
     """测试模型的 Action 解析能力"""
 

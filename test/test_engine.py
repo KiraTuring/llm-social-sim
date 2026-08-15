@@ -1,7 +1,6 @@
 """SimulationEngine 测试：tick 级与 Agent 级步进、规则触发、GM 注入、顺序轮换。"""
 
 import asyncio
-import json
 import os
 import sys
 import tempfile
@@ -10,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from dotenv import load_dotenv
 
+from conftest import write_plan
 from core.action import ActionRegistry
 from core.engine import SimulationEngine
 from core.gm import GMAgent
@@ -46,13 +46,6 @@ CONFIG = {
     "simulation": {"rotate_order": False},
     "logging": {"level": "INFO"},
 }
-
-
-def write_plan(plan: dict) -> str:
-    fd, path = tempfile.mkstemp(suffix=".json")
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump(plan, f, ensure_ascii=False)
-    return path
 
 
 async def build_engine(plans: dict | None = None, rotate_order: bool = False) -> tuple:

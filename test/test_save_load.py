@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from dotenv import load_dotenv
 
+from conftest import write_plan
 from core.action import ActionRegistry
 from core.agent import Agent
 from core.gm import GMAgent
@@ -52,13 +53,6 @@ TOP_LEVEL_KEYS = {
     "npcs",
 }
 GM_KEYS = {"scheduled_events", "random_events", "use_llm", "history"}
-
-
-def write_plan(plan: dict) -> str:
-    fd, path = tempfile.mkstemp(suffix=".json")
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump(plan, f, ensure_ascii=False)
-    return path
 
 
 def build_world(plan_path: str):

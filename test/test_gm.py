@@ -1,11 +1,13 @@
 """测试 GM Agent 事件注入。"""
 
 import asyncio
+import pytest
 from core.gm import GMAgent
 from core.world import WorldState
 from core.message import MessageBus
 
 
+@pytest.mark.llm
 async def test_gm():
     """测试 GM Agent 事件注入"""
 
