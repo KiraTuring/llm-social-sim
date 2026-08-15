@@ -218,9 +218,14 @@ class Agent(Character):
         return prompt
 
     async def perceive(self, world: "WorldState", llm_client: "LLMClient | None" = None) -> str:
-        """感知：收集消息 + 环境 + 记忆"""
+        """感知：收集消息 + 环境 + 记忆。
+
+        text 模式先在 ingest 前快照旧记忆，避免同一条 inbox 消息同时出现在
+        「你最近记得的事」和「你得到的新信息」两个段落中。
+        """
+        memory_context = self.memory.get_context() if self.prompt_format == "text" else None
         inbox_lines = self._ingest_inbox(world)
-        result = self._build_context(world, inbox_lines)
+        result = self._build_context(world, inbox_lines, memory_context=memory_context)
         if self.memory._compress_needed and llm_client:
             await self._maybe_compress(llm_client)
         return result
@@ -244,8 +249,14 @@ class Agent(Character):
         world.message_bus.clear_inbox(self.name)
         return lines
 
-    def _build_context(self, world: "WorldState", inbox_lines: list[str]) -> str:
-        """组装感知上下文 prompt：环境 → 状态 → 记忆 → 新信息 → 上一行动。"""
+    def _build_context(
+        self, world: "WorldState", inbox_lines: list[str], memory_context: str | None = None
+    ) -> str:
+        """组装感知上下文 prompt：环境 → 状态 → 记忆 → 新信息 → 上一行动。
+
+        memory_context 由 perceive() 在 ingest inbox 之前快照传入；
+        不传时回退到当前 memory.get_context()（保留直接调用 _build_context 的兼容性）。
+        """
         parts = []
 
         location_agents = world.get_characters_in_location(self.location)
@@ -264,9 +275,11 @@ class Agent(Character):
         parts.append(f"【你的状态】\n{state_str}")
 
         if self.prompt_format == "text":
-            memory_context = self.memory.get_context()
-            if memory_context:
-                parts.append(memory_context)
+            context_to_use = memory_context
+            if context_to_use is None:
+                context_to_use = self.memory.get_context()
+            if context_to_use:
+                parts.append(context_to_use)
 
         if inbox_lines:
             parts.append("【你得到的新信息】\n" + "\n".join(inbox_lines))

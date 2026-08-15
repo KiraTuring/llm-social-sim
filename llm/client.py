@@ -214,8 +214,10 @@ class LLMClient:
         """校验并执行一次响应中的 tool calls。
 
         返回 (status, payload)：
-        - ("success", actions)：全部通过，配对消息已追加到 messages
-        - ("retry", feedback)：需要重试的反馈文本（由重试循环追加）
+        - ("success", actions)：全部通过；或同批已执行部分工具后遇到非法工具
+          （已执行结果与失败工具的错误信息已配对写入 messages，GM 的 ReAct
+          循环下一轮会看到这些结果，不会盲目重试导致重复执行）
+        - ("retry", feedback)：尚未产生副作用，需要重试的反馈文本（由重试循环追加）
         - ("fallback", None)：重试耗尽，调用方返回 fallback
         """
         actions = []
@@ -231,6 +233,29 @@ class LLMClient:
                     error = action_spec.validate_params(params, validation_context)
 
                 if error:
+                    # 同批前面的工具已经执行过（如 npc_add 已生效），此时整体重试
+                    # 会让模型把已执行的工具再执行一遍。改为把已执行结果和当前失败
+                    # 信息配对写入 messages 后返回 success，让 ReAct 循环进入下一轮。
+                    if execute_action and executed:
+                        self._append_executed_tool_messages(
+                            tool_calls=tool_calls,
+                            choice=choice,
+                            executed=executed,
+                            messages=messages,
+                            failed_tool_call=tool_call,
+                            error=error,
+                        )
+                        self._log_partial_tool_call_error(
+                            error=error,
+                            raw_response=raw_response,
+                            tool_schemas=tool_schemas,
+                            messages=messages,
+                            system_prompt=system_prompt,
+                            agent_name=agent_name,
+                            tick=tick,
+                        )
+                        return "success", actions
+
                     return self._handle_tool_call_error(
                         error,
                         f"{agent_name} 参数错误，重试中 ({retry + 1}/{max_retries}): {error}",
@@ -250,11 +275,30 @@ class LLMClient:
                 # 校验通过后立即执行（若提供回调），使前序工具的副作用
                 # （如 npc_add 修改 world）对后续 tool call 的校验可见。
                 # 结果暂存，等全部工具校验通过后统一追加 assistant(tool_calls)+tool
-                # 消息——保证 assistant 声明的每个 tool_call_id 都被 tool 消息配对，
-                # 中途校验失败时不会残留未配对的 assistant(tool_calls)。
+                # 消息——保证 assistant 声明的每个 tool_call_id 都被 tool 消息配对。
                 if execute_action:
                     executed.append((tool_call, execute_action(action)))
             except Exception as e:
+                if execute_action and executed:
+                    self._append_executed_tool_messages(
+                        tool_calls=tool_calls,
+                        choice=choice,
+                        executed=executed,
+                        messages=messages,
+                        failed_tool_call=tool_call,
+                        error=f"解析参数失败: {e}",
+                    )
+                    self._log_partial_tool_call_error(
+                        error=f"解析参数失败: {e}",
+                        raw_response=raw_response,
+                        tool_schemas=tool_schemas,
+                        messages=messages,
+                        system_prompt=system_prompt,
+                        agent_name=agent_name,
+                        tick=tick,
+                    )
+                    return "success", actions
+
                 return self._handle_tool_call_error(
                     f"解析参数失败: {e}",
                     f"解析 tool call 失败: {agent_name} | Tick: {tick} | {e}",
@@ -263,27 +307,77 @@ class LLMClient:
                 )
 
         if execute_action and executed:
-            tc_list = [{
-                "id": tc.id,
-                "type": "function",
-                "function": {
-                    "name": tc.function.name,
-                    "arguments": tc.function.arguments,
-                },
-            } for tc in tool_calls]
-            messages.append({
-                "role": "assistant",
-                "content": choice.message.content or "",
-                "tool_calls": tc_list,
-            })
-            for tc, result in executed:
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": result or f"'{tc.function.name}' 执行完成",
-                })
+            self._append_executed_tool_messages(
+                tool_calls=tool_calls,
+                choice=choice,
+                executed=executed,
+                messages=messages,
+            )
 
         return "success", actions
+
+    def _append_executed_tool_messages(
+        self,
+        tool_calls,
+        choice,
+        executed,
+        messages,
+        failed_tool_call=None,
+        error: str | None = None,
+    ) -> None:
+        """把一次响应中的工具执行结果按 assistant(tool_calls)+tool 消息对追加到 messages。
+
+        所有 assistant 声明的 tool_call_id 都会被配对：已执行工具用执行结果，
+        校验/解析失败的工具用错误信息作为 tool 消息内容。
+        """
+        tc_list = [{
+            "id": tc.id,
+            "type": "function",
+            "function": {
+                "name": tc.function.name,
+                "arguments": tc.function.arguments,
+            },
+        } for tc in tool_calls]
+        messages.append({
+            "role": "assistant",
+            "content": choice.message.content or "",
+            "tool_calls": tc_list,
+        })
+        for tc, result in executed:
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": result or f"'{tc.function.name}' 执行完成",
+            })
+        if failed_tool_call is not None:
+            messages.append({
+                "role": "tool",
+                "tool_call_id": failed_tool_call.id,
+                "content": f"工具执行失败: {error}",
+            })
+
+    def _log_partial_tool_call_error(
+        self,
+        error: str,
+        raw_response,
+        tool_schemas,
+        messages,
+        system_prompt,
+        agent_name,
+        tick,
+    ) -> None:
+        """部分执行后的工具校验/解析失败：记录 warning 与 LLM 调用日志。"""
+        self._status(
+            "warning",
+            f"{agent_name} 同一响应中部分工具已执行后遇到非法工具，"
+            f"已把执行结果与错误反馈给模型继续下一轮: {error}",
+        )
+        if self.logger:
+            self.logger.log_llm_call(
+                agent_name=agent_name, tick=tick, mode="tool_call",
+                system_prompt=system_prompt, messages=messages,
+                schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
+            )
 
     def _handle_tool_call_error(
         self,

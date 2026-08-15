@@ -440,6 +440,27 @@ class TestTextModeUnchanged(unittest.TestCase):
             agent.memory._short_term,
         )
 
+    def test_perceive_does_not_duplicate_inbox_in_memory_section(self):
+        """text 模式：inbox 消息只出现在「你得到的新信息」，不再重复出现在「你最近记得的事」"""
+        agent = _make_agent("text")
+        agent.memory.add("旧的记忆", tick=1)
+
+        world = WorldState(tick=2, locations=["主厅"])
+        world.message_bus = MessageBus()
+        world.agents["测试"] = agent
+        world.message_bus.send(Message(
+            sender="张三", recipients=["测试"], target="测试",
+            content="你好，测试", msg_type="speech", tick=2,
+        ))
+
+        context = asyncio.run(agent.perceive(world))
+
+        # 旧记忆仍在；新 inbox 消息只出现一次（新信息段落），
+        # 不会同时出现在 ingest 后的记忆段落。
+        self.assertIn("【你最近记得的事】", context)
+        self.assertIn("旧的记忆", context)
+        self.assertEqual(context.count("你好，测试"), 1)
+
 
 class TestPendingUserMsgStale(unittest.TestCase):
     """极端情况：act 失败后 _pending_user_msg 的清理"""

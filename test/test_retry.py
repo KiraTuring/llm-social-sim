@@ -192,6 +192,57 @@ class TestLLMRetry(unittest.TestCase):
         self.assertEqual(len(actions), 2)
         self.assertEqual(calls, 1)
 
+    async def _run_partial_execution(self, response):
+        """返回 (actions, call_count, executed, messages)，模拟 GM 工具执行。"""
+        executed = []
+        messages = [{"role": "user", "content": "hello"}]
+        call_count = 0
+
+        async def fake_acompletion(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            return response
+
+        with patch("litellm.acompletion", new=fake_acompletion):
+            _, actions = await self.client.call_multi(
+                system_prompt="测试",
+                messages=messages,
+                action_registry=self.registry,
+                agent_name="GM",
+                tick=1,
+                allow_no_tool=True,
+                execute_action=lambda action: executed.append(action.action_type) or f"执行了{action.action_type}",
+            )
+        return actions, call_count, executed, messages
+
+    def test_gm_partial_execution_does_not_retry(self):
+        """同一响应中第 2 个工具校验失败：已执行工具不重试，错误工具不执行，消息配对完整"""
+        actions, calls, executed, messages = asyncio.run(
+            self._run_partial_execution(
+                _make_multi_response([
+                    ("observe", '{"internal_monologue": "a"}'),
+                    ("speak", '{"target": "不存在", "content": "hi"}'),
+                ]),
+            )
+        )
+
+        # 不再整体重试：只调用一次 LLM
+        self.assertEqual(calls, 1)
+        # 只返回已执行成功的工具
+        self.assertEqual(len(actions), 1)
+        self.assertEqual(actions[0].action_type, "observe")
+        # 已执行工具恰好执行一次，非法工具未执行
+        self.assertEqual(executed, ["observe"])
+        # 消息配对完整：assistant 声明 2 个 tool_call_id，2 个 tool 消息分别配对
+        assistant = [m for m in messages if m.get("role") == "assistant" and m.get("tool_calls")]
+        self.assertEqual(len(assistant), 1)
+        tool_ids = [tc["id"] for tc in assistant[0]["tool_calls"]]
+        self.assertEqual(len(tool_ids), 2)
+        tool_messages = [m for m in messages if m.get("role") == "tool"]
+        self.assertEqual({m["tool_call_id"] for m in tool_messages}, set(tool_ids))
+        self.assertTrue(any("执行了observe" in m["content"] for m in tool_messages))
+        self.assertTrue(any("不存在" in m["content"] for m in tool_messages))
+
 
 class TestGMChainTools(unittest.TestCase):
     """GM 同 tick 链式工具：npc_add 后 npc_speak 必须能看到新 NPC（校验上下文实时刷新）。"""
