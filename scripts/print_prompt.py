@@ -31,9 +31,13 @@ def main():
         scene.setup_gm(gm_registry)
         gm = GMAgent.from_config(scene, config, gm_registry)
 
+        registry = ActionRegistry()
+        scene.setup(registry)
         world = scene.init_world()
         for cfg in scene.agents:
-            world.agents[cfg["name"]] = Agent.from_config(scene, cfg, config)
+            world.agents[cfg["name"]] = Agent.from_config(
+                scene, cfg, config, registry=registry
+            )
 
         sep = "=" * 60
         print(f"\n{sep}")
@@ -56,9 +60,9 @@ def main():
         sys.exit(1)
 
     for cfg in agents:
-        agent = Agent.from_config(scene, cfg, config)
+        agent = Agent.from_config(scene, cfg, config, registry=registry)
 
-        prompt = agent.build_system_prompt(registry)
+        prompt = agent.build_system_prompt()
 
         sep = "=" * 60
         print(f"\n{sep}")

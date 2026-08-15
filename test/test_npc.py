@@ -18,6 +18,8 @@ from render.tui_info import is_npc
 from scenarios._test import _TestScene
 
 SCENE = _TestScene()
+AGENT_REGISTRY = ActionRegistry()
+SCENE.setup(AGENT_REGISTRY)
 CONFIG = {
     "agent": {
         "prompt_format": "text",
@@ -40,7 +42,9 @@ CONFIG = {
 def _build_world():
     """构造含动态 NPC 的世界：在书房添加一个神秘旅人。"""
     world = SCENE.init_world()
-    world.agents["测试甲"] = Agent.from_config(SCENE, SCENE.agents[0], CONFIG)
+    world.agents["测试甲"] = Agent.from_config(
+        SCENE, SCENE.agents[0], CONFIG, registry=AGENT_REGISTRY
+    )
     world.agents["测试甲"].location = "大厅"
     world.rebuild_location_index()
     ok = world.add_npc(NPC(name="神秘旅人", location="书房", role="旅人", goal="打听消息"))
@@ -101,7 +105,7 @@ def test_hearable_agents_for_npc():
 def test_observe_sees_dynamic_npc():
     """ObserveAction 能看到动态 NPC（role/state）"""
     world = _build_world()
-    agent = Agent.from_config(SCENE, SCENE.agents[0], CONFIG)
+    agent = Agent.from_config(SCENE, SCENE.agents[0], CONFIG, registry=AGENT_REGISTRY)
     world.agents[agent.name] = agent
     # 把 agent 挪到书房与 NPC 同处，便于 observe
     MoveAction().execute(agent.name, {"target": "书房"}, world)
@@ -113,7 +117,7 @@ def test_observe_sees_dynamic_npc():
 def test_speak_whisper_validate_for_npc():
     """SpeakAction / WhisperAction 对动态 NPC 校验通过"""
     world = _build_world()
-    agent = Agent.from_config(SCENE, SCENE.agents[0], CONFIG)
+    agent = Agent.from_config(SCENE, SCENE.agents[0], CONFIG, registry=AGENT_REGISTRY)
     agent.location = "书房"
     world.agents[agent.name] = agent
     ctx = world.build_validation_context(agent.name)
@@ -222,7 +226,9 @@ def test_static_npc_scene():
     assert is_npc("测试守卫", world)
     assert not is_npc("测试甲", world)
     # 测试甲在大厅，可对书房的测试守卫说话（可见）
-    world.agents["测试甲"] = Agent.from_config(SCENE, SCENE.agents[0], CONFIG)
+    world.agents["测试甲"] = Agent.from_config(
+        SCENE, SCENE.agents[0], CONFIG, registry=AGENT_REGISTRY
+    )
     world.agents["测试甲"].location = "大厅"
     ctx = world.build_validation_context("测试甲")
     assert SpeakAction().validate_params({"target": "测试守卫", "content": "查到什么了吗"}, ctx) is None
@@ -247,7 +253,7 @@ def test_npc_save_load_roundtrip():
     gm = GMAgent.from_config(SCENE, CONFIG, gm_registry)
     tmp = os.path.join(tempfile.mkdtemp(), "npc.json")
     save_simulation_state(world, gm, "_test", SCENE.name, tmp)
-    world2, scene2, gm2 = load_simulation_state(tmp, CONFIG)
+    world2, scene2, gm2, _ = load_simulation_state(tmp, CONFIG)
     assert "神秘旅人" in world2.npcs
     assert "神秘旅人" in world2.npc_names
     assert world2.npcs["神秘旅人"].location == "书房"
@@ -269,7 +275,7 @@ def test_removed_npc_not_restored_after_load():
     gm = GMAgent.from_config(SCENE, CONFIG, gm_registry)
     tmp = os.path.join(tempfile.mkdtemp(), "npc-removed.json")
     save_simulation_state(world, gm, "_test", SCENE.name, tmp)
-    world3, scene3, gm3 = load_simulation_state(tmp, CONFIG)
+    world3, scene3, gm3, _ = load_simulation_state(tmp, CONFIG)
     assert "神秘旅人" not in world3.npcs and "神秘旅人" not in world3.npc_names
     assert "测试守卫" not in world3.npcs and "测试守卫" not in world3.npc_names
     assert world3.npc_names == set(world3.npcs.keys()), world3.npc_names

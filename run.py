@@ -63,12 +63,14 @@ def _init_world(config: dict, scene_name: str, manual_agents: list[str] | None):
         if cfg["name"] in manual_names:
             manual_file = config["simulation"].get("manual_file")
             try:
-                agent = ManualAgent.from_config(scene, cfg, config, file_path=manual_file)
+                agent = ManualAgent.from_config(
+                    scene, cfg, config, registry=registry, file_path=manual_file
+                )
             except (FileNotFoundError, ValueError) as e:
                 print(f"❌ 手动控制配置错误: {e}")
                 sys.exit(1)
         else:
-            agent = Agent.from_config(scene, cfg, config)
+            agent = Agent.from_config(scene, cfg, config, registry=registry)
         world.agents[agent.name] = agent
 
     world.action_order = [n for n in world.agents if n not in world.npc_names]
@@ -84,8 +86,7 @@ def _load_world(load_path: str, config: dict, max_ticks: int | None):
     """从存档恢复世界状态"""
     from core.save_load import load_simulation_state
 
-    world, scene, gm = load_simulation_state(load_path, config)
-    scene.setup(registry := ActionRegistry())
+    world, scene, gm, registry = load_simulation_state(load_path, config)
     start_tick = world.tick + 1
     remaining = max_ticks or config["simulation"]["max_ticks"]
     print(f"从存档恢复 [{scene.name}]，当前 tick={world.tick}，继续运行 {remaining} 个 tick\n")
@@ -180,9 +181,7 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
 
     logger, llm, rule_engine = _setup_services(config, scene, gm, world)
     renderer = _make_renderer(config, scene)
-    engine = SimulationEngine(
-        world, gm, registry, llm, rule_engine, logger, config
-    )
+    engine = SimulationEngine(world, gm, llm, rule_engine, logger, config)
 
     actual_mode = mode or config["simulation"]["mode"]
     for tick in range(start_tick, start_tick + remaining):

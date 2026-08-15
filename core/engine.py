@@ -5,7 +5,7 @@ CLI 与 TUI 共用同一个引擎，保证 GM 注入、规则触发、日志记�
 
 完整 tick（CLI / 测试用）::
 
-    engine = SimulationEngine(world, gm, registry, llm, rule_engine, logger, config)
+    engine = SimulationEngine(world, gm, llm, rule_engine, logger, config)
     actions = await engine.run_tick(tick)
 
 Agent 级步进（TUI 用，每个角色行动完即可刷新 UI）::
@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from core.action import Action, ActionRegistry
+    from core.action import Action
     from core.gm import GMAgent
     from core.message import Message
     from core.rules import RuleEngine
@@ -49,7 +49,6 @@ class SimulationEngine:
         self,
         world: "WorldState",
         gm: "GMAgent",
-        registry: "ActionRegistry",
         llm: Any,
         rule_engine: "RuleEngine",
         logger: Any,
@@ -57,7 +56,6 @@ class SimulationEngine:
     ):
         self.world = world
         self.gm = gm
-        self.registry = registry
         self.llm = llm
         self.rule_engine = rule_engine
         self.logger = logger
@@ -113,10 +111,8 @@ class SimulationEngine:
 
         context = await agent.perceive(self.world, llm_client=self.llm)
         validation_context = self.world.build_validation_context(agent_name)
-        action = await agent.think(
-            self.llm, self.registry, context, tick, validation_context
-        )
-        messages = await agent.act(action, self.world, self.registry)
+        action = await agent.think(self.llm, context, tick, validation_context)
+        messages = await agent.act(action, self.world)
 
         self.agent_actions[agent_name] = action
 

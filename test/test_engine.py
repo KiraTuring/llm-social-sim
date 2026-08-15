@@ -49,7 +49,7 @@ async def build_engine(plans: dict | None = None, rotate_order: bool = False) ->
     for name, cfg in CFG.items():
         plan = (plans or {}).get(name, {})
         agent = ManualAgent.from_config(
-            SCENE, cfg, CONFIG, file_path=write_plan({name: plan})
+            SCENE, cfg, CONFIG, registry=REGISTRY, file_path=write_plan({name: plan})
         )
         world.agents[name] = agent
     world.action_order = [n for n in world.agents if n not in world.npc_names]
@@ -67,7 +67,7 @@ async def build_engine(plans: dict | None = None, rotate_order: bool = False) ->
 
     config = dict(CONFIG)
     config["simulation"] = {"rotate_order": rotate_order}
-    engine = SimulationEngine(world, gm, REGISTRY, None, rule_engine, logger, config)
+    engine = SimulationEngine(world, gm, None, rule_engine, logger, config)
     return engine, world, logger
 
 
@@ -154,6 +154,7 @@ def test_update_relationship_generalized():
     rel_agent = Agent(
         name="测试", role="测试角色", personality="p", goal="g", location="主厅",
         relationships={"乙": {"trust": 0, "impression": ""}}, memory=mem,
+        registry=ActionRegistry(),
     )
     rel_agent.update_relationship("乙", {"trust": -2})
     assert rel_agent.relationships["乙"]["trust"] == -2, rel_agent.relationships["乙"]

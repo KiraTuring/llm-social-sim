@@ -236,7 +236,7 @@ class SimulationTuiApp(App):
         from core.engine import SimulationEngine
 
         engine = SimulationEngine(
-            self.world, self.gm, self.registry,
+            self.world, self.gm,
             self.llm, self.rule_engine, self.logger, self.config,
         )
 

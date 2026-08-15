@@ -108,11 +108,12 @@ async def test_agent_perceive_think_flow():
         location="酒馆",
         relationships={},
         memory=memory,
+        registry=registry,
     )
     world.agents[agent.name] = agent
 
     llm = LLMClient(_llm_config())
     context = await agent.perceive(world)
-    action = await agent.think(llm, registry, context)
+    action = await agent.think(llm, context)
     assert action is not None, "think 未返回 Action"
     assert action.action_type, "think 返回了空 action_type"

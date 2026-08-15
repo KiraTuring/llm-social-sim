@@ -37,8 +37,11 @@ def _make_llm_response(content: str = "", tool_call: bool = True):
     )
 
 
-def _make_agent(prompt_format: str = "chat") -> Agent:
+def _make_agent(prompt_format: str = "chat", registry: ActionRegistry | None = None) -> Agent:
     """创建一个最小 Agent（chat 模式）"""
+    if registry is None:
+        registry = ActionRegistry()
+        registry.register(_DummyAction())
     memory = AgentMemory(name="测试", short_limit=3, compress_threshold=5)
     agent = Agent(
         name="测试",
@@ -48,6 +51,7 @@ def _make_agent(prompt_format: str = "chat") -> Agent:
         location="主厅",
         relationships={"张三": {"trust": 0, "impression": ""}},
         memory=memory,
+        registry=registry,
         prompt_format=prompt_format,
     )
     return agent
@@ -113,9 +117,9 @@ class TestThinkChatMode(unittest.TestCase):
     """think() 在 chat 模式下的行为"""
 
     def setUp(self):
-        self.agent = _make_agent("chat")
         self.registry = ActionRegistry()
         self.registry.register(_DummyAction())
+        self.agent = _make_agent("chat", self.registry)
 
     def test_success_sets_pending_user_msg(self):
         """LLM 成功返回 action → 设 _pending_user_msg"""
@@ -125,7 +129,6 @@ class TestThinkChatMode(unittest.TestCase):
         with patch("litellm.acompletion", new=fake_acompletion):
             action = asyncio.run(self.agent.think(
                 llm=self._mock_llm_client(),
-                registry=self.registry,
                 context="当前环境",
                 tick=3,
             ))
@@ -143,7 +146,6 @@ class TestThinkChatMode(unittest.TestCase):
         with patch("litellm.acompletion", new=fake_acompletion):
             action = asyncio.run(self.agent.think(
                 llm=self._mock_llm_client(),
-                registry=self.registry,
                 context="当前环境",
                 tick=3,
             ))
@@ -166,7 +168,6 @@ class TestThinkChatMode(unittest.TestCase):
         with patch("litellm.acompletion", new=fake_acompletion):
             asyncio.run(self.agent.think(
                 llm=self._mock_llm_client(),
-                registry=self.registry,
                 context="t3 上下文",
                 tick=3,
             ))
@@ -197,7 +198,6 @@ class TestThinkChatMode(unittest.TestCase):
         with patch("litellm.acompletion", new=fake_acompletion):
             asyncio.run(self.agent.think(
                 llm=self._mock_llm_client(),
-                registry=self.registry,
                 context="当前环境",
                 tick=3,
             ))
@@ -214,9 +214,9 @@ class TestActChatMode(unittest.TestCase):
     """act() 在 chat 模式下的 chat_history 提交"""
 
     def setUp(self):
-        self.agent = _make_agent("chat")
         self.registry = ActionRegistry()
         self.registry.register(_DummyAction())
+        self.agent = _make_agent("chat", self.registry)
         self.world = WorldState(tick=5, locations=["主厅"])
         self.world.message_bus = MessageBus()
         self.world.agents["测试"] = self.agent
@@ -226,7 +226,7 @@ class TestActChatMode(unittest.TestCase):
         """act() 将 pending_user_msg 和 assistant 消息写入 chat_history"""
         self.agent._pending_user_msg = {"role": "user", "content": "t5 上下文", "tick": 5}
         action = Action(action_type="speak", target="张三", content="你好", params={"target": "张三", "content": "你好"})
-        asyncio.run(self.agent.act(action, self.world, self.registry))
+        asyncio.run(self.agent.act(action, self.world))
 
         self.assertEqual(len(self.agent._chat_history), 2)
         self.assertEqual(self.agent._chat_history[0]["role"], "user")
@@ -239,14 +239,14 @@ class TestActChatMode(unittest.TestCase):
         """提交后清除 _pending_user_msg"""
         self.agent._pending_user_msg = {"role": "user", "content": "t5", "tick": 5}
         action = Action(action_type="speak", target="张三", content="hi", params={"target": "张三", "content": "hi"})
-        asyncio.run(self.agent.act(action, self.world, self.registry))
+        asyncio.run(self.agent.act(action, self.world))
         self.assertIsNone(self.agent._pending_user_msg)
 
     def test_no_pending_does_nothing(self):
         """_pending_user_msg 为 None → 只提交 assistant"""
         self.agent._pending_user_msg = None
         action = Action(action_type="speak", target="张三", content="hi", params={"target": "张三", "content": "hi"})
-        asyncio.run(self.agent.act(action, self.world, self.registry))
+        asyncio.run(self.agent.act(action, self.world))
         self.assertEqual(len(self.agent._chat_history), 1)
         self.assertEqual(self.agent._chat_history[0]["role"], "assistant")
 
@@ -254,7 +254,7 @@ class TestActChatMode(unittest.TestCase):
         """assistant 消息格式: [action_type] -> target: content"""
         self.agent._pending_user_msg = {"role": "user", "content": "t5", "tick": 5}
         action = Action(action_type="speak", target="张三", content="你好世界", params={"target": "张三", "content": "你好世界"})
-        asyncio.run(self.agent.act(action, self.world, self.registry))
+        asyncio.run(self.agent.act(action, self.world))
         content = self.agent._chat_history[1]["content"]
         self.assertIn("[speak]", content)
         self.assertIn("张三", content)
@@ -386,17 +386,17 @@ class TestTextModeUnchanged(unittest.TestCase):
 
     def test_no_chat_history_in_text_mode(self):
         """act 不写入 _chat_history"""
-        agent = _make_agent("text")
+        registry = ActionRegistry()
+        registry.register(_DummyAction())
+        agent = _make_agent("text", registry)
         world = WorldState(tick=1, locations=["主厅"])
         world.message_bus = MessageBus()
         world.agents["测试"] = agent
 
         action = Action(action_type="speak", target="all", content="hi", params={})
-        registry = ActionRegistry()
-        registry.register(_DummyAction())
 
         import asyncio
-        asyncio.run(agent.act(action, world, registry))
+        asyncio.run(agent.act(action, world))
         self.assertEqual(len(agent._chat_history), 0)
 
     def test_perceive_skips_context_in_chat_mode(self):
@@ -446,9 +446,6 @@ class TestPendingUserMsgStale(unittest.TestCase):
 
     def test_stale_not_committed_if_act_throws(self):
         """act 抛出异常时不提交到 chat_history，且清除悬空的 pending 消息"""
-        agent = _make_agent("chat")
-        agent._pending_user_msg = {"role": "user", "content": "旧的上下文", "tick": 1}
-
         # 一个会抛异常的 action
         class FailingAction(ActionSpec):
             name = "fail"
@@ -460,12 +457,14 @@ class TestPendingUserMsgStale(unittest.TestCase):
 
         registry = ActionRegistry()
         registry.register(FailingAction())
+        agent = _make_agent("chat", registry)
+        agent._pending_user_msg = {"role": "user", "content": "旧的上下文", "tick": 1}
         world = WorldState(tick=2, locations=["主厅"])
         world.message_bus = MessageBus()
 
         action = Action(action_type="fail", content="", params={})
         import asyncio
-        asyncio.run(agent.act(action, world, registry))
+        asyncio.run(agent.act(action, world))
 
         self.assertEqual(len(agent._chat_history), 0)
         self.assertIsNone(agent._pending_user_msg)

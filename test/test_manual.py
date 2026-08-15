@@ -38,7 +38,7 @@ async def build_world(plans: dict | None = None) -> tuple:
     for name, cfg in CFG.items():
         plan = (plans or {}).get(name, {})
         agent = ManualAgent.from_config(
-            SCENE, cfg, CONFIG, file_path=write_plan({name: plan})
+            SCENE, cfg, CONFIG, registry=REGISTRY, file_path=write_plan({name: plan})
         )
         world.agents[name] = agent
         agents[name] = agent
@@ -47,7 +47,7 @@ async def build_world(plans: dict | None = None) -> tuple:
 
 async def think(agent, world, tick):
     return await agent.think(
-        None, REGISTRY, "", tick, world.build_validation_context(agent.name)
+        None, "", tick, world.build_validation_context(agent.name)
     )
 
 
@@ -91,7 +91,7 @@ async def test_speak_executes_and_produces_message():
     })
     agent = agents["老巴克"]
     action = await think(agent, world, 1)
-    messages = await agent.act(action, world, REGISTRY)
+    messages = await agent.act(action, world)
     assert action.action_type == "speak", action
     assert any(m.msg_type == "speech" for m in messages), messages
 
@@ -103,7 +103,7 @@ async def test_move_executes_and_changes_location():
     })
     agent = agents["雷恩"]
     action = await think(agent, world, 1)
-    await agent.act(action, world, REGISTRY)
+    await agent.act(action, world)
     assert agent.location == "主厅", agent.location
 
 
@@ -140,7 +140,10 @@ async def test_whisper_cross_location_falls_back():
 def test_missing_file_raises():
     """文件缺失 → FileNotFoundError"""
     with pytest.raises(FileNotFoundError):
-        ManualAgent.from_config(SCENE, CFG["老巴克"], CONFIG, file_path="/nonexistent/manual.json")
+        ManualAgent.from_config(
+            SCENE, CFG["老巴克"], CONFIG, registry=REGISTRY,
+            file_path="/nonexistent/manual.json",
+        )
 
 
 def test_invalid_json_raises():
@@ -149,7 +152,7 @@ def test_invalid_json_raises():
     with os.fdopen(fd, "w") as f:
         f.write("{not valid json")
     with pytest.raises(ValueError):
-        ManualAgent.from_config(SCENE, CFG["老巴克"], CONFIG, file_path=path)
+        ManualAgent.from_config(SCENE, CFG["老巴克"], CONFIG, registry=REGISTRY, file_path=path)
 
 
 async def test_content_with_tags_not_parsed():

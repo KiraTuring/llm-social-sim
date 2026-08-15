@@ -13,7 +13,7 @@
 CLI 与 TUI 共用 `SimulationEngine`，tick 主循环只维护一份，避免两套逻辑漂移：
 
 ```python
-engine = SimulationEngine(world, gm, registry, llm, rule_engine, logger, config)
+engine = SimulationEngine(world, gm, llm, rule_engine, logger, config)
 ```
 
 两种用法：
@@ -40,14 +40,14 @@ perceive() 构建的 LLM prompt 顺序：
 
 ## Agent 创建
 
-`run.py` 通过 `Agent.from_config(scene, cfg, config)` 创建 agent。存档加载时传 `saved=agent_data` 恢复运行时状态：
+`run.py` 通过 `Agent.from_config(scene, cfg, config, registry=registry)` 创建 agent（registry 由场景 `setup()` 装配后**构造注入**，运行期不再改变）。存档加载时传 `saved=agent_data` 恢复运行时状态：
 
 ```python
 # 新建 (from_config 内部根据 scene+cfg 计算 states, 新建空记忆)
-agent = Agent.from_config(scene, cfg, config)
+agent = Agent.from_config(scene, cfg, config, registry=registry)
 
 # 存档恢复 (saved 覆盖运行时字段, scene 提供 world_description/instruction 等)
-agent = Agent.from_config(scene, cfg, config, saved=agent_data)
+agent = Agent.from_config(scene, cfg, config, registry=registry, saved=agent_data)
 ```
 
 保存时所有 agent 字段由 `Agent.to_dict()` 序列化（GM 由 `GMAgent.to_dict()`，存档版本迁移入口为 `save_load._migrate()`），包括 `states`、`writable_states`、`private_states`、`last_observed_result`。

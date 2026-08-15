@@ -202,8 +202,12 @@ class TestGMChainTools(unittest.TestCase):
 
         self.scene = _TestScene()
         self.world = self.scene.init_world()
+        self.registry = ActionRegistry()
+        self.scene.setup(self.registry)
         for cfg in self.scene.agents:
-            self.world.agents[cfg["name"]] = Agent.from_config(self.scene, cfg, CONFIG)
+            self.world.agents[cfg["name"]] = Agent.from_config(
+                self.scene, cfg, CONFIG, registry=self.registry
+            )
 
         self.gm_registry = ActionRegistry(include_agent_params=False)
         self.scene.setup_gm(self.gm_registry)
@@ -264,8 +268,12 @@ class TestGMChainTools(unittest.TestCase):
 
         scene = _TestScene()
         world = scene.init_world()
+        agent_registry = ActionRegistry()
+        scene.setup(agent_registry)
         for cfg in scene.agents:
-            world.agents[cfg["name"]] = Agent.from_config(scene, cfg, chat_config)
+            world.agents[cfg["name"]] = Agent.from_config(
+                scene, cfg, chat_config, registry=agent_registry
+            )
         reg = ActionRegistry(include_agent_params=False)
         scene.setup_gm(reg)
         gm = GMAgent.from_config(scene, chat_config, reg)

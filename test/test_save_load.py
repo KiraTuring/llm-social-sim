@@ -18,6 +18,8 @@ from scenarios.tavern import TavernScene
 
 SCENE = TavernScene()
 CFG = {c["name"]: c for c in SCENE.agents}
+REGISTRY = ActionRegistry()
+SCENE.setup(REGISTRY)
 
 CONFIG = {
     "agent": {
@@ -57,10 +59,10 @@ def build_world(plan_path: str):
     for name, cfg in CFG.items():
         if name == "老巴克":
             world.agents[name] = ManualAgent.from_config(
-                SCENE, cfg, CONFIG, file_path=plan_path
+                SCENE, cfg, CONFIG, registry=REGISTRY, file_path=plan_path
             )
         else:
-            world.agents[name] = Agent.from_config(SCENE, cfg, CONFIG)
+            world.agents[name] = Agent.from_config(SCENE, cfg, CONFIG, registry=REGISTRY)
     world.action_order = list(world.agents)
     world.tick = 3
     world.add_event("屋外传来马蹄声")
@@ -96,7 +98,7 @@ def _save_world():
 def test_roundtrip():
     """往返一致：world/agent/gm/ManualAgent"""
     save_path, _, world, gm = _save_world()
-    world2, scene2, gm2 = load_simulation_state(save_path, CONFIG)
+    world2, scene2, gm2, _ = load_simulation_state(save_path, CONFIG)
     assert scene2.name == SCENE.name
     assert world2.tick == world.tick
     assert world2.locations == world.locations

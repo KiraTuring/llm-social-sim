@@ -90,12 +90,11 @@ class ManualAgent(Agent):
     async def think(
         self,
         llm,
-        registry: "ActionRegistry",
         context: str,
         tick: int = 0,
         validation_context: dict | None = None,
     ):
-        action = self._read_action(tick, registry, validation_context)
+        action = self._read_action(tick, self.registry, validation_context)
         if action:
             return action
 

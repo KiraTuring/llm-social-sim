@@ -62,6 +62,9 @@ def load_simulation_state(path: str, config: dict):
     display_name = data.get("scene_display", data["scene"])
     print(f"载入存档: {display_name}")
 
+    registry = ActionRegistry()
+    scene.setup(registry)
+
     world = WorldState()
     world.tick = data["tick"]
     world.apply_scene_config(scene)
@@ -82,7 +85,9 @@ def load_simulation_state(path: str, config: dict):
         restore_kwargs = {}
         if cls is ManualAgent and agent_data.get("manual_file"):
             restore_kwargs["file_path"] = agent_data["manual_file"]
-        agent = cls.from_config(scene, cfg, config, saved=agent_data, **restore_kwargs)
+        agent = cls.from_config(
+            scene, cfg, config, registry=registry, saved=agent_data, **restore_kwargs
+        )
         world.agents[name] = agent
 
     # 恢复 NPC（静态 + 运行时动态添加的），并合并进 npc_names
@@ -100,4 +105,4 @@ def load_simulation_state(path: str, config: dict):
     scene.setup_gm(gm_registry)
     gm = GMAgent.from_dict(scene, config, data["gm"], gm_registry)
 
-    return world, scene, gm
+    return world, scene, gm, registry

@@ -30,6 +30,7 @@ class Agent(Character):
         location: str,
         relationships: dict,
         memory: "AgentMemory",
+        registry: "ActionRegistry",
         content_max_length: int = 200,
         inbox_limit: int = 5,
         world_description: str = "",
@@ -45,6 +46,7 @@ class Agent(Character):
         )
         self.relationships = relationships
         self.memory = memory
+        self.registry = registry
         self.content_max_length = content_max_length
         self.inbox_limit = inbox_limit
         self.world_description = world_description
@@ -67,7 +69,7 @@ class Agent(Character):
         print(f"[{self.name}] {message}")
 
     @classmethod
-    def from_config(cls, scene, cfg, config, *, saved=None, **extra):
+    def from_config(cls, scene, cfg, config, *, registry, saved=None, **extra):
         """创建 Agent。
 
         saved=None: 全新 agent，从 scene+cfg 构建
@@ -79,6 +81,7 @@ class Agent(Character):
             role=cfg["role"],
             personality=cfg["personality"],
             goal=cfg["goal"],
+            registry=registry,
             world_description=scene.world_description,
             instruction=scene.instruction,
             inbox_limit=config["agent"].get("inbox_limit", 5),
@@ -166,12 +169,12 @@ class Agent(Character):
         """最近 limit 条记忆（渲染用，返回副本）。"""
         return self.memory.recent(limit)
 
-    def build_system_prompt(self, registry: "ActionRegistry") -> str:
+    def build_system_prompt(self) -> str:
         """构建 System Prompt"""
 
-        action_names = ", ".join(registry.get_action_names())
+        action_names = ", ".join(self.registry.get_action_names())
 
-        desc_lines = registry.describe()
+        desc_lines = self.registry.describe()
 
         relations_text = "\n".join(
             f"- {name}: " + "，".join(f"{key}: {value}" for key, value in rel.items())
@@ -320,14 +323,13 @@ class Agent(Character):
     async def think(
         self,
         llm: "LLMClient",
-        registry: "ActionRegistry",
         context: str,
         tick: int = 0,
         validation_context: dict | None = None,
     ) -> "Action":
         """思考：调用 LLM 决策"""
 
-        system_prompt = self.build_system_prompt(registry)
+        system_prompt = self.build_system_prompt()
 
         if self.prompt_format == "chat":
             messages = self._build_chat_messages(context, tick)
@@ -337,7 +339,7 @@ class Agent(Character):
         _, action = await llm.call(
             system_prompt=system_prompt,
             messages=messages,
-            action_registry=registry,
+            action_registry=self.registry,
             temperature=0.7,
             agent_name=self.name,
             tick=tick,
@@ -354,9 +356,9 @@ class Agent(Character):
 
         return action
 
-    async def act(self, action: "Action", world: "WorldState", registry: "ActionRegistry") -> list:
+    async def act(self, action: "Action", world: "WorldState") -> list:
         """执行 Action 并记录结果。返回产生的消息；执行失败返回空列表。"""
-        action_spec = registry.get(action.action_type)
+        action_spec = self.registry.get(action.action_type)
         if action_spec is None:
             self._status("warning", f"未知行动类型: {action.action_type}")
             return []
