@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from core.action import Action, ActionRegistry, format_tool_result
 from core.character import Character
 from memory.memory import AgentMemory
 
 if TYPE_CHECKING:
-    from core.action import Action, ActionRegistry
     from core.world import WorldState
     from llm.client import LLMClient
     from memory.memory import AgentMemory
@@ -342,7 +342,6 @@ class Agent(Character):
 
         if not action:
             print(f"[{self.name}] LLM 未返回 Action，使用默认")
-            from core.action import Action
 
             action = Action(action_type="observe", content="观察四周", internal_monologue="...")
 
@@ -465,7 +464,6 @@ class Agent(Character):
 
     def _tool_result_summary(self, action: "Action") -> str:
         """从 action.result 构建工具返回摘要"""
-        from core.action import format_tool_result
         return format_tool_result(action.action_type, action.result, self.content_max_length)
 
     def modify_trust(self, other: str, delta: int):

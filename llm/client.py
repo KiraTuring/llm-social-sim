@@ -143,6 +143,182 @@ class LLMClient:
         raw = (response.choices[0].message.content or "").strip()
         return JSONResult(data=_parse_json_object(raw), raw=raw)
 
+    async def _retry_loop(
+        self,
+        messages: list[dict],
+        temperature: float,
+        agent_name: str,
+        tick: int,
+        max_retries: int,
+        system_prompt: str,
+        attempt,
+        fallback_payload,
+        **request_overrides,
+    ):
+        """共享请求-重试骨架：请求 → attempt 解析/校验 → 成功/重试/fallback。
+
+        attempt(response, retry) 返回 (status, payload)：
+        - ("success", payload)：直接返回 payload
+        - ("retry", feedback)：骨架追加 assistant+user 反馈后进入下一轮
+        - ("fallback", payload)：重试耗尽，直接返回 payload
+        attempt 内部负责日志与打印；骨架只负责请求、反馈消息与循环。
+        """
+        for retry in range(max_retries + 1):
+            response = await self._acompletion_with_retry(
+                agent_name, tick, temperature,
+                model=self._model_str,
+                messages=[{"role": "system", "content": system_prompt}] + messages,
+                api_key=self.api_key,
+                api_base=self.base_url,
+                drop_params=True,
+                **request_overrides,
+            )
+            if response is None:
+                return fallback_payload
+            status, payload = attempt(response, retry)
+            if status == "success":
+                return payload
+            if status == "fallback":
+                return payload
+            self._append_feedback(messages, response.choices[0], payload)
+        return fallback_payload
+
+    @staticmethod
+    def _append_feedback(messages: list[dict], choice, feedback: str) -> None:
+        """重试反馈：追加 assistant 原文 + user 纠错消息（不污染持久历史）。"""
+        messages.append({"role": "assistant", "content": choice.message.content or ""})
+        messages.append({"role": "user", "content": feedback})
+
+    def _process_tool_calls(
+        self,
+        tool_calls,
+        choice,
+        raw_response,
+        tool_schemas,
+        action_registry,
+        validation_context,
+        execute_action,
+        messages,
+        system_prompt,
+        agent_name,
+        tick,
+        max_retries,
+        retry,
+    ):
+        """校验并执行一次响应中的 tool calls。
+
+        返回 (status, payload)：
+        - ("success", actions)：全部通过，配对消息已追加到 messages
+        - ("retry", feedback)：需要重试的反馈文本（由重试循环追加）
+        - ("fallback", None)：重试耗尽，调用方返回 fallback
+        """
+        actions = []
+        executed = []
+        for tool_call in tool_calls:
+            try:
+                params = json.loads(tool_call.function.arguments)
+                action_spec = action_registry.get(tool_call.function.name)
+                if action_spec is None:
+                    valid_names = ", ".join(action_registry.get_action_names())
+                    error = f"工具 '{tool_call.function.name}' 不存在，可用工具: {valid_names}"
+                else:
+                    error = action_spec.validate_params(params, validation_context)
+
+                if error:
+                    return self._handle_tool_call_error(
+                        error,
+                        f"{agent_name} 参数错误，重试中 ({retry + 1}/{max_retries}): {error}",
+                        f"{agent_name} 参数错误，重试中 ({retry + 1}/{max_retries}): {error}",
+                        choice, raw_response, tool_schemas, messages,
+                        system_prompt, agent_name, tick, max_retries, retry,
+                    )
+
+                action = Action(
+                    action_type=tool_call.function.name,
+                    target=params.get("target"),
+                    content=params.get("content", ""),
+                    params=params,
+                    internal_monologue=params.get("internal_monologue", ""),
+                )
+                actions.append(action)
+
+                # 校验通过后立即执行（若提供回调），使前序工具的副作用
+                # （如 npc_add 修改 world）对后续 tool call 的校验可见。
+                # 结果暂存，等全部工具校验通过后统一追加 assistant(tool_calls)+tool
+                # 消息——保证 assistant 声明的每个 tool_call_id 都被 tool 消息配对，
+                # 中途校验失败时不会残留未配对的 assistant(tool_calls)。
+                if execute_action:
+                    executed.append((tool_call, execute_action(action)))
+            except Exception as e:
+                return self._handle_tool_call_error(
+                    f"解析参数失败: {e}",
+                    f"解析 tool call 失败: {agent_name} | Tick: {tick} | {e}",
+                    f"解析 tool call 失败: {e}",
+                    choice, raw_response, tool_schemas, messages,
+                    system_prompt, agent_name, tick, max_retries, retry,
+                )
+
+        if execute_action and executed:
+            tc_list = [{
+                "id": tc.id,
+                "type": "function",
+                "function": {
+                    "name": tc.function.name,
+                    "arguments": tc.function.arguments,
+                },
+            } for tc in tool_calls]
+            messages.append({
+                "role": "assistant",
+                "content": choice.message.content or "",
+                "tool_calls": tc_list,
+            })
+            for tc, result in executed:
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": result or f"'{tc.function.name}' 执行完成",
+                })
+
+        return "success", actions
+
+    def _handle_tool_call_error(
+        self,
+        feedback,
+        warn_text,
+        print_text,
+        choice,
+        raw_response,
+        tool_schemas,
+        messages,
+        system_prompt,
+        agent_name,
+        tick,
+        max_retries,
+        retry,
+    ):
+        """工具校验/解析失败：可重试则返回反馈文本，重试耗尽则返回 fallback 信号。
+
+        返回 ("retry", feedback) 或 ("fallback", None)。日志/打印在此统一处理。
+        """
+        if retry < max_retries:
+            if self.logger:
+                self.logger.warning(warn_text)
+                self.logger.log_llm_call(
+                    agent_name=agent_name, tick=tick, mode="tool_call",
+                    system_prompt=system_prompt, messages=messages,
+                    schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
+                )
+            print(f"[LLM] {print_text}")
+            return "retry", feedback
+        if self.logger:
+            self.logger.log_llm_call(
+                agent_name=agent_name, tick=tick, mode="tool_call",
+                system_prompt=system_prompt, messages=messages,
+                schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
+            )
+        print(f"[LLM] {agent_name} 重试耗尽，使用 fallback")
+        return "fallback", None
+
     async def call_multi(
         self,
         system_prompt: str,
@@ -169,21 +345,7 @@ class LLMClient:
         tool_schemas = action_registry.get_tool_schemas()
         validation_context = validation_context or {}
 
-        for retry in range(max_retries + 1):
-            full_messages = [{"role": "system", "content": system_prompt}] + messages
-
-            response = await self._acompletion_with_retry(
-                agent_name, tick, temperature,
-                model=self._model_str,
-                messages=full_messages,
-                tools=tool_schemas,
-                api_key=self.api_key,
-                api_base=self.base_url,
-                drop_params=True,
-            )
-            if response is None:
-                return None, []
-
+        def attempt(response, retry):
             choice = response.choices[0]
             raw_response = response.model_dump_json() if hasattr(response, "model_dump_json") else str(response)
 
@@ -202,75 +364,14 @@ class LLMClient:
                     )
                     tool_calls = tool_calls[:limit_tools]
 
-                actions = []
-                all_valid = True
-                executed = []
-                for tool_call in tool_calls:
-                    try:
-                        params = json.loads(tool_call.function.arguments)
-
-                        action_spec = action_registry.get(tool_call.function.name)
-                        error = None
-                        if not action_spec:
-                            valid_names = ", ".join(action_registry.get_action_names())
-                            error = f"工具 '{tool_call.function.name}' 不存在，可用工具: {valid_names}"
-                        else:
-                            error = action_spec.validate_params(params, validation_context)
-
-                        if error:
-                            all_valid = False
-                            if retry < max_retries:
-                                if self.logger:
-                                    self.logger.warning(f"{agent_name} 参数错误，重试中 ({retry + 1}/{max_retries}): {error}")
-                                    self.logger.log_llm_call(
-                                        agent_name=agent_name, tick=tick, mode="tool_call",
-                                        system_prompt=system_prompt, messages=messages,
-                                        schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
-                                    )
-                                print(f"[LLM] {agent_name} 参数错误，重试中 ({retry + 1}/{max_retries}): {error}")
-                                messages.append({"role": "assistant", "content": choice.message.content or ""})
-                                messages.append({"role": "user", "content": error})
-                            else:
-                                if self.logger:
-                                    self.logger.log_llm_call(
-                                        agent_name=agent_name, tick=tick, mode="tool_call",
-                                        system_prompt=system_prompt, messages=messages,
-                                        schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
-                                    )
-                                print(f"[LLM] {agent_name} 重试耗尽，使用 fallback")
-                                return choice.message.content, []
-                            break
-
-                        action = Action(
-                            action_type=tool_call.function.name,
-                            target=params.get("target"),
-                            content=params.get("content", ""),
-                            params=params,
-                            internal_monologue=params.get("internal_monologue", ""),
-                        )
-                        actions.append(action)
-
-                        # 校验通过后立即执行（若提供回调），使前序工具的副作用
-                        # （如 npc_add 修改 world）对后续 tool call 的校验可见。
-                        # 结果暂存，等全部工具校验通过后统一追加 assistant(tool_calls)+tool
-                        # 消息——保证 assistant 声明的每个 tool_call_id 都被 tool 消息配对，
-                        # 中途校验失败时不会残留未配对的 assistant(tool_calls)。
-                        if execute_action:
-                            result = execute_action(action)
-                            executed.append((tool_call, result))
-                    except Exception as e:
-                        all_valid = False
-                        if retry < max_retries:
-                            if self.logger:
-                                self.logger.warning(f"解析 tool call 失败: {agent_name} | Tick: {tick} | {e}")
-                            print(f"[LLM] 解析 tool call 失败: {e}")
-                            messages.append({"role": "assistant", "content": choice.message.content or ""})
-                            messages.append({"role": "user", "content": f"解析参数失败: {e}"})
-                        else:
-                            return choice.message.content, []
-                        break
-
-                if all_valid:
+                status, payload = self._process_tool_calls(
+                    tool_calls, choice, raw_response, tool_schemas,
+                    action_registry, validation_context, execute_action,
+                    messages, system_prompt, agent_name, tick,
+                    max_retries, retry,
+                )
+                if status == "success":
+                    actions = payload
                     for action in actions:
                         action.raw_content = choice.message.content or ""
                         action.raw_tool_calls = [
@@ -278,28 +379,6 @@ class LLMClient:
                              "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
                             for tc in tool_calls
                         ]
-
-                    if execute_action and executed:
-                        tc_list = [{
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments,
-                            },
-                        } for tc in tool_calls]
-                        messages.append({
-                            "role": "assistant",
-                            "content": choice.message.content or "",
-                            "tool_calls": tc_list,
-                        })
-                        for tc, result in executed:
-                            messages.append({
-                                "role": "tool",
-                                "tool_call_id": tc.id,
-                                "content": result or f"'{tc.function.name}' 执行完成",
-                            })
-
                     parsed = [{"action_type": a.action_type, "target": a.target, "content": a.content} for a in actions]
                     if self.logger:
                         self.logger.log_llm_call(
@@ -307,40 +386,50 @@ class LLMClient:
                             system_prompt=system_prompt, messages=messages,
                             schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=parsed,
                         )
+                    return "success", (choice.message.content, actions)
+                if status == "fallback":
+                    return "fallback", (choice.message.content, [])
+                return "retry", payload
 
-                    return choice.message.content, actions
-            else:
-                if allow_no_tool:
-                    if self.logger:
-                        self.logger.log_llm_call(
-                            agent_name=agent_name, tick=tick, mode="tool_call",
-                            system_prompt=system_prompt, messages=messages,
-                            schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
-                        )
-                    return choice.message.content, []
+            # 未调用工具
+            if allow_no_tool:
+                if self.logger:
+                    self.logger.log_llm_call(
+                        agent_name=agent_name, tick=tick, mode="tool_call",
+                        system_prompt=system_prompt, messages=messages,
+                        schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
+                    )
+                return "success", (choice.message.content, [])
+            if retry < max_retries:
+                if self.logger:
+                    self.logger.warning(f"{agent_name} 未调用工具，重试中 ({retry + 1}/{max_retries})")
+                    self.logger.log_llm_call(
+                        agent_name=agent_name, tick=tick, mode="tool_call",
+                        system_prompt=system_prompt, messages=messages,
+                        schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
+                    )
+                print(f"[LLM] {agent_name} 未调用工具，重试中 ({retry + 1}/{max_retries})")
+                return "retry", "请选择一个可用的工具来行动，不要只输出文字。"
+            if self.logger:
+                self.logger.log_llm_call(
+                    agent_name=agent_name, tick=tick, mode="tool_call",
+                    system_prompt=system_prompt, messages=messages,
+                    schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
+                )
+            print(f"[LLM] {agent_name} 重试耗尽，使用 fallback")
+            return "fallback", (choice.message.content, [])
 
-                if retry < max_retries:
-                    if self.logger:
-                        self.logger.warning(f"{agent_name} 未调用工具，重试中 ({retry + 1}/{max_retries})")
-                        self.logger.log_llm_call(
-                            agent_name=agent_name, tick=tick, mode="tool_call",
-                            system_prompt=system_prompt, messages=messages,
-                            schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
-                        )
-                    print(f"[LLM] {agent_name} 未调用工具，重试中 ({retry + 1}/{max_retries})")
-                    messages.append({"role": "assistant", "content": choice.message.content or ""})
-                    messages.append({"role": "user", "content": "请选择一个可用的工具来行动，不要只输出文字。"})
-                else:
-                    if self.logger:
-                        self.logger.log_llm_call(
-                            agent_name=agent_name, tick=tick, mode="tool_call",
-                            system_prompt=system_prompt, messages=messages,
-                            schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
-                        )
-                    print(f"[LLM] {agent_name} 重试耗尽，使用 fallback")
-                    return choice.message.content, []
-
-        return None, []
+        return await self._retry_loop(
+            messages=messages,
+            temperature=temperature,
+            agent_name=agent_name,
+            tick=tick,
+            max_retries=max_retries,
+            system_prompt=system_prompt,
+            attempt=attempt,
+            fallback_payload=(None, []),
+            tools=tool_schemas,
+        )
 
     async def _call_with_text(
         self,
@@ -359,19 +448,9 @@ class LLMClient:
         text_guide = action_registry.get_text_guide()
         system_prompt = f"{system_prompt}\n\n{text_guide}"
         validation_context = validation_context or {}
+        max_retries = 2
 
-        for retry in range(3):
-            response = await self._acompletion_with_retry(
-                agent_name, tick, temperature,
-                model=self._model_str,
-                messages=[{"role": "system", "content": system_prompt}] + messages,
-                api_key=self.api_key,
-                api_base=self.base_url,
-                drop_params=True,
-            )
-            if response is None:
-                return None, None
-
+        def attempt(response, retry):
             choice = response.choices[0]
             text = choice.message.content or ""
             raw_response = response.model_dump_json() if hasattr(response, "model_dump_json") else str(response)
@@ -393,27 +472,24 @@ class LLMClient:
                     error = action_spec.validate_params(params, validation_context)
 
             if error:
-                if retry < 2:
+                if retry < max_retries:
                     if self.logger:
-                        self.logger.warning(f"{agent_name} 输出错误，重试中 ({retry + 1}/2): {error}")
+                        self.logger.warning(f"{agent_name} 输出错误，重试中 ({retry + 1}/{max_retries}): {error}")
                         self.logger.log_llm_call(
                             agent_name=agent_name, tick=tick, mode="text_parse",
                             system_prompt=system_prompt, messages=messages,
                             schema_or_guide=text_guide, raw_response=raw_response, parsed_action=None,
                         )
-                    print(f"[LLM] {agent_name} 输出错误，重试中 ({retry + 1}/2): {error}")
-                    messages.append({"role": "assistant", "content": text})
-                    messages.append({"role": "user", "content": error})
-                    continue
-                else:
-                    if self.logger:
-                        self.logger.log_llm_call(
-                            agent_name=agent_name, tick=tick, mode="text_parse",
-                            system_prompt=system_prompt, messages=messages,
-                            schema_or_guide=text_guide, raw_response=raw_response, parsed_action=None,
-                        )
-                    print(f"[LLM] {agent_name} 重试耗尽，使用 fallback")
-                    return text, None
+                    print(f"[LLM] {agent_name} 输出错误，重试中 ({retry + 1}/{max_retries}): {error}")
+                    return "retry", error
+                if self.logger:
+                    self.logger.log_llm_call(
+                        agent_name=agent_name, tick=tick, mode="text_parse",
+                        system_prompt=system_prompt, messages=messages,
+                        schema_or_guide=text_guide, raw_response=raw_response, parsed_action=None,
+                    )
+                print(f"[LLM] {agent_name} 重试耗尽，使用 fallback")
+                return "fallback", (text, None)
 
             parsed_action = {
                 "action_type": action.action_type,
@@ -429,6 +505,15 @@ class LLMClient:
                     schema_or_guide=text_guide, raw_response=raw_response, parsed_action=parsed_action,
                 )
 
-            return text, action
+            return "success", (text, action)
 
-        return None, None
+        return await self._retry_loop(
+            messages=messages,
+            temperature=temperature,
+            agent_name=agent_name,
+            tick=tick,
+            max_retries=max_retries,
+            system_prompt=system_prompt,
+            attempt=attempt,
+            fallback_payload=(None, None),
+        )

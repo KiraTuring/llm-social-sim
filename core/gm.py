@@ -3,7 +3,7 @@
 import random
 from typing import TYPE_CHECKING
 
-from core.action import ActionRegistry
+from core.action import ActionRegistry, format_tool_result
 from core.actions.gm_tools import NarrateAction
 
 if TYPE_CHECKING:
@@ -168,7 +168,6 @@ class GMAgent:
                 _, result = spec.execute("GM", action.params, world)
                 # 执行后原地刷新校验上下文，使同批后续 tool call 能看到本次副作用
                 validation_context.update(world.build_validation_context("GM"))
-                from core.action import format_tool_result
                 summary = format_tool_result(action.action_type, result)
                 if self.logger:
                     self.logger.info(f"GM 工具: {action.action_type} → {summary}")
