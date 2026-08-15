@@ -460,7 +460,7 @@ class SimulationTuiApp(App):
                 for r_name, r_info in rels.items():
                     rel_parts.append(f"{_esc(r_name)}({r_info.get('trust', 0)})")
                 body_parts.append(f"[bold]关系:[/bold] {', '.join(rel_parts)}")
-            memories = agent.memory._short_term[-5:]
+            memories = agent.recent_memories(5)
             if memories:
                 mem_parts = []
                 for m in memories:

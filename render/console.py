@@ -57,7 +57,7 @@ class ConsoleRenderer:
         state_str = " | ".join(f"{k}: {v}" for k, v in agent.states.items())
         content += f"[dim]{state_str}[/dim]\n"
 
-        inbox = getattr(agent, '_perceived_inbox', [])
+        inbox = agent.perceived_inbox
         if inbox:
             if self.show_full_inbox:
                 lines = [f"  {self._format_inbox_line(m)}" for m in inbox]

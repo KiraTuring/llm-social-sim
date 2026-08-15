@@ -57,6 +57,15 @@ class AgentMemory:
 
         return "\n\n".join(parts)
 
+    @property
+    def summary(self) -> str:
+        """压缩摘要（只读，渲染/展示用）。"""
+        return self._summary
+
+    def recent(self, limit: int) -> list[dict]:
+        """返回最近 limit 条短期记忆（返回副本，渲染/展示用）。"""
+        return self._short_term[-limit:]
+
     async def compress(self, llm_client: "LLMClient", relationships: dict | None = None) -> dict | None:
         """压缩短期记忆为摘要，可选推断关系变化。返回关系更新 dict 或 None"""
 
@@ -98,34 +107,21 @@ class AgentMemory:
         user_content += f"需要概括的经历：\n{events_text}"
 
         try:
-            import litellm
-            response = await litellm.acompletion(
-                model=llm_client._model_str,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_content},
-                ],
+            resp = await llm_client.call_json(
+                system_prompt=system_prompt,
+                user_content=user_content,
                 temperature=0.3,
-                api_key=llm_client.api_key,
-                api_base=llm_client.base_url,
-                drop_params=True,
+                agent_name=self.name,
             )
-            raw = response.choices[0].message.content.strip()
-            if not raw:
+            if resp is None:
+                return None
+            if not resp.raw:
                 if llm_client.logger:
                     llm_client.logger.warning(f"记忆压缩返回空: {self.name}")
                 return None
 
-            # Parse JSON, with regex recovery
-            import json
-            import re
-            try:
-                data = json.loads(raw)
-            except json.JSONDecodeError:
-                match = re.search(r'\{.*\}', raw, re.DOTALL)
-                data = json.loads(match.group()) if match else {}
-
-            new_summary = data.get("summary", raw)
+            data = resp.data or {}
+            new_summary = data.get("summary", resp.raw)
             if not new_summary:
                 if llm_client.logger:
                     llm_client.logger.warning(f"记忆压缩摘要为空: {self.name}")

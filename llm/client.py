@@ -1,13 +1,47 @@
 """LLM 客户端：统一调用 DeepSeek/本地模型，支持双模式解析。"""
 
 import asyncio
+import json
 import logging
 import os
+import re
+from dataclasses import dataclass
 
 from core.action import Action, ActionRegistry
 
 os.environ["LITELLM_LOG"] = "ERROR"
 logging.getLogger("litellm").setLevel(logging.ERROR)
+
+
+@dataclass
+class JSONResult:
+    """结构化 LLM 返回：原始文本 + 解析出的 JSON 对象。
+
+    data 为 None 表示内容为空或未解析出 JSON 对象（raw 仍可作兜底）。
+    """
+
+    data: dict | None
+    raw: str
+
+
+def _parse_json_object(raw: str) -> dict | None:
+    """解析 LLM 返回中的 JSON 对象：直接解析 + 正则提取兜底。
+
+    返回 dict 或 None（内容为空 / 非 JSON / 解析失败）。
+    """
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        if not match:
+            return None
+        try:
+            data = json.loads(match.group())
+        except json.JSONDecodeError:
+            return None
+    return data if isinstance(data, dict) else None
 
 
 class LLMClient:
@@ -79,6 +113,36 @@ class LLMClient:
                 await asyncio.sleep(1)
         return None
 
+    async def call_json(
+        self,
+        system_prompt: str,
+        user_content: str,
+        temperature: float = 0.3,
+        agent_name: str = "unknown",
+        tick: int = 0,
+    ) -> JSONResult | None:
+        """调用 LLM 并解析 JSON 对象（记忆压缩等结构化输出场景）。
+
+        走统一请求管线：extra_params 合并 + 最多 3 次重试（_acompletion_with_retry）。
+        API 调用彻底失败返回 None；内容为空或解析不出 JSON 时返回
+        JSONResult(data=None, raw=原文)，由调用方决定兜底策略。
+        """
+        response = await self._acompletion_with_retry(
+            agent_name, tick, temperature,
+            model=self._model_str,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+            api_key=self.api_key,
+            api_base=self.base_url,
+            drop_params=True,
+        )
+        if response is None:
+            return None
+        raw = (response.choices[0].message.content or "").strip()
+        return JSONResult(data=_parse_json_object(raw), raw=raw)
+
     async def call_multi(
         self,
         system_prompt: str,
@@ -100,8 +164,6 @@ class LLMClient:
         execute_action: 可选回调，提供时将自动执行 action 并构建 tool 消息追加到 messages
         call() 的单 Action 路径也复用本方法（allow_no_tool=False, limit_tools=1）。
         """
-        import json
-
         if action_registry is None:
             return None, []
         tool_schemas = action_registry.get_tool_schemas()

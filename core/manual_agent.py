@@ -45,6 +45,11 @@ class ManualAgent(Agent):
         data["manual_file"] = str(self._manual_file)
         return data
 
+    @property
+    def manual_plan(self) -> dict:
+        """手动行动计划（只读，详情展示用）。"""
+        return self._manual_plan
+
     def _load_plan(self) -> dict:
         """加载并校验手动控制计划，文件缺失/格式错误直接抛错。"""
         if not self._manual_file.exists():

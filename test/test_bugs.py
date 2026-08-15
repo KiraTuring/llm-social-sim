@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """测试 Bug 1-4 修复: model 硬编码 / compress 空返回 / visibility 安全 / message_bus 字段"""
 
+import asyncio
 import unittest
 from unittest.mock import patch, MagicMock, AsyncMock
 
@@ -212,47 +213,41 @@ class TestMemoryCompression(unittest.TestCase):
 
     def test_compress_truncates_and_updates_summary(self):
         """compress 成功后 short_term 截断、summary 更新、标志清除"""
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock(message=MagicMock(content=" 测试摘要文本  "))]
-
-        async_mock = AsyncMock(return_value=mock_response)
+        from llm.client import JSONResult
 
         self.add_events(7)
 
-        with patch("litellm.acompletion", async_mock):
-            mock_client = MagicMock()
-            mock_client._model_str = "openai/gpt-4o"
-            mock_client.api_key = "test_key"
-            mock_client.base_url = "https://test.com"
+        mock_client = MagicMock()
+        mock_client.logger = None
+        mock_client.call_json = AsyncMock(return_value=JSONResult(
+            data={"summary": "测试摘要文本"},
+            raw='{"summary": "测试摘要文本"}',
+        ))
 
-            import asyncio
-            asyncio.run(self.memory.compress(mock_client))
+        asyncio.run(self.memory.compress(mock_client))
 
-            self.assertEqual(len(self.memory._short_term), 3)
-            self.assertEqual(self.memory._summary, "测试摘要文本")
-            self.assertFalse(self.memory._compress_needed)
+        self.assertEqual(len(self.memory._short_term), 3)
+        self.assertEqual(self.memory._summary, "测试摘要文本")
+        self.assertFalse(self.memory._compress_needed)
 
     def test_compress_merge_with_existing_summary(self):
         """多次压缩时，已有摘要和新经历一起发给 LLM"""
+        from llm.client import JSONResult
+
         self.memory._summary = "旧摘要"
         self.add_events(6)
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock(message=MagicMock(content="新摘要"))]
+        mock_client = MagicMock()
+        mock_client.logger = None
+        mock_client.call_json = AsyncMock(return_value=JSONResult(
+            data={"summary": "新摘要"},
+            raw='{"summary": "新摘要"}',
+        ))
 
-        async_mock = AsyncMock(return_value=mock_response)
+        asyncio.run(self.memory.compress(mock_client))
 
-        with patch("litellm.acompletion", async_mock) as mocked:
-            mock_client = MagicMock()
-            mock_client._model_str = "openai/gpt-4o"
-            mock_client.api_key = "test_key"
-            mock_client.base_url = "https://test.com"
-
-            import asyncio
-            asyncio.run(self.memory.compress(mock_client))
-
-            user_msg = mocked.call_args[1]["messages"][1]["content"]
-            self.assertIn("旧摘要", user_msg)
+        user_msg = mock_client.call_json.call_args.kwargs["user_content"]
+        self.assertIn("旧摘要", user_msg)
 
     def test_compress_failure_preserves_state(self):
         """LLM 调用失败时原有状态不变"""
@@ -260,19 +255,46 @@ class TestMemoryCompression(unittest.TestCase):
         original_summary = self.memory._summary
         original_len = len(self.memory._short_term)
 
-        async_mock = AsyncMock(side_effect=Exception("API error"))
+        mock_client = MagicMock()
+        mock_client.logger = None
+        mock_client.call_json = AsyncMock(side_effect=Exception("API error"))
 
-        with patch("litellm.acompletion", async_mock):
-            mock_client = MagicMock()
-            mock_client._model_str = "openai/gpt-4o"
-            mock_client.api_key = "test_key"
-            mock_client.base_url = "https://test.com"
+        asyncio.run(self.memory.compress(mock_client))
 
-            import asyncio
-            asyncio.run(self.memory.compress(mock_client))
+        self.assertEqual(self.memory._summary, original_summary)
+        self.assertEqual(len(self.memory._short_term), original_len)
 
-            self.assertEqual(self.memory._summary, original_summary)
-            self.assertEqual(len(self.memory._short_term), original_len)
+    def test_compress_raw_fallback_when_no_json(self):
+        """LLM 未返回 JSON 时，用原文作为摘要兜底"""
+        from llm.client import JSONResult
+
+        self.add_events(6)
+
+        mock_client = MagicMock()
+        mock_client.logger = None
+        mock_client.call_json = AsyncMock(return_value=JSONResult(
+            data=None, raw="测试摘要文本"
+        ))
+
+        asyncio.run(self.memory.compress(mock_client))
+
+        self.assertEqual(self.memory._summary, "测试摘要文本")
+        self.assertEqual(len(self.memory._short_term), 3)
+
+    def test_compress_api_none_preserves_state(self):
+        """call_json 返回 None（API 失败）时状态不变"""
+        self.add_events(6)
+        original_summary = self.memory._summary
+        original_len = len(self.memory._short_term)
+
+        mock_client = MagicMock()
+        mock_client.logger = None
+        mock_client.call_json = AsyncMock(return_value=None)
+
+        asyncio.run(self.memory.compress(mock_client))
+
+        self.assertEqual(self.memory._summary, original_summary)
+        self.assertEqual(len(self.memory._short_term), original_len)
 
 
 class TestActionRegistryNoneGuard(unittest.TestCase):

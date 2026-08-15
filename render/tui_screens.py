@@ -137,8 +137,8 @@ class AgentInfoScreen(ModalScreen):
                     yield Static("[bold]关系印象:[/bold]\n" + "\n".join(imp_lines))
 
             cap_parts = []
-            writable = getattr(agent, "_writable_states", None)
-            private = getattr(agent, "_private_states", None)
+            writable = getattr(agent, "writable_states", None)
+            private = getattr(agent, "private_states", None)
             if writable:
                 cap_parts.append(f"可写状态: {_esc(', '.join(sorted(writable)))}")
             if private:
@@ -154,17 +154,17 @@ class AgentInfoScreen(ModalScreen):
                         "[bold]🛠 可用工具:[/bold]\n" + "\n".join(tool_lines)
                     )
 
-            summary = getattr(agent.memory, "_summary", "") or ""
+            summary = getattr(agent.memory, "summary", "") or ""
             if summary:
                 yield Static(f"[bold]🧠 记忆摘要:[/bold]\n{_esc(summary)}")
 
-            last_observed = getattr(agent, "_last_observed_result", "") or ""
+            last_observed = getattr(agent, "last_observed_result", "") or ""
             if last_observed:
                 yield Static(
                     f"[bold]👁 上次观察:[/bold] {_esc(last_observed)}"
                 )
 
-            plan = getattr(agent, "_manual_plan", None)
+            plan = getattr(agent, "manual_plan", None)
             if plan:
                 plan_lines = []
                 for tick, entry in plan.get(agent.name, {}).items():

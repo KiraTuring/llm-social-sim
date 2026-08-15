@@ -331,6 +331,8 @@ class TestTruncateChatHistory(unittest.TestCase):
 
     def test_truncate_after_compress(self):
         """完整流程：perceive 触发压缩 → story_term 截断 → chat_history 截断"""
+        from llm.client import JSONResult
+
         agent = _make_agent("chat")
         agent.memory.compress_threshold = 5
         agent.memory.short_limit = 2
@@ -351,18 +353,14 @@ class TestTruncateChatHistory(unittest.TestCase):
         self.assertTrue(agent.memory._compress_needed)
 
         # 模拟 LLM 进行压缩
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock(message=MagicMock(content='{"summary": "压缩摘要", "relations": {}}'))]
-        async_mock = AsyncMock(return_value=mock_response)
-
         mock_client = MagicMock()
-        mock_client._model_str = "openai/gpt-4o"
-        mock_client.api_key = "test"
-        mock_client.base_url = "http://test"
         mock_client.logger = None
+        mock_client.call_json = AsyncMock(return_value=JSONResult(
+            data={"summary": "压缩摘要", "relations": {}},
+            raw='{"summary": "压缩摘要", "relations": {}}',
+        ))
 
-        with patch("litellm.acompletion", async_mock):
-            asyncio.run(agent.perceive(self._make_world(tick=7), llm_client=mock_client))
+        asyncio.run(agent.perceive(self._make_world(tick=7), llm_client=mock_client))
 
         # 验证：short_term 截断后剩余 2 条
         self.assertEqual(len(agent.memory._short_term), 2)
@@ -463,10 +461,10 @@ class TestTextModeUnchanged(unittest.TestCase):
 
 
 class TestPendingUserMsgStale(unittest.TestCase):
-    """极端情况：act 失败后 _pending_user_msg 残留的处理"""
+    """极端情况：act 失败后 _pending_user_msg 的清理"""
 
     def test_stale_not_committed_if_act_throws(self):
-        """act 抛出异常时不提交到 chat_history"""
+        """act 抛出异常时不提交到 chat_history，且清除悬空的 pending 消息"""
         agent = _make_agent("chat")
         agent._pending_user_msg = {"role": "user", "content": "旧的上下文", "tick": 1}
 
@@ -489,7 +487,8 @@ class TestPendingUserMsgStale(unittest.TestCase):
         asyncio.run(agent.act(action, world, registry))
 
         self.assertEqual(len(agent._chat_history), 0)
-        self.assertIsNotNone(agent._pending_user_msg)
+        self.assertIsNone(agent._pending_user_msg)
+        self.assertEqual(action.result, {"error": "模拟失败"})
 
 
 if __name__ == "__main__":

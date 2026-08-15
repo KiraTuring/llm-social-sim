@@ -53,6 +53,7 @@ class Agent(Character):
         self._private_states = set(private_states) if private_states else set()
         self._last_action = None
         self._last_observed_result: str = ""
+        self._perceived_inbox: list[dict] = []
         self._chat_history: list[dict] = []
         self._pending_user_msg: dict | None = None
 
@@ -131,6 +132,30 @@ class Agent(Character):
             "chat_history": self._chat_history,
             "memory": self.memory.to_dict(),
         }
+
+    @property
+    def perceived_inbox(self) -> list[dict]:
+        """本 tick perceive 读取到的收件箱消息（渲染用，返回副本）。"""
+        return list(self._perceived_inbox)
+
+    @property
+    def writable_states(self) -> set:
+        """可写状态名集合（只读，渲染/展示用）。"""
+        return set(self._writable_states)
+
+    @property
+    def private_states(self) -> set:
+        """私有状态名集合（只读，渲染/展示用）。"""
+        return set(self._private_states)
+
+    @property
+    def last_observed_result(self) -> str:
+        """最近一次观察结果（只读，渲染/展示用）。"""
+        return self._last_observed_result
+
+    def recent_memories(self, limit: int = 5) -> list[dict]:
+        """最近 limit 条记忆（渲染用，返回副本）。"""
+        return self.memory.recent(limit)
 
     def build_system_prompt(self, registry: "ActionRegistry") -> str:
         """构建 System Prompt"""
@@ -324,45 +349,67 @@ class Agent(Character):
         return action
 
     async def act(self, action: "Action", world: "WorldState", registry: "ActionRegistry") -> list:
-        """行动：执行 Action"""
-
+        """执行 Action 并记录结果。返回产生的消息；执行失败返回空列表。"""
         action_spec = registry.get(action.action_type)
+        if action_spec is None:
+            print(f"[{self.name}] 未知行动类型: {action.action_type}")
+            return []
 
-        if action_spec:
-            try:
-                messages, result = action_spec.execute(self.name, {"target": action.target, "content": action.content, **action.params}, world)
+        try:
+            messages = self._execute_action(action_spec, action, world)
+        except Exception as e:
+            self._record_failure(action, e)
+            return []
 
-                action.result = result
+        self._record_action(action, world)
+        return messages
 
-                # Apply state_update from LLM (only writable states)
-                su = action.params.get("state_update", action.state_update or {})
-                if isinstance(su, dict):
-                    for key, val in su.items():
-                        if key in self._writable_states:
-                            self.states[key] = val
+    def _execute_action(
+        self, action_spec, action: "Action", world: "WorldState"
+    ) -> list:
+        """调用 ActionSpec 执行行动，返回产生的消息。
 
-                if result:
-                    for key, value in result.items():
-                        self.memory.add(f"[{key}] {value}", tick=world.tick)
-                else:
-                    summary = f"[{action.action_type}] 你: {action.content[:self.content_max_length]}"
-                    if action.target:
-                        summary += f" (目标: {action.target})"
-                    self.memory.add(summary, tick=world.tick)
+        失败时抛异常，由 act() 统一记录与兜底。
+        """
+        messages, result = action_spec.execute(
+            self.name,
+            {"target": action.target, "content": action.content, **action.params},
+            world,
+        )
+        action.result = result
+        return messages
 
-                self._build_last_action(action, world)
+    def _record_action(self, action: "Action", world: "WorldState") -> None:
+        """记录行动副作用：状态更新、记忆、上一行动、chat 历史。"""
+        # Apply state_update from LLM (only writable states)
+        su = action.params.get("state_update", action.state_update or {})
+        if isinstance(su, dict):
+            for key, val in su.items():
+                if key in self._writable_states:
+                    self.states[key] = val
 
-                if self.prompt_format == "chat":
-                    if self._pending_user_msg:
-                        self._chat_history.append(self._pending_user_msg)
-                        self._pending_user_msg = None
-                    self._chat_history.extend(self._build_chat_entries(action, world.tick))
+        if action.result:
+            for key, value in action.result.items():
+                self.memory.add(f"[{key}] {value}", tick=world.tick)
+        else:
+            summary = f"[{action.action_type}] 你: {action.content[:self.content_max_length]}"
+            if action.target:
+                summary += f" (目标: {action.target})"
+            self.memory.add(summary, tick=world.tick)
 
-                return messages
-            except Exception as e:
-                print(f"[{self.name}] 执行 action 失败: {e}")
+        self._build_last_action(action, world)
 
-        return []
+        if self.prompt_format == "chat":
+            if self._pending_user_msg:
+                self._chat_history.append(self._pending_user_msg)
+                self._pending_user_msg = None
+            self._chat_history.extend(self._build_chat_entries(action, world.tick))
+
+    def _record_failure(self, action: "Action", error: Exception) -> None:
+        """行动失败：错误写入 action.result（日志/UI 可见），并清理悬空消息。"""
+        action.result = {"error": str(error)}
+        self._pending_user_msg = None
+        print(f"[{self.name}] 执行 action 失败: {error}")
 
     def _build_last_action(self, action: "Action", world: "WorldState"):
         """构建上一步行动的简单描述"""
