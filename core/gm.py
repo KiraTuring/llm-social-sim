@@ -6,7 +6,6 @@ import random
 from typing import TYPE_CHECKING
 
 from core.action import ActionRegistry, format_tool_result
-from core.actions.gm_tools import NarrateAction
 
 if TYPE_CHECKING:
     from core.world import WorldState
@@ -19,10 +18,10 @@ class GMAgent:
     MAX_TURNS = 3
 
     def __init__(self, events: list, random_events: list, chance: float,
-                 use_llm: bool = False, llm_chance: float = 0.0, llm_prompt: str = "",
+                 gm_registry: ActionRegistry, use_llm: bool = False,
+                 llm_chance: float = 0.0, llm_prompt: str = "",
                  world_description: str = "", logger=None, message_limit: int = 15,
-                 prompt_format: str = "text", history_max_messages: int = 40,
-                 gm_registry: ActionRegistry | None = None):
+                 prompt_format: str = "text", history_max_messages: int = 40):
         self.scheduled_events = events
         self.random_events = random_events
         self.random_chance = chance
@@ -35,17 +34,10 @@ class GMAgent:
         self.prompt_format = prompt_format
         self.history_max_messages = history_max_messages
         self._gm_history: list[dict] = []
-
-        if gm_registry is not None:
-            self.registry = gm_registry
-        else:
-            # 兜底：与 Scene.setup_gm 基类默认一致，只注册 narrate。
-            # 正常路径总是由场景的 setup_gm() 传入完整 registry。
-            self.registry = ActionRegistry(include_agent_params=False)
-            self.registry.register(NarrateAction())
+        self.registry = gm_registry
 
     @classmethod
-    def from_config(cls, scene, config, gm_registry=None):
+    def from_config(cls, scene, config, gm_registry: ActionRegistry):
         """从 scene 配置和模拟配置构建 GMAgent。"""
         gm_cfg = scene.get_gm_config()
         return cls(
@@ -72,9 +64,9 @@ class GMAgent:
         }
 
     @classmethod
-    def from_dict(cls, scene, config, data: dict) -> "GMAgent":
+    def from_dict(cls, scene, config, data: dict, gm_registry: ActionRegistry) -> "GMAgent":
         """从存档恢复 GM：from_config 构造后应用运行时字段。"""
-        gm = cls.from_config(scene, config)
+        gm = cls.from_config(scene, config, gm_registry)
         gm.scheduled_events = [tuple(item) for item in data["scheduled_events"]]
         gm.random_events = data["random_events"]
         gm.use_llm = data.get("use_llm", config["gm"]["use_llm"])

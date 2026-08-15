@@ -1,7 +1,7 @@
 """宇宙飞船场景：封闭空间内的角色张力，适合测试 GM 和 agent 行为。"""
 
 from core.rules import RuleEngine
-from scenarios.base import Scene
+from core.scene import Scene
 
 
 class SpaceshipScene(Scene):
@@ -148,8 +148,8 @@ class SpaceshipScene(Scene):
                     agent.states["情绪"] = "紧张"
 
     def setup(self, registry):
-        from core.actions.common import InteractAction, MoveAction, ObserveAction, SpeakAction, WhisperAction
-        from core.actions.communication import RadioAction
+        from actions.common import InteractAction, MoveAction, ObserveAction, SpeakAction, WhisperAction
+        from actions.communication import RadioAction
 
         for action_cls in [SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction]:
             registry.register(action_cls())
@@ -157,7 +157,7 @@ class SpaceshipScene(Scene):
 
     def setup_gm(self, registry):
         """飞船 GM 工具：旁白 + 环境/状态管理（系统 AI，无 NPC）"""
-        from core.actions.gm_tools import NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction
+        from actions.gm_tools import NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction
 
         for action_cls in [NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction]:
             registry.register(action_cls())

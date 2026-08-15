@@ -1,4 +1,4 @@
-"""场景加载工具：动态加载场景类和发现可用场景。"""
+"""核心场景加载器：动态加载场景类、发现可用场景、校验 Agent 配置。"""
 
 import sys
 from pathlib import Path
@@ -27,16 +27,7 @@ def validate_agent_configs(agents: list[dict]):
 
 def list_available_scenes():
     """列出所有可用场景"""
-    scenes_dir = Path(__file__).parent
-    scene_files = list(scenes_dir.glob("*_scene.py")) + list(scenes_dir.glob("[!_]*.py"))
-
-    scenes = []
-    for f in scene_files:
-        if f.name.startswith("_"):
-            continue
-        if f.name == "base.py" or f.name == "utils.py":
-            continue
-        scene_name = f.stem.replace("_scene", "")
-        scenes.append(scene_name)
-
-    return sorted(scenes)
+    scenes_dir = Path(__file__).parent.parent / "scenarios"
+    return sorted(
+        f.stem for f in scenes_dir.glob("[!_]*.py")
+    )

@@ -6,12 +6,13 @@ import tempfile
 
 import pytest
 from core.action import ActionRegistry
-from core.actions.common import SpeakAction, ObserveAction, WhisperAction, MoveAction
-from core.actions.gm_npc import AddNpcAction, NpcMoveAction, NpcSpeakAction, RemoveNpcAction
-from core.actions.gm_tools import ModifyCharStateAction
+from actions.common import SpeakAction, ObserveAction, WhisperAction, MoveAction
+from actions.gm_npc import AddNpcAction, NpcMoveAction, NpcSpeakAction, RemoveNpcAction
+from actions.gm_tools import ModifyCharStateAction
 from core.agent import Agent
 from core.character import Character, NPC
 from core.gm import GMAgent
+from core.scene import Scene
 from core.save_load import save_simulation_state, load_simulation_state
 from render.tui_info import is_npc
 from scenarios._test import _TestScene
@@ -230,7 +231,9 @@ def test_static_npc_scene():
 def test_gm_context_includes_dynamic_npc():
     """GM 世界上下文包含动态 NPC"""
     world = _build_world()
-    gm = GMAgent.from_config(SCENE, CONFIG)
+    gm_registry = ActionRegistry(include_agent_params=False)
+    SCENE.setup_gm(gm_registry)
+    gm = GMAgent.from_config(SCENE, CONFIG, gm_registry)
     ctx_text = gm._build_world_context(world)
     assert "神秘旅人" in ctx_text and "书房" in ctx_text, ctx_text
 
@@ -276,8 +279,6 @@ def test_gm_tool_whitelist():
     """GM 工具白名单：测试场景注册全部 7 个工具，基类默认只注册 narrate"""
     test_tools = _gm_tool_names(SCENE)
     assert {"narrate", "modify_environment", "modify_char_state", "npc_speak", "npc_add", "npc_move", "npc_remove"} <= test_tools
-
-    from scenarios.base import Scene
 
     base_reg = ActionRegistry(include_agent_params=False)
     Scene().setup_gm(base_reg)

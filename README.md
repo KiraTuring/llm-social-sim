@@ -59,7 +59,7 @@ python3 run.py --list-scenes
 
 ```python
 # scenarios/myscene.py
-from scenarios.base import Scene
+from core.scene import Scene
 
 class MyScene(Scene):
     name = "我的场景"

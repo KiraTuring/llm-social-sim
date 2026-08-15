@@ -13,8 +13,8 @@ from core.gm import GMAgent
 from core.manual_agent import ManualAgent
 from core.message import Message, BROADCAST
 from core.save_load import SAVE_VERSION, save_simulation_state, load_simulation_state
+from core.scene_loader import validate_agent_configs
 from scenarios.tavern import TavernScene
-from scenarios.utils import validate_agent_configs
 
 SCENE = TavernScene()
 CFG = {c["name"]: c for c in SCENE.agents}

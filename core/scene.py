@@ -1,4 +1,4 @@
-"""场景基类：定义场景接口和通用逻辑。"""
+"""核心场景框架：定义场景接口和通用逻辑。"""
 
 from __future__ import annotations
 
@@ -42,13 +42,13 @@ class Scene:
         Agent 工具格式一致）——要什么就注册什么，不要则不注册：
         ```
         def setup_gm(self, registry):
-            from core.actions.gm_tools import NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction
-            from core.actions.gm_npc import NpcSpeakAction, AddNpcAction
+            from actions.gm_tools import NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction
+            from actions.gm_npc import NpcSpeakAction, AddNpcAction
             for action_cls in [NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction, NpcSpeakAction, AddNpcAction]:
                 registry.register(action_cls())
         ```
         """
-        from core.actions.gm_tools import NarrateAction
+        from actions.gm_tools import NarrateAction
 
         registry.register(NarrateAction())
 

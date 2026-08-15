@@ -6,6 +6,7 @@ LLM 驱动的多 Agent 社会模拟引擎：每个 Agent 有性格/目标/记忆
 
 ```
 core/           核心模块（engine / action / character / memory / message_bus / world ...）
+actions/        内置动作实现库（common / communication / gm_tools / gm_npc ...）
 scenarios/      场景定义（tavern / murder / spaceship / _test ...）
 scripts/        工具脚本（print_prompt.py 等）
 test/           测试
@@ -24,9 +25,10 @@ test/           测试
 以下规则任何改动都不能破坏，做相关任务前必须知晓：
 
 - **新场景**：文件在 `scenarios/<name>.py`，类名 `<Title>Scene`（如 `TavernScene`）；必须实现 `name`、`locations`、`agents`、`gm_events`、`gm_random_events`、`render_config` 字段；Agent 配置必须含 `name`、`role`、`personality`、`goal`、`location`、`relationships`（启动时自动校验，缺字段立即报错）
+- **新 Action**：文件放 `actions/<name>.py`，继承 `core.action.ActionSpec`，由场景的 `setup()`/`setup_gm()` 注册；核心代码不依赖具体动作
 - **GM 工具白名单**：`setup_gm()` 全量声明所需工具，基类默认只注册 `narrate`；GM 用 `ActionRegistry(include_agent_params=False)`（不含 `internal_monologue` 和 `state_update`）
 - **通用机制测试**统一用 `scenarios/_test.py` 的 `_TestScene`，不耦合生产场景（tavern/murder/spaceship）
-- **场景自动识别**排除 `_` 开头和 `base.py`、`utils.py`
+- **场景自动识别**排除 `_` 开头的文件（如 `_test.py`）
 
 详细规则见下方路由表对应文档，加载后同等效力。
 

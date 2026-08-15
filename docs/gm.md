@@ -12,13 +12,13 @@ GM 拥有自己的 `ActionRegistry`，由场景的 `setup_gm()` 方法全量白�
 
 | Action | 文件 | 用途 |
 |--------|------|------|
-| `narrate` | `core/actions/gm_tools.py` | GM 旁白：世界叙事或事件公告，支持广播/位置定向/私信 |
-| `modify_environment` | `core/actions/gm_tools.py` | 修改位置环境指标，`value="delete"` 删除非预定义指标 |
-| `modify_char_state` | `core/actions/gm_tools.py` | 修改角色非主观状态（精力、体力、伤势） |
-| `npc_speak` | `core/actions/gm_npc.py` | 控制 NPC 说话，消息流对 Agent 透明（sender=NPC名） |
-| `npc_add` | `core/actions/gm_npc.py` | 动态创建新 NPC（name/location/role/personality/goal），可在运行中添加角色 |
-| `npc_move` | `core/actions/gm_npc.py` | 移动 NPC 到任意有效位置（GM 全能，不受连通性限制），用于走动或事件后离场 |
-| `npc_remove` | `core/actions/gm_npc.py` | 移除 NPC（叙事上表现为"xx离开了"），静默执行，离开播报由 GM 用 `narrate` 描述 |
+| `narrate` | `actions/gm_tools.py` | GM 旁白：世界叙事或事件公告，支持广播/位置定向/私信 |
+| `modify_environment` | `actions/gm_tools.py` | 修改位置环境指标，`value="delete"` 删除非预定义指标 |
+| `modify_char_state` | `actions/gm_tools.py` | 修改角色非主观状态（精力、体力、伤势） |
+| `npc_speak` | `actions/gm_npc.py` | 控制 NPC 说话，消息流对 Agent 透明（sender=NPC名） |
+| `npc_add` | `actions/gm_npc.py` | 动态创建新 NPC（name/location/role/personality/goal），可在运行中添加角色 |
+| `npc_move` | `actions/gm_npc.py` | 移动 NPC 到任意有效位置（GM 全能，不受连通性限制），用于走动或事件后离场 |
+| `npc_remove` | `actions/gm_npc.py` | 移除 NPC（叙事上表现为"xx离开了"），静默执行，离开播报由 GM 用 `narrate` 描述 |
 
 场景按需注册（murder 只有 3 人故不注册 `npc_add`/`modify_environment`；spaceship 无 NPC 故不注册 `npc_speak`；tavern 注册全部 7 工具，支持 GM 添加临时角色并让其说话/回应/走动/移除离场）。
 

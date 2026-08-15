@@ -2,10 +2,10 @@
 
 命名用下划线前缀（`_test` → `_TestScene`）：
 - `list_available_scenes()` 的 glob `[!_]*.py` 不会收录它，`--list-scenes` 不出现
-- 但 `scenarios/utils.py::load_scene` 仍能通过模块路径解析，存档往返测试可用
+- 但 `core/scene_loader.py::load_scene` 仍能通过模块路径解析，存档往返测试可用
 """
 
-from scenarios.base import Scene
+from core.scene import Scene
 
 
 class _TestScene(Scene):
@@ -95,14 +95,14 @@ class _TestScene(Scene):
     }
 
     def setup(self, registry):
-        from core.actions.common import InteractAction, MoveAction, ObserveAction, SpeakAction, ThinkAction, WhisperAction
+        from actions.common import InteractAction, MoveAction, ObserveAction, SpeakAction, ThinkAction, WhisperAction
 
         for action_cls in [SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction, ThinkAction]:
             registry.register(action_cls())
 
     def setup_gm(self, registry):
-        from core.actions.gm_npc import AddNpcAction, NpcMoveAction, NpcSpeakAction, RemoveNpcAction
-        from core.actions.gm_tools import ModifyCharStateAction, ModifyEnvironmentAction, NarrateAction
+        from actions.gm_npc import AddNpcAction, NpcMoveAction, NpcSpeakAction, RemoveNpcAction
+        from actions.gm_tools import ModifyCharStateAction, ModifyEnvironmentAction, NarrateAction
 
         for action_cls in [NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction, NpcSpeakAction, AddNpcAction, NpcMoveAction, RemoveNpcAction]:
             registry.register(action_cls())

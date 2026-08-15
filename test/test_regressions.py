@@ -9,8 +9,8 @@ from conftest import make_llm_config
 from core.world import WorldState
 from core.message import MessageBus
 from core.action import ActionRegistry
+from core.scene import Scene
 from memory.memory import AgentMemory
-from scenarios.base import Scene
 
 
 class TestModelConfig(unittest.TestCase):

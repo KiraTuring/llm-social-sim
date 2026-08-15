@@ -2,7 +2,7 @@
 
 from core.message import BROADCAST
 from core.rules import RuleEngine
-from scenarios.base import Scene
+from core.scene import Scene
 
 
 class TavernScene(Scene):
@@ -155,15 +155,15 @@ class TavernScene(Scene):
 
     def setup(self, registry):
         """注册酒馆场景特定的 actions"""
-        from core.actions.common import InteractAction, MoveAction, ObserveAction, SpeakAction, WhisperAction
+        from actions.common import InteractAction, MoveAction, ObserveAction, SpeakAction, WhisperAction
 
         for action_cls in [SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction]:
             registry.register(action_cls())
 
     def setup_gm(self, registry):
         """酒馆 GM 工具：旁白 + 环境/状态管理 + NPC 控制（支持临时角色）"""
-        from core.actions.gm_npc import AddNpcAction, NpcMoveAction, NpcSpeakAction, RemoveNpcAction
-        from core.actions.gm_tools import ModifyCharStateAction, ModifyEnvironmentAction, NarrateAction
+        from actions.gm_npc import AddNpcAction, NpcMoveAction, NpcSpeakAction, RemoveNpcAction
+        from actions.gm_tools import ModifyCharStateAction, ModifyEnvironmentAction, NarrateAction
 
         for action_cls in [NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction, NpcSpeakAction, AddNpcAction, NpcMoveAction, RemoveNpcAction]:
             registry.register(action_cls())

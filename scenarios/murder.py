@@ -1,6 +1,6 @@
 """谋杀谜案场景：玩家调查庄园凶案，警长由 GM 控制。"""
 
-from scenarios.base import Scene
+from core.scene import Scene
 
 
 class MurderScene(Scene):
@@ -133,7 +133,7 @@ class MurderScene(Scene):
 
     def setup(self, registry):
         """注册庄园场景的行动"""
-        from core.actions.common import InteractAction, MoveAction, ObserveAction, SpeakAction, ThinkAction, WhisperAction
+        from actions.common import InteractAction, MoveAction, ObserveAction, SpeakAction, ThinkAction, WhisperAction
 
         for action_cls in [SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction, ThinkAction]:
             registry.register(action_cls())
@@ -144,8 +144,8 @@ class MurderScene(Scene):
         故意不注册 add_npc（剧情明确只有 3 人，无其他人物）
         和 modify_environment（环境证据是静态线索，无需动态修改）。
         """
-        from core.actions.gm_tools import NarrateAction, ModifyCharStateAction
-        from core.actions.gm_npc import NpcSpeakAction
+        from actions.gm_tools import NarrateAction, ModifyCharStateAction
+        from actions.gm_npc import NpcSpeakAction
 
         for action_cls in [NarrateAction, ModifyCharStateAction, NpcSpeakAction]:
             registry.register(action_cls())

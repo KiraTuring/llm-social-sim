@@ -6,10 +6,10 @@ import tempfile
 import pytest
 from conftest import write_plan
 from core.action import ActionRegistry
-from core.actions.common import SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction
+from actions.common import SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction
 from core.manual_agent import ManualAgent
+from core.scene_loader import validate_agent_configs
 from scenarios.tavern import TavernScene
-from scenarios.utils import validate_agent_configs
 
 SCENE = TavernScene()
 REGISTRY = ActionRegistry()

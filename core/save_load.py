@@ -3,10 +3,11 @@
 import json
 from pathlib import Path
 
+from core.action import ActionRegistry
 from core.message import MessageBus
 from core.agent import Agent
 from core.manual_agent import ManualAgent
-from scenarios.utils import load_scene
+from core.scene_loader import load_scene
 
 SAVE_VERSION = 1
 
@@ -95,6 +96,8 @@ def load_simulation_state(path: str, config: dict):
     # npc_names 必须与实际 npcs 实体完全一致（add_npc/remove_npc 保持该不变量）。
     world.npc_names = set(world.npcs.keys())
 
-    gm = GMAgent.from_dict(scene, config, data["gm"])
+    gm_registry = ActionRegistry(include_agent_params=False)
+    scene.setup_gm(gm_registry)
+    gm = GMAgent.from_dict(scene, config, data["gm"], gm_registry)
 
     return world, scene, gm

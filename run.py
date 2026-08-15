@@ -18,7 +18,7 @@ import os
 import sys
 from pathlib import Path
 
-from scenarios.utils import load_scene, list_available_scenes, validate_agent_configs
+from core.scene_loader import load_scene, list_available_scenes, validate_agent_configs
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -86,9 +86,6 @@ def _load_world(load_path: str, config: dict, max_ticks: int | None):
 
     world, scene, gm = load_simulation_state(load_path, config)
     scene.setup(registry := ActionRegistry())
-    gm_registry = ActionRegistry(include_agent_params=False)
-    scene.setup_gm(gm_registry)
-    gm.registry = gm_registry
     start_tick = world.tick + 1
     remaining = max_ticks or config["simulation"]["max_ticks"]
     print(f"从存档恢复 [{scene.name}]，当前 tick={world.tick}，继续运行 {remaining} 个 tick\n")

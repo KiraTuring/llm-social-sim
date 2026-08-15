@@ -8,7 +8,7 @@ from unittest.mock import patch
 from conftest import OFFLINE_CONFIG as CONFIG, make_response as _make_response, make_multi_response as _make_multi_response
 from llm.client import LLMClient
 from core.action import ActionRegistry
-from core.actions.common import SpeakAction, ObserveAction, MoveAction
+from actions.common import SpeakAction, ObserveAction, MoveAction
 from core.gm import GMAgent
 
 

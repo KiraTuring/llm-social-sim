@@ -61,7 +61,7 @@ connections = [
 ```python
 def setup(self, registry: ActionRegistry):
     registry.register(MyCustomAction())
-    # common actions 在场景外 core/actions/common.py
+    # common actions 在场景外 actions/common.py
 ```
 
 ## 自定义 Action 的 tool schema
@@ -116,8 +116,8 @@ GM 工具的注册方式与角色 Action 相同，由场景的 `setup_gm()` 方�
 
 ```python
 def setup_gm(self, registry: ActionRegistry):
-    from core.actions.gm_tools import NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction
-    from core.actions.gm_npc import NpcSpeakAction, AddNpcAction, NpcMoveAction, RemoveNpcAction
+    from actions.gm_tools import NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction
+    from actions.gm_npc import NpcSpeakAction, AddNpcAction, NpcMoveAction, RemoveNpcAction
     for action_cls in [NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction, NpcSpeakAction, AddNpcAction, NpcMoveAction, RemoveNpcAction]:
         registry.register(action_cls())
 ```
@@ -144,7 +144,7 @@ GM 使用的 `ActionRegistry` 使用 `include_agent_params=False`（不含 `inte
 | `think` | 无参数校验。必填 `internal_monologue`，结果写入记忆为 `[thought]` |
 | `interact` | 可选 `modifications`，只有 `interactable_keys` 中的 key 可调 |
 
-## 通讯 Action（`core/actions/communication.py`）
+## 通讯 Action（`actions/communication.py`）
 
 场景相关的远程通讯行动，目前包含 `radio`：
 
