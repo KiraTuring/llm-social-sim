@@ -1,0 +1,231 @@
+"""贸易 Action：同一位置的 Agent 间（含 NPC）转移金钱/物品。
+
+状态约定（与 core.world.ECONOMY_STATE_KEYS 一致）：
+- 金钱: 整数，存在 states["金钱"]
+- 物品: {名称: 数量} dict，存在 states["物品"]
+
+give 是行动者付出的（钱或物品），take 是行动者获得的。take 必须伴随 give
+（有来有往）；纯 give（支付/送礼）允许。旁观者能看到交易的物品，看不到金额。
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from core.action import ActionSpec, validate_content_length
+from core.message import Message
+from core.world import ECONOMY_STATE_KEYS
+
+if TYPE_CHECKING:
+    from core.world import WorldState
+
+MONEY_KEY, ITEMS_KEY = ECONOMY_STATE_KEYS
+
+
+class TradeAction(ActionSpec):
+    name = "trade"
+    description = (
+        "与同一位置的另一个角色交易：give 是你付出的（金钱或物品），take 是你获得的（金钱或物品）。"
+        "take 必须伴随 give（有来有往），纯 give（支付/送礼）允许。旁观者能看到交易的物品，看不到金额"
+    )
+    text_format = "[ACTION]trade[/ACTION]\n[TARGET]{交易对象}[/TARGET]\n[CONTENT]{交易描述，可选}[/CONTENT]"
+
+    def get_tool_schema(self):
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "target": {"type": "string", "description": "交易对象（同位置的另一个角色，Agent 或 NPC）"},
+                        "give_money": {"type": "integer", "description": "你付出的金钱数量（可选）"},
+                        "give_items": {"type": "object", "description": "你付出的物品（可选），如 {\"酒壶\": 1}"},
+                        "take_money": {"type": "integer", "description": "你希望获得的金钱数量（可选）"},
+                        "take_items": {"type": "object", "description": "你希望获得的物品（可选），如 {\"干粮\": 2}"},
+                        "content": {"type": "string", "description": "交易时的行为表现（可选，别人能看到，如「把一枚银币放在柜台上」）"},
+                    },
+                    "required": ["target"],
+                },
+            },
+        }
+
+    def validate_params(self, params: dict, context: dict) -> str | None:
+        """校验交易参数：对象、同位置、give/take 规则、支付能力、内容长度。"""
+        target = params.get("target", "")
+        agent_name = context.get("agent_name", "")
+        agent_names = context.get("agent_names", [])
+        if not target:
+            return "请指定交易对象"
+        if target == agent_name:
+            return "不能和自己交易"
+        if target not in agent_names:
+            return f"'{target}' 不存在，可用的交易对象: {', '.join(agent_names)}"
+        agent_loc = context.get("agent_location", "")
+        if target not in context.get("agents_by_location", {}).get(agent_loc, []):
+            return f"'{target}' 不在你当前的位置({agent_loc})，无法交易"
+
+        give_money = params.get("give_money", 0)
+        give_items = params.get("give_items") or {}
+        take_money = params.get("take_money", 0)
+        take_items = params.get("take_items") or {}
+        if error := self._validate_amounts(give_money, give_items, take_money, take_items):
+            return error
+
+        # 有来有往：take 必须伴随 give；纯 give（支付/送礼）允许
+        giving = give_money > 0 or bool(give_items)
+        taking = take_money > 0 or bool(take_items)
+        if not giving and not taking:
+            return "交易内容为空：请至少付出或获得一些东西"
+        if taking and not giving:
+            return "有来有往：要获得物品/金钱（take），必须先付出（give）"
+
+        # 行动者支付能力（inventory 只含自己的经济状态，见 build_validation_context）
+        inventory = context.get("inventory") or {}
+        wallet = inventory.get(MONEY_KEY, 0)
+        if give_money > wallet:
+            return f"金钱不足：你只有 {wallet}，无法付出 {give_money}"
+        stock = inventory.get(ITEMS_KEY) or {}
+        for name, qty in give_items.items():
+            have = stock.get(name, 0)
+            if qty > have:
+                return f"物品不足：你只有 {name}×{have}，无法付出 {name}×{qty}"
+
+        if error := validate_content_length(params.get("content", ""), context):
+            return error
+        return None
+
+    @staticmethod
+    def _validate_amounts(give_money, give_items, take_money, take_items) -> str | None:
+        """数值合法性：金钱为非负整数，物品数量为正整数。"""
+        for label, value in (("give_money", give_money), ("take_money", take_money)):
+            if not isinstance(value, int) or isinstance(value, bool):
+                return f"{label} 必须是整数"
+            if value < 0:
+                return f"{label} 不能为负"
+        for label, items in (("give_items", give_items), ("take_items", take_items)):
+            if not items:
+                continue
+            if not isinstance(items, dict):
+                return f"{label} 必须是 {{名称: 数量}} 形式的对象"
+            for name, qty in items.items():
+                if not isinstance(qty, int) or isinstance(qty, bool) or qty <= 0:
+                    return f"{label} 中 '{name}' 的数量必须是正整数"
+        return None
+
+    def execute(self, agent_name: str, params: dict, world: "WorldState"):
+        """执行交易：防御性双检 → 转移双方账目 → 私信对手方 + 通知旁观者。"""
+        target = params.get("target", "")
+        try:
+            give_money = int(params.get("give_money") or 0)
+            take_money = int(params.get("take_money") or 0)
+        except (TypeError, ValueError):
+            return [], {"summary": "金额必须是整数"}
+        give_items = params.get("give_items") or {}
+        take_items = params.get("take_items") or {}
+        if not isinstance(give_items, dict) or not isinstance(take_items, dict):
+            return [], {"summary": "物品参数格式错误，应为 {名称: 数量}"}
+
+        actor = world.agents[agent_name]
+        counterparty = world.characters.get(target)
+        if counterparty is None:
+            return [], {"summary": f"未找到角色 {target}"}
+
+        # 防御性双检（validate_params 已拦截，单线程无竞态，这里仅兜底）
+        wallet = actor.states.get(MONEY_KEY, 0)
+        if give_money > wallet:
+            return [], {"summary": f"金钱不足：你只有 {wallet}"}
+        stock = actor.states.get(ITEMS_KEY, {})
+        for name, qty in give_items.items():
+            have = stock.get(name, 0)
+            if qty > have:
+                return [], {"summary": f"物品不足：你只有 {name}×{have}"}
+        c_wallet = counterparty.states.get(MONEY_KEY, 0)
+        if take_money > c_wallet:
+            return [], {"summary": f"{target} 没有足够的金钱（只有 {c_wallet}）"}
+        c_stock = counterparty.states.get(ITEMS_KEY, {})
+        for name, qty in take_items.items():
+            have = c_stock.get(name, 0)
+            if qty > have:
+                return [], {"summary": f"{target} 没有 {name}（只有 {name}×{have}）"}
+
+        # 转移双方账目
+        self._transfer(actor.states, counterparty.states,
+                       give_money, give_items, take_money, take_items)
+
+        detail = self._describe(give_money, give_items, take_money, take_items)
+
+        # 1. 对手方私信（含金额与物品明细）
+        deal_msg = Message(
+            sender=agent_name, recipients=[target], target=target,
+            content=detail, msg_type="trade", tick=world.tick,
+        )
+        world.message_bus.send(deal_msg)
+        messages = [deal_msg]
+
+        # 2. 旁观者通知：只列物品，不列金额
+        bystanders = world.get_hearable_agents(agent_name, exclude=target)
+        if bystanders:
+            visible = self._describe_visible(give_items, take_items)
+            notice_text = f"与 {target} 进行了一笔交易"
+            if visible:
+                notice_text += f"（{visible}）"
+            notice = Message(
+                sender=agent_name, recipients=bystanders, content=notice_text,
+                msg_type="action", tick=world.tick,
+            )
+            world.message_bus.send(notice)
+            messages.append(notice)
+
+        world.add_event(f"交易: {agent_name} ↔ {target}: {detail}")
+        return messages, {"summary": f"交易完成: {detail}"}
+
+    @staticmethod
+    def _transfer(actor_states: dict, target_states: dict,
+                  give_money: int, give_items: dict,
+                  take_money: int, take_items: dict) -> None:
+        """执行双方账目变动：give 从行动者流向对手方，take 从对手方流向行动者。"""
+        if give_money:
+            actor_states[MONEY_KEY] = actor_states.get(MONEY_KEY, 0) - give_money
+            target_states[MONEY_KEY] = target_states.get(MONEY_KEY, 0) + give_money
+        if take_money:
+            target_states[MONEY_KEY] = target_states.get(MONEY_KEY, 0) - take_money
+            actor_states[MONEY_KEY] = actor_states.get(MONEY_KEY, 0) + take_money
+        if give_items:
+            actor_items = actor_states.setdefault(ITEMS_KEY, {})
+            target_items = target_states.setdefault(ITEMS_KEY, {})
+            for name, qty in give_items.items():
+                actor_items[name] = actor_items.get(name, 0) - qty
+                if actor_items[name] <= 0:
+                    del actor_items[name]
+                target_items[name] = target_items.get(name, 0) + qty
+        if take_items:
+            target_items = target_states.setdefault(ITEMS_KEY, {})
+            actor_items = actor_states.setdefault(ITEMS_KEY, {})
+            for name, qty in take_items.items():
+                target_items[name] = target_items.get(name, 0) - qty
+                if target_items[name] <= 0:
+                    del target_items[name]
+                actor_items[name] = actor_items.get(name, 0) + qty
+
+    @staticmethod
+    def _describe(give_money: int, give_items: dict,
+                  take_money: int, take_items: dict) -> str:
+        """交易明细（发给对手方 / 事件日志 / 行动者记忆）。"""
+        parts = []
+        if give_money:
+            parts.append(f"付出金钱{give_money}")
+        if give_items:
+            parts.append("付出" + "、".join(f"{n}×{q}" for n, q in give_items.items()))
+        if take_money:
+            parts.append(f"获得金钱{take_money}")
+        if take_items:
+            parts.append("获得" + "、".join(f"{n}×{q}" for n, q in take_items.items()))
+        return "，".join(parts) or "完成了一次交易"
+
+    @staticmethod
+    def _describe_visible(give_items: dict, take_items: dict) -> str:
+        """旁观者可见描述：只列涉及的物品名，不列金额与数量。"""
+        names = set(give_items) | set(take_items)
+        return "、".join(sorted(names))

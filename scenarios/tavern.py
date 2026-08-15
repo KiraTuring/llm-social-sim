@@ -37,6 +37,9 @@ class TavernScene(Scene):
 
     states = {"情绪": "平静", "精力": 100}
     writable_states = ["情绪"]
+    # 经济状态（金钱/物品）对他人 observe 不可见；也不在 writable_states 中，
+    # LLM 无法通过 state_update 自改钱物——只能通过 trade 动作转移。
+    private_states = ["金钱", "物品"]
 
     agents = [
         {
@@ -49,6 +52,7 @@ class TavernScene(Scene):
                 "雷恩": {"trust": 0, "impression": "欠酒钱的常客，有点心虚"},
                 "艾莉娅": {"trust": 1, "impression": "新来的旅人，看着有些蹊跷"},
             },
+            "states": {"金钱": 80, "物品": {"麦酒": 12, "炖菜": 3}},
         },
         {
             "name": "雷恩",
@@ -60,6 +64,7 @@ class TavernScene(Scene):
                 "老巴克": {"trust": 0, "impression": "酒馆老板，消息灵通但心机深"},
                 "艾莉娅": {"trust": 0, "impression": "神秘旅人，带着上锁的盒子"},
             },
+            "states": {"金钱": 5, "物品": {"旧佩剑": 1, "干粮": 2}},
         },
         {
             "name": "艾莉娅",
@@ -71,6 +76,7 @@ class TavernScene(Scene):
                 "老巴克": {"trust": 1, "impression": "酒馆老板，应该消息灵通"},
                 "雷恩": {"trust": 0, "impression": "佣兵，看起来危险但也许有用"},
             },
+            "states": {"金钱": 30, "物品": {"上锁木盒": 1, "干粮": 1}},
         },
     ]
 
@@ -137,9 +143,9 @@ class TavernScene(Scene):
                     if any(word in msg.content for word in praise_words):
                         agent.update_relationship(sender, {"trust": 1})
 
-        # TODO: 未来添加贸易 Action 后启用
-        @engine.on("trade_offer")
-        def _on_trade_offer(msg, world):
+        # 交易完成后：对手方对发起方增加信任
+        @engine.on("trade")
+        def _on_trade(msg, world):
             if msg.recipients and msg.recipients[0] in world.agents:
                 target = world.agents[msg.recipients[0]]
                 sender = msg.sender
@@ -156,8 +162,9 @@ class TavernScene(Scene):
     def setup(self, registry):
         """注册酒馆场景特定的 actions"""
         from actions.common import InteractAction, MoveAction, ObserveAction, SpeakAction, WhisperAction
+        from actions.trade import TradeAction
 
-        for action_cls in [SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction]:
+        for action_cls in [SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction, TradeAction]:
             registry.register(action_cls())
 
     def setup_gm(self, registry):

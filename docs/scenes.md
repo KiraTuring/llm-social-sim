@@ -162,6 +162,29 @@ GM 使用的 `ActionRegistry` 使用 `include_agent_params=False`（不含 `inte
 
 旁观者在两个位置都能看到"有人在用无线电"，但都不知道内容、不知道通话对象。
 
+## 贸易 Action（`actions/trade.py`）
+
+`trade` 让同一位置的 Agent（含 NPC）转移金钱/物品，打通「行动 → 经济 → 关系」回路：
+
+| Action | 说明 |
+|--------|------|
+| `trade` | 与同一位置的角色交易：`give_money`/`give_items`（付出）+ `take_money`/`take_items`（获得）。take 必须伴随 give（有来有往），纯 give（支付/送礼）允许 |
+
+### 状态约定
+
+- 金钱/物品存在角色的 `states`：`金钱`=整数、`物品`={名称: 数量}（键名见 `core.world.ECONOMY_STATE_KEYS`）
+- 这两个键应**加入 `private_states`**（他人 observe 不可见）且**不要加入 `writable_states`**（LLM 不能通过 `state_update` 自改钱物，只能通过 `trade` 转移）
+- 校验期支付能力只检查行动者自己的钱物（`build_validation_context` 的 `inventory` 字段，只含自己的经济状态，不泄露他人）
+
+### 消息流
+
+```
+行动者 ──→ 对手方（msg_type="trade"，含金额与物品明细）
+       └→ 旁观者（msg_type="action"："与 X 进行了一笔交易（物品名）"——只列物品，不列金额）
+```
+
+交易完成后可在 `setup_rules()` 里监听 `trade` 事件（如 tavern 的信任规则：对手方对发起方 trust +1）。
+
 校验失败时 LLM 会收到错误提示并重试（最多 2 次），超限 fallback 到 `observe`。
 
 ## 规则注册

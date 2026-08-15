@@ -12,6 +12,23 @@ if TYPE_CHECKING:
     from .agent import Agent
 
 
+# 经济类状态键约定（trade 动作使用）：金钱=整数，物品={名称: 数量}。
+# 校验支付能力时只暴露行动者自己的这些状态（见 build_inventory）。
+ECONOMY_STATE_KEYS = ("金钱", "物品")
+
+
+def build_inventory(states: dict) -> dict:
+    """从角色 states 抽取经济类状态视图（行动者自己的支付能力，供参数校验期使用）。
+
+    只包含 ECONOMY_STATE_KEYS 声明的键，dict 值取副本，避免调用方误改真实状态。
+    """
+    return {
+        key: (dict(value) if isinstance(value, dict) else value)
+        for key, value in states.items()
+        if key in ECONOMY_STATE_KEYS
+    }
+
+
 @dataclass
 class WorldState:
     """世界状态"""
@@ -264,4 +281,7 @@ class WorldState:
             "adjacent_locations": self.get_adjacent_locations(agent_location),
             "interactable_keys": self.interactable_keys,
             "content_max_length": self.agents[agent_name].content_max_length,
+            # 行动者自己的经济状态视图（trade 等动作校验支付能力用，不含他人信息）
+            # getattr 兜底：测试里的 stub agent 可能没有 states
+            "inventory": build_inventory(getattr(self.agents[agent_name], "states", {})),
         }
