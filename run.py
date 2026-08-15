@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """通用模拟入口：支持多场景选择。"""
 
+from __future__ import annotations
+
 from render.console import ConsoleRenderer
 from llm.client import LLMClient
 from core.rules import RuleEngine
@@ -105,7 +107,7 @@ def _prepare_world(config: dict, scene_name: str, manual_agents: list[str] | Non
     return world, scene, gm, registry, start_tick, remaining
 
 
-def _setup_services(config: dict, scene, gm):
+def _setup_services(config: dict, scene, gm, world=None):
     """创建模拟核心服务（logger, llm, rule_engine）"""
     log_level = getattr(__import__("logging"), config["logging"].get("level", "INFO"))
     logger = SimLogger(
@@ -114,6 +116,9 @@ def _setup_services(config: dict, scene, gm):
     )
     llm = LLMClient(config["llm"], logger)
     gm.logger = logger
+    if world is not None:
+        for agent in world.agents.values():
+            agent.logger = logger
 
     rule_engine = RuleEngine()
     scene.setup_rules(rule_engine)
@@ -153,7 +158,7 @@ async def run_tui_simulation(config: dict, scene_name: str, max_ticks: int | Non
         config, scene_name, manual_agents, load_path, max_ticks
     )
 
-    logger, llm, rule_engine = _setup_services(config, scene, gm)
+    logger, llm, rule_engine = _setup_services(config, scene, gm, world)
 
     from render.tui_app import SimulationTuiApp
     app = SimulationTuiApp(
@@ -176,7 +181,7 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
     if not load_path:
         _print_scene_header(scene)
 
-    logger, llm, rule_engine = _setup_services(config, scene, gm)
+    logger, llm, rule_engine = _setup_services(config, scene, gm, world)
     renderer = _make_renderer(config, scene)
     engine = SimulationEngine(
         world, gm, registry, llm, rule_engine, logger, config

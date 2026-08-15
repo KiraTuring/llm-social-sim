@@ -166,6 +166,21 @@ async def run_tests():
         pass
     print("[10] JSON 格式错误报错 OK")
 
+    # 11. 内容含标签文本 → 直接构造 Action，不被 parse_text 截断，params 原样保留
+    world, agents = await build_world({
+        "老巴克": {"1": {
+            "action_type": "speak",
+            "content": "甲说[/CONTENT]乙说[/ACTION]",
+            "params": {"tone": "轻声"},
+        }},
+    })
+    agent = agents["老巴克"]
+    action = await think(agent, world, 1)
+    assert action.action_type == "speak", action
+    assert action.content == "甲说[/CONTENT]乙说[/ACTION]", action.content
+    assert action.params == {"tone": "轻声"}, action.params
+    print("[11] 内容含标签文本 OK")
+
     print("=" * 50)
     print("全部 ManualAgent 测试通过")
 

@@ -17,7 +17,6 @@ from memory.memory import AgentMemory
 class _DummyAction(ActionSpec):
     name = "speak"
     description = "说话"
-    parameters = {"content": {"type": "string"}}
     text_format = ""
 
     def execute(self, agent_name, params, world):

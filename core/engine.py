@@ -16,6 +16,8 @@ Agent 级步进（TUI 用，每个角色行动完即可刷新 UI）::
     await engine.end_tick()
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 

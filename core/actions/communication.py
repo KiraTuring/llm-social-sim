@@ -7,10 +7,6 @@ from core.message import Message
 class RadioAction(ActionSpec):
     name = "radio"
     description = "通过无线电与任意位置的队友通话。只有通话对象能听到内容，可见范围内的人会看到你在使用无线电但听不到内容、也不知道通话对象。"
-    parameters = {
-        "target": {"type": "string"},
-        "content": {"type": "string"},
-    }
     text_format = ("[ACTION]radio[/ACTION]\n"
                    "[TARGET]{通话对象}[/TARGET]\n"
                    "[CONTENT]{通话内容}[/CONTENT]\n"

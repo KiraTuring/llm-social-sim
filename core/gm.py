@@ -1,5 +1,7 @@
 """GM Agent：注入事件，推进剧情。"""
 
+from __future__ import annotations
+
 import random
 from typing import TYPE_CHECKING
 

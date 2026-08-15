@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from pydantic import BaseModel, Field
 
@@ -17,12 +17,12 @@ class Action(BaseModel):
     """解析后的 Action 数据结构"""
 
     action_type: str
-    target: str | None = None
+    target: Optional[str] = None
     content: str
     params: dict = Field(default_factory=dict)
     internal_monologue: str = ""
-    result: dict | None = None
-    state_update: dict | None = None
+    result: Optional[dict] = None
+    state_update: Optional[dict] = None
     raw_tool_calls: list[dict] = Field(default_factory=list)
     raw_content: str = ""
 
@@ -32,7 +32,6 @@ class ActionSpec(ABC):
 
     name: str
     description: str
-    parameters: dict
     text_format: str
 
     @abstractmethod
@@ -114,13 +113,19 @@ class ActionRegistry:
 - [ACTION] 必须是以下之一：{', '.join(self.get_action_names())}"""
 
     def parse_text(self, text: str) -> Action:
-        """从文本解析 Action（用于 text_parse 模式）"""
+        """从文本解析 Action（用于 text_parse 模式）。
+
+        缺少 [ACTION] 标签时返回 None（视为无法解析，交由调用方重试/兜底），
+        避免把任意文本静默当成 speak。
+        """
         thought_match = re.search(r"\[THOUGHT\](.*?)\[/THOUGHT\]", text, re.DOTALL)
         action_match = re.search(r"\[ACTION\](.*?)\[/ACTION\]", text, re.DOTALL)
+        if action_match is None:
+            return None
         target_match = re.search(r"\[TARGET\](.*?)\[/TARGET\]", text, re.DOTALL)
         content_match = re.search(r"\[CONTENT\](.*?)\[/CONTENT\]", text, re.DOTALL)
         state_match = re.search(r"\[STATE\](.*?)\[/STATE\]", text, re.DOTALL)
-        action_type = action_match.group(1).strip() if action_match else "speak"
+        action_type = action_match.group(1).strip()
         content = content_match.group(1).strip() if content_match else ""
         target = target_match.group(1).strip() if target_match else None
         internal_monologue = thought_match.group(1).strip() if thought_match else ""

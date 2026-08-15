@@ -1,5 +1,7 @@
 """世界状态管理。"""
 
+from __future__ import annotations
+
 import copy
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -59,10 +61,6 @@ class WorldState:
         if not self.connections:
             return [loc2 for loc2 in self.locations if loc2 != loc]
         return list(self._adjacency.get(loc, set()))
-
-    def advance_tick(self):
-        """推进一个 tick"""
-        self.tick += 1
 
     def update_environment(self, location: str, key: str, value: str) -> str | None:
         """更新环境状态，如果 location 不合法返回错误信息"""

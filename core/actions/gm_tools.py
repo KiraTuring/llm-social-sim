@@ -7,7 +7,6 @@ from core.message import BROADCAST, Message
 class NarrateAction(ActionSpec):
     name = "narrate"
     description = "GM 旁白：向角色发出世界叙事或事件公告。target=留空（世界广播）、角色名（私信）、位置名（该位置及能观察到该位置的所有人）。避免全知视角，只描述角色能感知到的内容。严禁用 narrate 替角色说话或移动角色——本工具只描述环境与事件，角色言行由专门工具处理"
-    parameters = {"event_description": {"type": "string"}}
     text_format = "[ACTION]narrate[/ACTION]\n[CONTENT]{叙事内容，一句话，中文}[/CONTENT]"
 
     def get_tool_schema(self):
@@ -70,7 +69,6 @@ class NarrateAction(ActionSpec):
 class ModifyEnvironmentAction(ActionSpec):
     name = "modify_environment"
     description = "管理某个位置的环境状态指标。可以添加新指标（指定新 key 和 value）、修改现有指标（指定已有 key 和新 value）、或删除无用指标（value='delete'，不可删除场景预定义指标）。"
-    parameters = {"location": {"type": "string"}, "key": {"type": "string"}, "value": {"type": "string"}}
     text_format = "[ACTION]modify_environment[/ACTION]\n[TARGET]{位置}[/TARGET]\n[CONTENT]{key} -> {value}[/CONTENT]"
 
     def get_tool_schema(self):
@@ -123,7 +121,6 @@ class ModifyEnvironmentAction(ActionSpec):
 class ModifyCharStateAction(ActionSpec):
     name = "modify_char_state"
     description = "修改角色的非主观状态（如精力、体力、伤势等）。情绪类主观状态由角色自主控制，此工具应仅用于角色无法自行改变的外部属性。"
-    parameters = {"target": {"type": "string"}, "key": {"type": "string"}, "value": {"type": "string"}}
     text_format = "[ACTION]modify_char_state[/ACTION]\n[TARGET]{角色名}[/TARGET]\n[CONTENT]{key} -> {value}[/CONTENT]"
 
     def get_tool_schema(self):

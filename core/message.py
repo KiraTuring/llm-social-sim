@@ -1,5 +1,7 @@
 """消息系统和消息路由。"""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 

@@ -17,7 +17,6 @@ load_dotenv()
 class TestSpeakAction(ActionSpec):
     name = "speak"
     description = "说话"
-    parameters = {"content": {"type": "string"}}
     text_format = "[ACTION]speak[/ACTION]\n[CONTENT]{内容}[/CONTENT]\n[THOUGHT]{内心独白}[/THOUGHT]"
 
     def execute(self, agent_name, params, world):

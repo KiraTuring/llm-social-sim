@@ -1,5 +1,7 @@
 """日志模块：记录 LLM 调用和系统调试信息。"""
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 

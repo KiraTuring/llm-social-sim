@@ -58,6 +58,13 @@ class Agent(Character):
         self._perceived_inbox: list[dict] = []
         self._chat_history: list[dict] = []
         self._pending_user_msg: dict | None = None
+        self.logger = None
+
+    def _status(self, level: str, message: str) -> None:
+        """输出运行状态：logger 存在时写入日志文件，并始终在控制台显示。"""
+        if self.logger is not None:
+            getattr(self.logger, level)(message)
+        print(f"[{self.name}] {message}")
 
     @classmethod
     def from_config(cls, scene, cfg, config, *, saved=None, **extra):
@@ -341,7 +348,7 @@ class Agent(Character):
             self._pending_user_msg = {"role": "user", "content": context, "tick": tick}
 
         if not action:
-            print(f"[{self.name}] LLM 未返回 Action，使用默认")
+            self._status("warning", "LLM 未返回 Action，使用默认")
 
             action = Action(action_type="observe", content="观察四周", internal_monologue="...")
 
@@ -351,7 +358,7 @@ class Agent(Character):
         """执行 Action 并记录结果。返回产生的消息；执行失败返回空列表。"""
         action_spec = registry.get(action.action_type)
         if action_spec is None:
-            print(f"[{self.name}] 未知行动类型: {action.action_type}")
+            self._status("warning", f"未知行动类型: {action.action_type}")
             return []
 
         try:
@@ -408,7 +415,7 @@ class Agent(Character):
         """行动失败：错误写入 action.result（日志/UI 可见），并清理悬空消息。"""
         action.result = {"error": str(error)}
         self._pending_user_msg = None
-        print(f"[{self.name}] 执行 action 失败: {error}")
+        self._status("error", f"执行 action 失败: {error}")
 
     def _build_last_action(self, action: "Action", world: "WorldState"):
         """构建上一步行动的简单描述"""

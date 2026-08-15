@@ -1,10 +1,13 @@
 """手动控制 Agent：从 JSON 文件读取行动，不调用 LLM。"""
 
+from __future__ import annotations
+
 import json
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from core.action import Action
 from core.agent import Agent
 
 if TYPE_CHECKING:
@@ -92,8 +95,6 @@ class ManualAgent(Agent):
         tick: int = 0,
         validation_context: dict | None = None,
     ):
-        from core.action import Action
-
         action = self._read_action(tick, registry, validation_context)
         if action:
             return action
@@ -143,9 +144,12 @@ class ManualAgent(Agent):
                 )
                 return None
 
-        return registry.parse_text(
-            f"[ACTION]{action_type}[/ACTION]\n"
-            f"[TARGET]{entry['target']}[/TARGET]\n"
-            f"[CONTENT]{entry['content']}[/CONTENT]\n"
-            f"[THOUGHT]{entry['internal_monologue']}[/THOUGHT]"
+        # 直接构造 Action，不走 parse_text：内容含 [ACTION] 等标签文本不会解析错，
+        # 且 JSON 中的 params 字段原样保留（parse_text 会丢弃它）。
+        return Action(
+            action_type=action_type,
+            target=entry.get("target") or None,
+            content=entry.get("content", ""),
+            internal_monologue=entry.get("internal_monologue", ""),
+            params=dict(entry.get("params") or {}),
         )

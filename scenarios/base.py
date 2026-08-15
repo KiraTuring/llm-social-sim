@@ -1,5 +1,7 @@
 """场景基类：定义场景接口和通用逻辑。"""
 
+from __future__ import annotations
+
 import copy
 
 from core.action import ActionRegistry

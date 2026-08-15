@@ -493,5 +493,26 @@ class TestGMChainTools(unittest.TestCase):
         self.assertEqual(pending, [])
 
 
+class TestParseText(unittest.TestCase):
+    """parse_text：缺 [ACTION] 标签返回 None，不再静默回退为 speak。"""
+
+    def setUp(self):
+        self.registry = ActionRegistry()
+        self.registry.register(ObserveAction())
+
+    def test_missing_action_returns_none(self):
+        """完全没有 [ACTION] 标签 → None（调用方走重试/兜底）"""
+        self.assertIsNone(self.registry.parse_text("随便说点什么"))
+
+    def test_with_action_tag_parses(self):
+        """含 [ACTION] 标签 → 正常解析"""
+        action = self.registry.parse_text(
+            "[ACTION]observe[/ACTION][THOUGHT]看看[/THOUGHT]"
+        )
+        self.assertIsNotNone(action)
+        self.assertEqual(action.action_type, "observe")
+        self.assertEqual(action.internal_monologue, "看看")
+
+
 if __name__ == "__main__":
     unittest.main()

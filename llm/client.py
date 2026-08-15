@@ -1,5 +1,7 @@
 """LLM 客户端：统一调用 DeepSeek/本地模型，支持双模式解析。"""
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
@@ -59,6 +61,12 @@ class LLMClient:
             self.logger.debug(f"EXTRA PARAMS: {self.extra_params}")
         self._model_str = f"{self.provider}/{self.model}" if "/" not in self.model else self.model
 
+    def _status(self, level: str, message: str) -> None:
+        """输出运行状态：logger 存在时写入日志文件，并始终在控制台显示。"""
+        if self.logger is not None:
+            getattr(self.logger, level)(message)
+        print(f"[LLM] {message}")
+
     async def call(
         self,
         system_prompt: str,
@@ -106,9 +114,7 @@ class LLMClient:
                 return await litellm.acompletion(**call_kwargs)
             except Exception as e:
                 if api_attempt == 2:
-                    if self.logger:
-                        self.logger.error(f"API 调用失败: {agent_name} | Tick: {tick} | {e}")
-                    print(f"[LLM] 调用失败: {e}")
+                    self._status("error", f"API 调用失败: {agent_name} | Tick: {tick} | {e}")
                     return None
                 await asyncio.sleep(1)
         return None
@@ -228,7 +234,6 @@ class LLMClient:
                     return self._handle_tool_call_error(
                         error,
                         f"{agent_name} 参数错误，重试中 ({retry + 1}/{max_retries}): {error}",
-                        f"{agent_name} 参数错误，重试中 ({retry + 1}/{max_retries}): {error}",
                         choice, raw_response, tool_schemas, messages,
                         system_prompt, agent_name, tick, max_retries, retry,
                     )
@@ -253,7 +258,6 @@ class LLMClient:
                 return self._handle_tool_call_error(
                     f"解析参数失败: {e}",
                     f"解析 tool call 失败: {agent_name} | Tick: {tick} | {e}",
-                    f"解析 tool call 失败: {e}",
                     choice, raw_response, tool_schemas, messages,
                     system_prompt, agent_name, tick, max_retries, retry,
                 )
@@ -285,7 +289,6 @@ class LLMClient:
         self,
         feedback,
         warn_text,
-        print_text,
         choice,
         raw_response,
         tool_schemas,
@@ -301,14 +304,13 @@ class LLMClient:
         返回 ("retry", feedback) 或 ("fallback", None)。日志/打印在此统一处理。
         """
         if retry < max_retries:
+            self._status("warning", warn_text)
             if self.logger:
-                self.logger.warning(warn_text)
                 self.logger.log_llm_call(
                     agent_name=agent_name, tick=tick, mode="tool_call",
                     system_prompt=system_prompt, messages=messages,
                     schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
                 )
-            print(f"[LLM] {print_text}")
             return "retry", feedback
         if self.logger:
             self.logger.log_llm_call(
@@ -316,7 +318,7 @@ class LLMClient:
                 system_prompt=system_prompt, messages=messages,
                 schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
             )
-        print(f"[LLM] {agent_name} 重试耗尽，使用 fallback")
+        self._status("warning", f"{agent_name} 重试耗尽，使用 fallback")
         return "fallback", None
 
     async def call_multi(
@@ -353,14 +355,10 @@ class LLMClient:
                 tool_calls = list(choice.message.tool_calls)
                 if limit_tools is not None and len(tool_calls) > limit_tools:
                     discarded = len(tool_calls) - limit_tools
-                    if self.logger:
-                        self.logger.warning(
-                            f"{agent_name} 一次返回 {len(tool_calls)} 个工具，"
-                            f"仅保留前 {limit_tools} 个，显式丢弃 {discarded} 个"
-                        )
-                    print(
-                        f"[LLM] {agent_name} 一次返回 {len(tool_calls)} 个工具，"
-                        f"仅保留第 1 个，显式丢弃 {discarded} 个"
+                    self._status(
+                        "warning",
+                        f"{agent_name} 一次返回 {len(tool_calls)} 个工具，"
+                        f"仅保留前 {limit_tools} 个，显式丢弃 {discarded} 个",
                     )
                     tool_calls = tool_calls[:limit_tools]
 
@@ -401,14 +399,13 @@ class LLMClient:
                     )
                 return "success", (choice.message.content, [])
             if retry < max_retries:
+                self._status("warning", f"{agent_name} 未调用工具，重试中 ({retry + 1}/{max_retries})")
                 if self.logger:
-                    self.logger.warning(f"{agent_name} 未调用工具，重试中 ({retry + 1}/{max_retries})")
                     self.logger.log_llm_call(
                         agent_name=agent_name, tick=tick, mode="tool_call",
                         system_prompt=system_prompt, messages=messages,
                         schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
                     )
-                print(f"[LLM] {agent_name} 未调用工具，重试中 ({retry + 1}/{max_retries})")
                 return "retry", "请选择一个可用的工具来行动，不要只输出文字。"
             if self.logger:
                 self.logger.log_llm_call(
@@ -416,7 +413,7 @@ class LLMClient:
                     system_prompt=system_prompt, messages=messages,
                     schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
                 )
-            print(f"[LLM] {agent_name} 重试耗尽，使用 fallback")
+            self._status("warning", f"{agent_name} 重试耗尽，使用 fallback")
             return "fallback", (choice.message.content, [])
 
         return await self._retry_loop(
@@ -473,14 +470,13 @@ class LLMClient:
 
             if error:
                 if retry < max_retries:
+                    self._status("warning", f"{agent_name} 输出错误，重试中 ({retry + 1}/{max_retries}): {error}")
                     if self.logger:
-                        self.logger.warning(f"{agent_name} 输出错误，重试中 ({retry + 1}/{max_retries}): {error}")
                         self.logger.log_llm_call(
                             agent_name=agent_name, tick=tick, mode="text_parse",
                             system_prompt=system_prompt, messages=messages,
                             schema_or_guide=text_guide, raw_response=raw_response, parsed_action=None,
                         )
-                    print(f"[LLM] {agent_name} 输出错误，重试中 ({retry + 1}/{max_retries}): {error}")
                     return "retry", error
                 if self.logger:
                     self.logger.log_llm_call(
@@ -488,7 +484,7 @@ class LLMClient:
                         system_prompt=system_prompt, messages=messages,
                         schema_or_guide=text_guide, raw_response=raw_response, parsed_action=None,
                     )
-                print(f"[LLM] {agent_name} 重试耗尽，使用 fallback")
+                self._status("warning", f"{agent_name} 重试耗尽，使用 fallback")
                 return "fallback", (text, None)
 
             parsed_action = {

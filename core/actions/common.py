@@ -7,7 +7,6 @@ from core.message import Message, BROADCAST
 class SpeakAction(ActionSpec):
     name = "speak"
     description = "对某人或所有人说话（同位置和相邻位置的人都能听到）"
-    parameters = {"content": {"type": "string"}}
     text_format = "[ACTION]speak[/ACTION]\n[TARGET]{目标}[/TARGET]\n[CONTENT]{内容}[/CONTENT]\n[THOUGHT]{内心独白}[/THOUGHT]"
 
     def get_tool_schema(self):
@@ -60,7 +59,6 @@ class SpeakAction(ActionSpec):
 class WhisperAction(ActionSpec):
     name = "whisper"
     description = "悄悄话（只有目标能听到内容，周围的人会注意到你在窃窃私语）"
-    parameters = {"content": {"type": "string"}}
     text_format = "[ACTION]whisper[/ACTION]\n[TARGET]{目标}[/TARGET]\n[CONTENT]{内容}[/CONTENT]\n[THOUGHT]{内心独白}[/THOUGHT]"
 
     def get_tool_schema(self):
@@ -122,7 +120,6 @@ class WhisperAction(ActionSpec):
 class MoveAction(ActionSpec):
     name = "move"
     description = "移动到另一个位置"
-    parameters = {"target": {"type": "string"}, "content": {"type": "string"}}
     text_format = "[ACTION]move[/ACTION]\n[TARGET]{目标位置}[/TARGET]\n[CONTENT]{移动时的行为表现（别人能看到，如「快步走过去」）}[/CONTENT]\n[THOUGHT]{内心独白}[/THOUGHT]"
 
     def get_tool_schema(self):
@@ -191,7 +188,6 @@ class MoveAction(ActionSpec):
 class ObserveAction(ActionSpec):
     name = "observe"
     description = "观察四周。每次调用返回同样的环境信息（取决于你所在位置和可见范围），不会因为调用多次而得到不同结果。并非所有位置都能看到"
-    parameters = {}
     text_format = "[ACTION]observe[/ACTION]\n[THOUGHT]{内心独白}[/THOUGHT]"
 
     def get_tool_schema(self):
@@ -253,7 +249,6 @@ class ObserveAction(ActionSpec):
 class ThinkAction(ActionSpec):
     name = "think"
     description = "思考或等待。在你需要思考、等别人回复、或没有明确可做的事时使用。你的思考会写入你的记忆"
-    parameters = {}
     text_format = "[ACTION]think[/ACTION]\n[THOUGHT]{内心独白}[/THOUGHT]"
 
     def get_tool_schema(self):
@@ -280,7 +275,6 @@ class ThinkAction(ActionSpec):
 class InteractAction(ActionSpec):
     name = "interact"
     description = "与物品/环境互动，可附带对环境指标的修改（如调节设备、开关系统等）"
-    parameters = {"content": {"type": "string"}}
     text_format = "[ACTION]interact[/ACTION]\n[CONTENT]{互动描述}[/CONTENT]\n[THOUGHT]{内心独白}[/THOUGHT]"
 
     def get_tool_schema(self):
