@@ -185,7 +185,7 @@ class SimulationEngine:
         """结束当前 tick：轮换行动顺序、记录结束日志。"""
         if self._current_tick is None:
             return
-        if self.config["simulation"]["rotate_order"]:
+        if self.config["simulation"].get("rotate_order", False):
             self.world.rotate_order()
         self.logger.log_tick_end(self._current_tick)
         self._current_tick = None

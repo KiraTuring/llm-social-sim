@@ -290,30 +290,32 @@ class WorldState:
             self.action_order = self.action_order[1:] + [self.action_order[0]]
 
     def build_validation_context(self, agent_name: str) -> dict:
-        """为指定 Agent 或 GM 构建 LLM 参数校验上下文"""
+        """为指定 Agent 或 GM 构建 LLM 参数校验上下文。"""
+        base = {
+            "agent_name": agent_name,
+            "locations": self.locations,
+            "interactable_keys": self.interactable_keys,
+        }
         if agent_name not in self.agents:
             return {
-                "agent_name": agent_name,
+                **base,
                 "agent_names": list(self.agents.keys()),
-                "locations": self.locations,
                 "npc_names": list(self.npc_names),
                 "npc_locations": {n: self.npcs[n].location for n in self.npcs},
-                "interactable_keys": self.interactable_keys,
             }
-        agent_location = self.agents[agent_name].location
+
+        agent = self.agents[agent_name]
+        agent_location = agent.location
         agent_names = list(self.agents.keys()) + [n for n in self.npcs if n != agent_name]
-        agents_by_location = {loc: self.get_characters_in_location(loc) for loc in self.locations}
         return {
-            "agent_name": agent_name,
+            **base,
             "agent_location": agent_location,
             "agent_names": agent_names,
-            "locations": self.locations,
-            "agents_by_location": agents_by_location,
+            "agents_by_location": {loc: self.get_characters_in_location(loc) for loc in self.locations},
             "hearable_agents": self.get_hearable_agents(agent_name),
             "adjacent_locations": self.get_adjacent_locations(agent_location),
-            "interactable_keys": self.interactable_keys,
-            "content_max_length": self.agents[agent_name].content_max_length,
+            "content_max_length": agent.content_max_length,
             # 行动者自己的经济状态视图（trade 等动作校验支付能力用，不含他人信息）
             # getattr 兜底：测试里的 stub agent 可能没有 states
-            "inventory": build_inventory(getattr(self.agents[agent_name], "states", {})),
+            "inventory": build_inventory(getattr(agent, "states", {})),
         }

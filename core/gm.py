@@ -16,6 +16,7 @@ class GMAgent:
     """GM Agent：注入事件，推进剧情"""
 
     MAX_TURNS = 3
+    RECENT_MESSAGE_WINDOW = 50
 
     def __init__(self, events: list, random_events: list, chance: float,
                  gm_registry: ActionRegistry, use_llm: bool = False,
@@ -87,7 +88,7 @@ class GMAgent:
             self._broadcast_event(e, world)
 
         if self.use_llm and llm_client:
-            recent = world.message_bus.get_recent(50)
+            recent = world.message_bus.get_recent(self.RECENT_MESSAGE_WINDOW)
             trigger = any(
                 (m.trigger_gm or
                  m.target in world.npc_names)

@@ -62,6 +62,22 @@ class AgentMemory:
         """压缩摘要（只读，渲染/展示用）。"""
         return self._summary
 
+    @property
+    def needs_compression(self) -> bool:
+        """是否需要压缩短期记忆。"""
+        return self._compress_needed
+
+    @property
+    def short_term_size(self) -> int:
+        """当前短期记忆条数。"""
+        return len(self._short_term)
+
+    def oldest_short_term_tick(self) -> int | None:
+        """短期记忆中最早的 tick；没有短期记忆时返回 None。"""
+        if not self._short_term:
+            return None
+        return min(e["tick"] for e in self._short_term)
+
     def recent(self, limit: int) -> list[dict]:
         """返回最近 limit 条短期记忆（返回副本，渲染/展示用）。"""
         return self._short_term[-limit:]

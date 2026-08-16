@@ -11,7 +11,6 @@ from memory.memory import AgentMemory
 if TYPE_CHECKING:
     from core.world import WorldState
     from llm.client import LLMClient
-    from memory.memory import AgentMemory
 
 
 class Agent(Character):
@@ -232,7 +231,7 @@ class Agent(Character):
         memory_context = self.memory.get_context() if self.prompt_format == "text" else None
         inbox_lines = self._ingest_inbox(world)
         result = self._build_context(world, inbox_lines, memory_context=memory_context)
-        if self.memory._compress_needed and llm_client:
+        if self.memory.needs_compression and llm_client:
             await self._maybe_compress(llm_client)
         return result
 
@@ -299,7 +298,7 @@ class Agent(Character):
         """记忆压缩 + 关系更新 + chat 历史截断（LLM 失败静默跳过）。"""
         if llm_client.logger:
             llm_client.logger.debug(
-                f"{self.name} 触发记忆压缩 ({len(self.memory._short_term)} 条)"
+                f"{self.name} 触发记忆压缩 ({self.memory.short_term_size} 条)"
             )
         try:
             rel_updates = await self.memory.compress(llm_client, relationships=self.relationships)
@@ -327,16 +326,16 @@ class Agent(Character):
         messages = list(self._chat_history)
         messages.append({"role": "user", "content": current_context, "tick": tick})
 
-        if self.memory._summary:
-            messages.insert(0, {"role": "user", "content": f"【你的过去】\n{self.memory._summary}"})
+        if self.memory.summary:
+            messages.insert(0, {"role": "user", "content": f"【你的过去】\n{self.memory.summary}"})
 
         return messages
 
     def _truncate_chat_history(self):
         """压缩后截断 chat_history：只保留 _short_term 中最早 tick 之后的条目。"""
-        if not self.memory._short_term:
+        oldest_tick = self.memory.oldest_short_term_tick()
+        if oldest_tick is None:
             return
-        oldest_tick = min(e["tick"] for e in self.memory._short_term)
         self._chat_history = [e for e in self._chat_history if e.get("tick", 0) >= oldest_tick]
 
     async def think(
@@ -425,7 +424,7 @@ class Agent(Character):
                 summary += f" (目标: {action.target})"
             self.memory.add(summary, tick=world.tick)
 
-        self._build_last_action(action, world)
+        self._build_last_action(action)
 
         if self.prompt_format == "chat":
             if self._pending_user_msg:
@@ -439,7 +438,7 @@ class Agent(Character):
         self._pending_user_msg = None
         self._status("error", f"执行 action 失败: {error}")
 
-    def _build_last_action(self, action: "Action", world: "WorldState"):
+    def _build_last_action(self, action: "Action"):
         """构建上一步行动的简单描述"""
         parts = [f"[{action.action_type}]"]
         if action.target:
