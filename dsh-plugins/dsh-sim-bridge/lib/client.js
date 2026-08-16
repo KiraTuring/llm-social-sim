@@ -47,15 +47,21 @@ window.__ModuleLoader__.load({
 				}
 			}, []);
 
-			// host 配置（config.panelEnabled）：false 时整个面板不渲染、不轮询
+			// host 配置轮询：始终运行（config 命令不 spawn 桥接），实时检测面板开关
 			React.useEffect(() => {
-				rpc("config", {}).then((r) => {
-					if (r && r.ok && r.data && typeof r.data.panelEnabled === "boolean") {
-						setPanelEnabled(r.data.panelEnabled);
-					}
-				}).catch(() => {});
+				const check = () => {
+					rpc("config", {}).then((r) => {
+						if (r && r.ok && r.data && typeof r.data.panelEnabled === "boolean") {
+							setPanelEnabled(r.data.panelEnabled);
+						}
+					}).catch(() => {});
+				};
+				check();
+				const timer = setInterval(check, 3000);
+				return () => clearInterval(timer);
 			}, []);
 
+			// 状态轮询：仅面板启用时运行（开关变化由上面的 config 轮询驱动）
 			React.useEffect(() => {
 				if (!panelEnabled) return;
 				refresh();
@@ -176,7 +182,60 @@ window.__ModuleLoader__.load({
 			);
 		}
 
+		function SettingsSection(props) {
+			const h = React.createElement;
+			const api = props && props.api;
+			const [enabled, setEnabled] = React.useState(true);
+			const [rev, setRev] = React.useState(null);
+			const [err, setErr] = React.useState("");
+			const [saving, setSaving] = React.useState(false);
+
+			React.useEffect(() => {
+				if (!api) return;
+				api.settings.describe({}).then((r) => {
+					const ns = (r && r.namespaces || []).find((n) => n.ns === "sim-bridge");
+					if (ns) {
+						setEnabled(!!(ns.value && ns.value.panelEnabled));
+						setRev(ns.revision);
+					}
+				}).catch((e) => setErr(String((e && e.message) || e)));
+			}, [api]);
+
+			const toggle = () => {
+				if (!api || saving) return;
+				setSaving(true);
+				setErr("");
+				api.settings.update({
+					ns: "sim-bridge",
+					patch: { panelEnabled: !enabled },
+					expectedRevision: rev === null ? undefined : rev,
+				}).then((view) => {
+					setEnabled(!!(view && view.value && view.value.panelEnabled));
+					if (view && typeof view.revision === "number") setRev(view.revision);
+				}).catch((e) => setErr(String((e && e.message) || e))).finally(() => setSaving(false));
+			};
+
+			const row = { display: "flex", gap: 8, alignItems: "center", margin: "12px 0" };
+			const desc = { fontSize: 12, color: "rgba(128,128,128,0.9)", margin: "4px 0" };
+			const errStyle = { fontSize: 12, color: "#c87828", margin: "4px 0" };
+
+			return h("div", null,
+				h("p", { style: desc }, "LLM 社会模拟引擎的实时控制面板（输入框上方 dock）。关闭后面板不显示、不轮询；sim_* 工具与 /sim-bridge/rpc 不受影响。修改立即生效。"),
+				h("div", { style: row },
+					h("input", { type: "checkbox", checked: enabled, disabled: saving, onChange: toggle }),
+					h("label", null, "显示「社会模拟」面板"),
+				),
+				err ? h("p", { style: errStyle }, "错误: " + err) : null,
+			);
+		}
+
 		function apply(ctx) {
+			const connection = ctx.get("connection");
+			const api = (connection && connection.api) || null;
+			ctx.slots.inject("settings.section", () => ctx.slots.register(
+				{ name: "settings.section", id: "sim-bridge", order: 25, label: "社会模拟" },
+				() => React.createElement(SettingsSection, { api })
+			));
 			ctx.slots.inject("conversation.input.dock", () => ctx.slots.register(
 				{ name: "conversation.input.dock", id: "sim-bridge-panel", order: 30 },
 				() => React.createElement(Panel, null)

@@ -16,6 +16,8 @@
  */
 
 const REPO_ROOT_FALLBACK = '/Users/haitongwang/Work/llm_playground'
+const schemastery = require('@deepseek-ai/schemastery')
+const z = (schemastery && schemastery.default) || schemastery
 
 // subprocess/webServer 是硬依赖：用 inject 声明，cordis 会 park 插件直到两者
 // 就绪再执行 apply（patch 插入的 host 行在 root ctx 上可能先于 webServer 提供者
@@ -30,7 +32,9 @@ module.exports = {
       worldActive: false,
       repoRoot: REPO_ROOT_FALLBACK,
       routeError: null,
-      // 面板开关（host 组合行 config.panelEnabled，默认 true；false 时 Client 面板不渲染）
+      settingsError: null,
+      // 面板开关的 base 层（host 组合行 config.panelEnabled，默认 true）；
+      // 用户层由 settings 命名空间提供（设置页可改，applies: live 立即生效）
       panelEnabled: !(config && config.panelEnabled === false),
     }
 
@@ -38,6 +42,30 @@ module.exports = {
     const webServer = ctx.webServer
     // 桥接进程/世界是进程级单例：仓库路径是部署事实。不能用
     // sandboxPolicy.workspaceRoot（host 平面无会话，它只会回退成 HOME 目录）。
+
+    // ---------- settings 命名空间（设置页可改、持久化、live 生效） ----------
+
+    let simSettings = null
+    const settingsService = ctx.get('settings')
+    if (settingsService) {
+      try {
+        simSettings = settingsService.register(
+          'sim-bridge',
+          z.object({ panelEnabled: z.boolean() }),
+          { base: { panelEnabled: state.panelEnabled }, applies: 'live' },
+        )
+      } catch (e) {
+        state.settingsError = String((e && e.message) || e)
+        ctx.logger.warn('[sim-bridge] settings.register failed: ' + state.settingsError)
+      }
+    }
+    const effectivePanelEnabled = () => {
+      if (simSettings) {
+        const v = simSettings.get()
+        if (v && typeof v.panelEnabled === 'boolean') return v.panelEnabled
+      }
+      return state.panelEnabled
+    }
 
   // ---------- 桥接进程（JSONL over stdio） ----------
 
@@ -170,11 +198,12 @@ module.exports = {
     command,
     state,
     diag: () => ({
-      panelEnabled: state.panelEnabled,
+      panelEnabled: effectivePanelEnabled(),
       worldActive: state.worldActive,
       bridgeAlive: !!(state.child && !state.child.dead),
       repoRoot: state.repoRoot,
       routeError: state.routeError,
+      settingsError: state.settingsError,
       bridgeStderrTail: stderrTail(),
     }),
   }
@@ -206,10 +235,11 @@ module.exports = {
           // 配置命令不触碰桥接进程（不 spawn），直接返回 host 配置
           result.ok = true
           result.data = {
-            panelEnabled: state.panelEnabled,
+            panelEnabled: effectivePanelEnabled(),
             worldActive: state.worldActive,
             bridgeAlive: !!(state.child && !state.child.dead),
             routeError: state.routeError,
+            settingsError: state.settingsError,
           }
         } else if (body && typeof body.cmd === 'string' && body.cmd) {
           const args = {}

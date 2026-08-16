@@ -32,7 +32,12 @@ LLM 社会模拟引擎（本仓库）的 DSH 持久插件。**单包双面 + 双
 
 ## 配置
 
-host 行支持 `config.panelEnabled`（默认 `true`）：设为 `false` 时 Client 面板整体不渲染、不轮询（工具与 `/sim-bridge/rpc` 不受影响）。改配置需重启 DSH 生效。
+两层开关，host 组合行的 `config.panelEnabled` 是 **base 层**（默认 `true`）；GUI 的
+**设置 → 社会模拟**页（`settings.section`，持久化到 settings.yaml、`applies: live`
+立即生效）是 **user 层**，优先级更高。两层任一为 `false` 时 Client 面板不渲染、不
+轮询（工具与 `/sim-bridge/rpc` 不受影响）。
+
+改组合行配置需重启 DSH；改 GUI 设置立即生效、无需重启：
 
 ```yaml
 - insert:
@@ -41,6 +46,9 @@ host 行支持 `config.panelEnabled`（默认 `true`）：设为 `false` 时 Cli
       config:
         panelEnabled: false
 ```
+
+注意：设置页出现在 **设置面板左侧导航**（「社会模拟」），不在「设置-插件」标签里
+（那个页签是只读的 Loader 清单）。
 
 ## 排障
 
