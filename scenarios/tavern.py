@@ -35,8 +35,16 @@ class TavernScene(Scene):
         "  后厨 → 飘出炖菜和面包的香气"
     )
 
-    states = {"情绪": "平静", "精力": 100}
+    instruction = (
+        "状态同步：你的情绪会随事件和互动发生变化。"
+        "如果你的情绪发生了变化（比如感到紧张、担忧、放松、愤怒等），"
+        "请在行动时通过 state_update 参数同步更新你的状态。"
+        "可更新字段：情绪。"
+    )
+
+    states = {"情绪": "平静"}
     writable_states = ["情绪"]
+    # 本场景不设精力：聊天场景无需体力机制，且精力若由 LLM 自决更新不合理。
     # 经济状态（金钱/物品）对他人 observe 不可见；也不在 writable_states 中，
     # LLM 无法通过 state_update 自改钱物——只能通过 trade 动作转移。
     private_states = ["金钱", "物品"]

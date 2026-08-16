@@ -350,3 +350,46 @@ def test_extract_state_events_pure_function(monkeypatch):
         assert e["tick"] == 5
         assert e["sender"] == "GM"
         assert e["msg_type"] == "system_event"
+
+
+def test_tavern_scene_prompt_and_states():
+    """tavern 场景配置：instruction 强调 state_update，且不设精力。"""
+    scene = TavernScene()
+    assert "state_update" in scene.instruction
+    assert "情绪" in scene.instruction
+    assert "情绪" in scene.states
+    assert "精力" not in scene.states
+    assert scene.writable_states == ["情绪"]
+
+
+def test_act_as_state_update_applies_writable_only(bridge):
+    """state_update 应用：只写 writable_states（情绪），忽略不可写字段（金钱）。"""
+    bridge.start_tavern(1)
+    bridge.send({
+        "req_id": 2,
+        "cmd": "act_as",
+        "agent": "艾莉娅",
+        "action_type": "interact",
+        "content": "抱紧木盒",
+        "params": {"state_update": {"情绪": "紧张"}},
+    })
+    resp = bridge.send({"req_id": 3, "cmd": "step", "ticks": 1})
+    assert resp["ok"] is True
+    state = bridge.send({"req_id": 4, "cmd": "state"})["data"]
+    a = next(x for x in state["agents"] if x["name"] == "艾莉娅")
+    assert a["states"]["情绪"] == "紧张"
+
+    # 不可写字段（金钱，private 且不在 writable_states）应被忽略
+    bridge.send({
+        "req_id": 5,
+        "cmd": "act_as",
+        "agent": "艾莉娅",
+        "action_type": "interact",
+        "content": "数了数钱",
+        "params": {"state_update": {"金钱": 999}},
+    })
+    resp = bridge.send({"req_id": 6, "cmd": "step", "ticks": 1})
+    assert resp["ok"] is True
+    state = bridge.send({"req_id": 7, "cmd": "state"})["data"]
+    a = next(x for x in state["agents"] if x["name"] == "艾莉娅")
+    assert a["states"]["金钱"] == 30
