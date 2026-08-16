@@ -8,20 +8,14 @@ from dataclasses import dataclass
 BROADCAST = "all"
 """发送给 \"all\" 表示广播给所有已知 Agent"""
 
-# 消息类型常量：所有 msg_type 的单一事实来源（动作发送 / 规则监听 / GM 触发共用）。
-# 新消息类型先在常量表声明，避免魔法字符串散落。
-MSG_SPEECH = "speech"
-MSG_WHISPER = "whisper"
-MSG_ACTION = "action"
-MSG_INTERACT = "interact"
-MSG_SYSTEM_EVENT = "system_event"
-MSG_RADIO = "radio"
-MSG_TRADE = "trade"
-
 
 @dataclass
 class Message:
-    """单条消息"""
+    """单条消息
+
+    trigger_gm: 发送方显式声明本条消息是否需要 GM 关注（与环境互动、对 NPC 说话等）。
+    GM 触发判断以此字段为准，不依赖消息类型字符串。
+    """
 
     sender: str
     recipients: list[str]
@@ -29,6 +23,7 @@ class Message:
     msg_type: str
     tick: int
     target: str | None = None
+    trigger_gm: bool = False
 
     def to_dict(self) -> dict:
         """序列化为可保存的 dict"""
@@ -39,7 +34,13 @@ class Message:
             "msg_type": self.msg_type,
             "tick": self.tick,
             "target": self.target,
+            "trigger_gm": self.trigger_gm,
         }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Message":
+        """从 dict 恢复；旧存档缺 trigger_gm 字段时回退为 False（向后兼容）。"""
+        return cls(**{**data, "trigger_gm": data.get("trigger_gm", False)})
 
 
 class MessageBus:
@@ -88,9 +89,9 @@ class MessageBus:
         """从 dict 恢复 MessageBus"""
         bus = cls()
         bus._known_agents = set(data["known_agents"])
-        bus._messages = [Message(**m) for m in data["messages"]]
+        bus._messages = [Message.from_dict(m) for m in data["messages"]]
         bus._inboxes = {
-            name: [Message(**m) for m in msgs]
+            name: [Message.from_dict(m) for m in msgs]
             for name, msgs in data["inboxes"].items()
         }
         return bus

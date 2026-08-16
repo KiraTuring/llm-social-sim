@@ -1,7 +1,7 @@
 """GM Action 实现：narrate, modify_environment, 后续 add_agent/add_location 等。"""
 
 from core.action import ActionSpec
-from core.message import BROADCAST, MSG_SYSTEM_EVENT, Message
+from core.message import BROADCAST, Message
 
 
 class NarrateAction(ActionSpec):
@@ -59,7 +59,7 @@ class NarrateAction(ActionSpec):
             recipients = [BROADCAST]
 
         msg = Message(sender="GM", recipients=recipients, target=target if target else None,
-                      content=content, msg_type=MSG_SYSTEM_EVENT, tick=world.tick)
+                      content=content, msg_type="system_event", tick=world.tick)
         world.message_bus.send(msg)
         prefix = f"[{target}] " if target else ""
         world.add_event(f"旁白: {prefix}{content}")

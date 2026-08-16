@@ -117,3 +117,38 @@ def test_agent_ingests_all_inbox_messages():
     assert len(world.agents["测试"].memory._short_term) == 3
     assert len(world.agents["测试"]._perceived_inbox) == 3
     assert context.count("你好3") == 1
+
+
+def test_trigger_gm_default_false_and_roundtrip():
+    """trigger_gm 默认 False；to_dict/from_dict 往返一致。"""
+    assert _msg("甲", "你好").trigger_gm is False
+
+    flagged = Message(
+        sender="甲", recipients=["乙"], content="开动引擎",
+        msg_type="interact", tick=1, trigger_gm=True,
+    )
+    data = flagged.to_dict()
+    assert data["trigger_gm"] is True
+    assert Message.from_dict(data).trigger_gm is True
+
+    # 未置位时序列化也是 False，往返不变
+    plain = Message.from_dict(_msg("甲", "你好").to_dict())
+    assert plain.trigger_gm is False
+
+
+def test_from_dict_tolerates_missing_trigger_gm():
+    """旧存档消息 dict 缺 trigger_gm 键时回退 False，向后兼容。"""
+    old = {
+        "sender": "甲", "recipients": ["乙"], "content": "hi",
+        "msg_type": "speech", "tick": 1, "target": None,
+    }
+    restored = Message.from_dict(old)
+    assert restored.trigger_gm is False
+
+    bus = MessageBus.from_dict({
+        "known_agents": ["甲"],
+        "messages": [old],
+        "inboxes": {"甲": [old]},
+    })
+    assert bus.get_all()[0].trigger_gm is False
+    assert bus.get_inbox("甲")[0].trigger_gm is False

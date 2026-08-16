@@ -91,6 +91,8 @@ def _exec(action):
 
 `GMAgent.check_and_inject()` 中 LLM 事件触发的条件：
 
-- 上一 tick 有 `interact` 消息 → **强制触发**
-- 上一 tick 有 `speech` 消息且 target 是 NPC 名 → **强制触发**
+- 上一 tick 有 `trigger_gm=True` 的消息（如 `interact` 环境互动）→ **强制触发**
+- 上一 tick 有消息且 target 是 NPC 名 → **强制触发**（兜底：玩家对 NPC 说话/私语，GM 需作为 NPC 回应；不依赖 flag）
 - 以上都没有 → 以 `llm_event_chance` 概率随机触发
+
+`trigger_gm` 是 `Message` 上的显式布尔字段：发送方声明"本条消息需要 GM 关注"，GM 触发判断以此为准，不再从消息类型字符串推断。需要 GM 响应的新动作在发送消息时置 `trigger_gm=True`。

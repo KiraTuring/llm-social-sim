@@ -1,9 +1,12 @@
 """GM 事件注入测试：计划事件确定性注入、随机事件按概率注入（离线，不调 LLM）。"""
 
+from unittest.mock import AsyncMock
+
 from core.action import ActionRegistry
+from core.character import NPC
 from core.gm import GMAgent
 from core.world import WorldState
-from core.message import MessageBus
+from core.message import BROADCAST, Message, MessageBus
 from scenarios._test import _TestScene
 
 
@@ -64,3 +67,65 @@ async def test_random_event_injected_with_chance_1():
         await gm.check_and_inject(world)
     log = "\n".join(world.event_log_texts())
     assert any(name in log for name in ("醉汉", "壁炉")), log
+
+
+def _llm_trigger_gm() -> GMAgent:
+    """use_llm 开启、随机概率为 0 的 GM，便于精确验证触发条件。"""
+    return GMAgent(
+        events=[], random_events=[], chance=0.0,
+        use_llm=True, llm_chance=0.0,
+        gm_registry=_make_gm_registry(),
+    )
+
+
+async def test_llm_triggered_by_trigger_gm_flag():
+    """上一 tick 的消息带 trigger_gm=True（如 interact）触发 GM。"""
+    world = _build_world()
+    gm = _llm_trigger_gm()
+    calls: list[int] = []
+    gm._generate_llm_event = AsyncMock(side_effect=lambda w, c: calls.append(w.tick))
+    world.message_bus.register_agent("测试甲")
+
+    world.tick = 2
+    world.message_bus.send(Message(
+        sender="测试甲", recipients=[BROADCAST], content="开动引擎",
+        msg_type="interact", tick=1, trigger_gm=True,
+    ))
+    await gm.check_and_inject(world, llm_client=object())
+    assert calls == [2]
+
+
+async def test_llm_triggered_by_npc_target_fallback():
+    """target 是 NPC 的消息仍触发 GM（兜底路径，不依赖 flag）。"""
+    world = _build_world()
+    gm = _llm_trigger_gm()
+    calls: list[int] = []
+    gm._generate_llm_event = AsyncMock(side_effect=lambda w, c: calls.append(w.tick))
+    world.message_bus.register_agent("测试甲")
+    world.add_npc(NPC(name="警长", location="酒馆", role="治安官"))
+
+    world.tick = 2
+    world.message_bus.send(Message(
+        sender="测试甲", recipients=["警长"], target="警长",
+        content="请问谁来过这里", msg_type="speech", tick=1,
+    ))
+    await gm.check_and_inject(world, llm_client=object())
+    assert calls == [2]
+
+
+async def test_llm_not_triggered_by_plain_speech():
+    """普通聊天（非 interact、target 非 NPC）不触发 GM。"""
+    world = _build_world()
+    gm = _llm_trigger_gm()
+    calls: list[int] = []
+    gm._generate_llm_event = AsyncMock(side_effect=lambda w, c: calls.append(w.tick))
+    world.message_bus.register_agent("测试甲")
+    world.message_bus.register_agent("测试乙")
+
+    world.tick = 2
+    world.message_bus.send(Message(
+        sender="测试甲", recipients=["测试乙"], target="测试乙",
+        content="今天天气不错", msg_type="speech", tick=1,
+    ))
+    await gm.check_and_inject(world, llm_client=object())
+    assert calls == []
