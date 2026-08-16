@@ -1,23 +1,18 @@
-"""模拟状态保存与加载"""
+"""模拟状态序列化与版本迁移。
+
+注意：真正的对象装配（从存档恢复世界）在 app/factory.py::restore_world，
+本模块只负责纯数据序列化和旧版本数据迁移，不 import 具体场景/动作。
+"""
 
 import json
 import re
 from pathlib import Path
 
-from core.action import ActionRegistry
-from core.message import MessageBus
-from core.agent import Agent
-from core.manual_agent import ManualAgent
-
 SAVE_VERSION = 2
 
 
 def _migrate_event_log(events: list) -> list[dict]:
-    """v1 字符串事件迁移到 v2 结构化事件。
-
-    v1 格式形如 "[tick 3] 屋外传来马蹄声"；迁移时解析 tick，来源无法
-    还原，统一标记为 GM。
-    """
+    """v1 字符串事件迁移到 v2 结构化事件。"""
     migrated = []
     for item in events:
         if isinstance(item, dict):
@@ -41,7 +36,7 @@ def _migrate_event_log(events: list) -> list[dict]:
     return migrated
 
 
-def _migrate(data: dict) -> dict:
+def migrate_save_data(data: dict) -> dict:
     """存档版本迁移入口：旧版本在此升级到最新格式，返回迁移后的 dict。"""
     if data.get("version") == 1:
         data = dict(data)
@@ -76,70 +71,3 @@ def save_simulation_state(world, gm, scene_module: str, scene_display: str, path
     path_obj = Path(path)
     path_obj.parent.mkdir(parents=True, exist_ok=True)
     path_obj.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def load_simulation_state(path: str, config: dict, *, scene_loader):
-    """从存档恢复世界状态。
-
-    scene_loader 由调用方（组合根）注入，用于按存档中的场景名加载 Scene；
-    core 不 import scenarios/，因此本函数不猜测场景位置与命名约定。
-    """
-    from core.world import WorldState
-    from core.gm import GMAgent
-
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
-    data = _migrate(data)
-
-    if data.get("version") != SAVE_VERSION:
-        raise ValueError(f"不支持的存档版本: {data.get('version')}")
-
-    scene = scene_loader(data["scene"])
-    display_name = data.get("scene_display", data["scene"])
-    print(f"载入存档: {display_name}")
-
-    registry = ActionRegistry()
-    scene.setup(registry)
-
-    from core.event import TimelineEvent
-
-    world = WorldState()
-    world.tick = data["tick"]
-    world.apply_scene_config(scene)
-    world.event_log = [TimelineEvent.from_dict(e) for e in data["event_log"]]
-    world.action_order = data["action_order"]
-    world.connections = [tuple(p) for p in data.get("connections", [])]
-    world._adjacency = WorldState.compute_adjacency(world.connections)
-    world.environment = data.get("environment", {})
-
-    world.message_bus = MessageBus.from_dict(data["message_bus"])
-
-    agents_by_name = {a["name"]: a for a in scene.agents}
-
-    for name, agent_data in data["agents"].items():
-        cfg = agents_by_name[name]
-        agent_type = agent_data.get("agent_type", "Agent")
-        cls = ManualAgent if agent_type == "ManualAgent" else Agent
-        restore_kwargs = {}
-        if cls is ManualAgent and agent_data.get("manual_file"):
-            restore_kwargs["file_path"] = agent_data["manual_file"]
-        agent = cls.from_config(
-            scene, cfg, config, registry=registry, saved=agent_data, **restore_kwargs
-        )
-        world.agents[name] = agent
-
-    # 恢复 NPC（静态 + 运行时动态添加的），并合并进 npc_names
-    from core.character import NPC
-
-    for name, npc_data in data.get("npcs", {}).items():
-        npc = NPC.from_dict(npc_data)
-        world.add_npc(npc)
-
-    # 校正 npc_names：删除的静态 NPC（npc_remove）不能被 scene 基线重新播种，
-    # npc_names 必须与实际 npcs 实体完全一致（add_npc/remove_npc 保持该不变量）。
-    world.npc_names = set(world.npcs.keys())
-
-    gm_registry = ActionRegistry(include_agent_params=False)
-    scene.setup_gm(gm_registry)
-    gm = GMAgent.from_dict(scene, config, data["gm"], gm_registry)
-
-    return world, scene, gm, registry

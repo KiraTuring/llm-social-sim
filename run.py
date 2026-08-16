@@ -3,131 +3,20 @@
 
 from __future__ import annotations
 
-from render.console import ConsoleRenderer
-from llm.client import LLMClient
-from core.rules import RuleEngine
-from core.engine import SimulationEngine
-from core.gm import GMAgent
-from core.agent import Agent
-from core.manual_agent import ManualAgent
-from core.action import ActionRegistry
-from core.logger import SimLogger
 import argparse
 import asyncio
-import os
 import sys
-from pathlib import Path
 
-from core.scene import validate_agent_configs
-from scenarios import load_scene, list_available_scenes
 from dotenv import load_dotenv
 
+from app.config import load_config
+from app.factory import prepare_world, setup_services
+from core.engine import SimulationEngine
+from core.save_load import save_simulation_state
+from render.console import ConsoleRenderer
+from scenarios import list_available_scenes
+
 load_dotenv()
-
-
-def load_config(config_path: str | None = None) -> dict:
-    """加载配置文件"""
-    if config_path is None:
-        config_path = str(Path(__file__).parent / "config.yaml")
-
-    import yaml
-
-    with open(config_path) as f:
-        config = yaml.safe_load(f)
-
-    return _expand_env_vars(config)
-
-
-def _expand_env_vars(obj: any) -> any:
-    """递归展开配置中的环境变量"""
-    if isinstance(obj, str):
-        if obj.startswith("${") and obj.endswith("}"):
-            var_name = obj[2:-1]
-            return os.getenv(var_name, "")
-        return obj
-    elif isinstance(obj, dict):
-        return {k: _expand_env_vars(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [_expand_env_vars(item) for item in obj]
-    return obj
-
-
-def _init_world(config: dict, scene_name: str, manual_agents: list[str] | None):
-    """新场景初始化：加载场景、创建 Agent 和 GM"""
-    scene = load_scene(scene_name)
-    world = scene.init_world()
-    validate_agent_configs(scene.agents)
-    scene.setup(registry := ActionRegistry())
-    manual_names = set(manual_agents or config["simulation"].get("manual_agents", []))
-
-    for cfg in scene.agents:
-        if cfg["name"] in manual_names:
-            manual_file = config["simulation"].get("manual_file")
-            try:
-                agent = ManualAgent.from_config(
-                    scene, cfg, config, registry=registry, file_path=manual_file
-                )
-            except (FileNotFoundError, ValueError) as e:
-                print(f"❌ 手动控制配置错误: {e}")
-                sys.exit(1)
-        else:
-            agent = Agent.from_config(scene, cfg, config, registry=registry)
-        world.agents[agent.name] = agent
-
-    world.action_order = [n for n in world.agents if n not in world.npc_names]
-
-    gm_registry = ActionRegistry(include_agent_params=False)
-    scene.setup_gm(gm_registry)
-    gm = GMAgent.from_config(scene, config, gm_registry)
-
-    return world, scene, gm, registry
-
-
-def _load_world(load_path: str, config: dict, max_ticks: int | None):
-    """从存档恢复世界状态"""
-    from core.save_load import load_simulation_state
-
-    world, scene, gm, registry = load_simulation_state(load_path, config, scene_loader=load_scene)
-    start_tick = world.tick + 1
-    remaining = max_ticks or config["simulation"]["max_ticks"]
-    print(f"从存档恢复 [{scene.name}]，当前 tick={world.tick}，继续运行 {remaining} 个 tick\n")
-    return world, scene, gm, registry, start_tick
-
-
-def _prepare_world(config: dict, scene_name: str, manual_agents: list[str] | None,
-                   load_path: str | None, max_ticks: int | None):
-    """统一装配世界与场景：从存档恢复或新初始化，返回运行所需的全部上下文。"""
-    if load_path:
-        world, scene, gm, registry, start_tick = _load_world(load_path, config, max_ticks)
-    else:
-        world, scene, gm, registry = _init_world(config, scene_name, manual_agents)
-        start_tick = 1
-    remaining = max_ticks or config["simulation"]["max_ticks"]
-    return world, scene, gm, registry, start_tick, remaining
-
-
-def _setup_services(config: dict, scene, gm, world=None):
-    """创建模拟核心服务（logger, llm, rule_engine）"""
-    log_level = getattr(__import__("logging"), config["logging"].get("level", "INFO"))
-    logger = SimLogger(
-        log_file=config["logging"].get("file", "logs/simulation.log"),
-        level=log_level,
-    )
-    llm = LLMClient(config["llm"], logger)
-    gm.logger = logger
-    if world is not None:
-        mb_cfg = config.get("message_bus", {})
-        world.message_bus.set_limits(
-            max_messages=mb_cfg.get("max_messages"),
-            max_inbox_per_agent=mb_cfg.get("max_inbox_per_agent"),
-        )
-        for agent in world.agents.values():
-            agent.logger = logger
-
-    rule_engine = RuleEngine()
-    scene.setup_rules(rule_engine)
-
-    return logger, llm, rule_engine
 
 
 def _make_renderer(config: dict, scene, registry=None) -> ConsoleRenderer:
@@ -150,8 +39,6 @@ def _print_scene_header(scene):
 
 def _save_state(world, gm, scene, save_path: str):
     """保存模拟状态"""
-    from core.save_load import save_simulation_state
-
     scene_module = scene.__class__.__module__.split(".")[-1]
     save_simulation_state(world, gm, scene_module, scene.name, save_path)
     print(f"状态已保存到 {save_path}")
@@ -159,11 +46,11 @@ def _save_state(world, gm, scene, save_path: str):
 
 async def run_tui_simulation(config: dict, scene_name: str, max_ticks: int | None = None, mode: str | None = None, manual_agents: list[str] | None = None, load_path: str | None = None, save_path: str | None = None):
     """使用 Textual TUI 运行模拟"""
-    world, scene, gm, registry, start_tick, remaining = _prepare_world(
+    world, scene, gm, registry, start_tick, remaining = prepare_world(
         config, scene_name, manual_agents, load_path, max_ticks
     )
 
-    logger, llm, rule_engine = _setup_services(config, scene, gm, world)
+    logger, llm, rule_engine = setup_services(config, scene, gm, world)
 
     from render.tui_app import SimulationTuiApp
     app = SimulationTuiApp(
@@ -180,13 +67,13 @@ async def run_tui_simulation(config: dict, scene_name: str, max_ticks: int | Non
 
 async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = None, mode: str | None = None, manual_agents: list[str] | None = None, load_path: str | None = None, save_path: str | None = None):
     """运行模拟"""
-    world, scene, gm, registry, start_tick, remaining = _prepare_world(
+    world, scene, gm, registry, start_tick, remaining = prepare_world(
         config, scene_name, manual_agents, load_path, max_ticks
     )
     if not load_path:
         _print_scene_header(scene)
 
-    logger, llm, rule_engine = _setup_services(config, scene, gm, world)
+    logger, llm, rule_engine = setup_services(config, scene, gm, world)
     renderer = _make_renderer(config, scene, registry)
     engine = SimulationEngine(world, gm, llm, rule_engine, logger, config)
 

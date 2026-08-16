@@ -5,6 +5,7 @@ import os
 import tempfile
 
 import pytest
+from app.factory import create_agent, create_gm, restore_world
 from core.action import ActionRegistry
 from actions.common import SpeakAction, ObserveAction, WhisperAction, MoveAction
 from actions.gm_npc import AddNpcAction, NpcMoveAction, NpcSpeakAction, RemoveNpcAction
@@ -13,7 +14,7 @@ from core.agent import Agent
 from core.character import Character, NPC
 from core.gm import GMAgent
 from core.scene import Scene
-from core.save_load import save_simulation_state, load_simulation_state
+from core.save_load import save_simulation_state
 from scenarios import load_scene
 from render.tui_info import is_npc
 from scenarios._test import _TestScene
@@ -42,7 +43,7 @@ CONFIG = {
 def _build_world():
     """构造含动态 NPC 的世界：在书房添加一个神秘旅人。"""
     world = SCENE.init_world()
-    world.agents["测试甲"] = Agent.from_config(
+    world.agents["测试甲"] = create_agent(
         SCENE, SCENE.agents[0], CONFIG, registry=AGENT_REGISTRY
     )
     world.agents["测试甲"].location = "大厅"
@@ -105,7 +106,7 @@ def test_hearable_agents_for_npc():
 def test_observe_sees_dynamic_npc():
     """ObserveAction 能看到动态 NPC（role/state）"""
     world = _build_world()
-    agent = Agent.from_config(SCENE, SCENE.agents[0], CONFIG, registry=AGENT_REGISTRY)
+    agent = create_agent(SCENE, SCENE.agents[0], CONFIG, registry=AGENT_REGISTRY)
     world.agents[agent.name] = agent
     # 把 agent 挪到书房与 NPC 同处，便于 observe
     MoveAction().execute(agent.name, {"target": "书房"}, world)
@@ -117,7 +118,7 @@ def test_observe_sees_dynamic_npc():
 def test_speak_whisper_validate_for_npc():
     """SpeakAction / WhisperAction 对动态 NPC 校验通过"""
     world = _build_world()
-    agent = Agent.from_config(SCENE, SCENE.agents[0], CONFIG, registry=AGENT_REGISTRY)
+    agent = create_agent(SCENE, SCENE.agents[0], CONFIG, registry=AGENT_REGISTRY)
     agent.location = "书房"
     world.agents[agent.name] = agent
     ctx = world.build_validation_context(agent.name)
@@ -166,7 +167,7 @@ def test_npc_move_success(source, target):
     assert npc_name in world.get_characters_in_location(target)
     if source == "dynamic":
         assert npc_name not in world.get_characters_in_location("书房")
-        assert msgs and msgs[0].sender == npc_name and msgs[0].msg_type == "action"
+        assert msgs and msgs[0].sender == npc_name and msgs[0].tag == "action"
         assert target in result["result"]
         assert any(f"移动到了{target}" in e.text for e in world.event_log)
 
@@ -226,7 +227,7 @@ def test_static_npc_scene():
     assert is_npc("测试守卫", world)
     assert not is_npc("测试甲", world)
     # 测试甲在大厅，可对书房的测试守卫说话（可见）
-    world.agents["测试甲"] = Agent.from_config(
+    world.agents["测试甲"] = create_agent(
         SCENE, SCENE.agents[0], CONFIG, registry=AGENT_REGISTRY
     )
     world.agents["测试甲"].location = "大厅"
@@ -239,7 +240,7 @@ def test_gm_context_includes_dynamic_npc():
     world = _build_world()
     gm_registry = ActionRegistry(include_agent_params=False)
     SCENE.setup_gm(gm_registry)
-    gm = GMAgent.from_config(SCENE, CONFIG, gm_registry)
+    gm = create_gm(SCENE, CONFIG, gm_registry)
     ctx_text = gm._build_world_context(world)
     assert "神秘旅人" in ctx_text and "书房" in ctx_text, ctx_text
 
@@ -250,10 +251,10 @@ def test_npc_save_load_roundtrip():
     world.tick = 2
     gm_registry = ActionRegistry(include_agent_params=False)
     SCENE.setup_gm(gm_registry)
-    gm = GMAgent.from_config(SCENE, CONFIG, gm_registry)
+    gm = create_gm(SCENE, CONFIG, gm_registry)
     tmp = os.path.join(tempfile.mkdtemp(), "npc.json")
     save_simulation_state(world, gm, "_test", SCENE.name, tmp)
-    world2, scene2, gm2, _ = load_simulation_state(tmp, CONFIG, scene_loader=load_scene)
+    world2, scene2, gm2, _ = restore_world(tmp, CONFIG, scene_loader=load_scene)
     assert "神秘旅人" in world2.npcs
     assert "神秘旅人" in world2.npc_names
     assert world2.npcs["神秘旅人"].location == "书房"
@@ -272,10 +273,10 @@ def test_removed_npc_not_restored_after_load():
     RemoveNpcAction().execute("GM", {"npc_name": "测试守卫"}, world)
     gm_registry = ActionRegistry(include_agent_params=False)
     SCENE.setup_gm(gm_registry)
-    gm = GMAgent.from_config(SCENE, CONFIG, gm_registry)
+    gm = create_gm(SCENE, CONFIG, gm_registry)
     tmp = os.path.join(tempfile.mkdtemp(), "npc-removed.json")
     save_simulation_state(world, gm, "_test", SCENE.name, tmp)
-    world3, scene3, gm3, _ = load_simulation_state(tmp, CONFIG, scene_loader=load_scene)
+    world3, scene3, gm3, _ = restore_world(tmp, CONFIG, scene_loader=load_scene)
     assert "神秘旅人" not in world3.npcs and "神秘旅人" not in world3.npc_names
     assert "测试守卫" not in world3.npcs and "测试守卫" not in world3.npc_names
     assert world3.npc_names == set(world3.npcs.keys()), world3.npc_names

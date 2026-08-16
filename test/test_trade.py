@@ -4,6 +4,7 @@
 import os
 import tempfile
 
+from app.factory import create_agent, create_gm, restore_world
 from core.action import ActionRegistry
 from actions.trade import TradeAction
 from actions.common import ObserveAction
@@ -12,7 +13,7 @@ from core.character import NPC
 from core.gm import GMAgent
 from core.message import Message
 from core.rules import RuleEngine
-from core.save_load import save_simulation_state, load_simulation_state
+from core.save_load import save_simulation_state
 from scenarios import load_scene
 from scenarios._test import _TestScene
 
@@ -42,10 +43,10 @@ ACTION = TradeAction()
 def _build_world(colocated: bool = True):
     """两个 Agent（附金钱/物品状态），默认同在大厅。"""
     world = SCENE.init_world()
-    world.agents["测试甲"] = Agent.from_config(
+    world.agents["测试甲"] = create_agent(
         SCENE, SCENE.agents[0], CONFIG, registry=AGENT_REGISTRY
     )
-    world.agents["测试乙"] = Agent.from_config(
+    world.agents["测试乙"] = create_agent(
         SCENE, SCENE.agents[1], CONFIG, registry=AGENT_REGISTRY
     )
     world.agents["测试甲"].states.update({"inventory": {"金钱": 30, "物品": {"干粮": 2, "药草": 3}}})
@@ -71,7 +72,7 @@ def test_money_transfer():
     msgs, result = ACTION.execute("测试甲", params, world)
     assert world.agents["测试甲"].states["inventory"]["金钱"] == 20
     assert world.agents["测试乙"].states["inventory"]["金钱"] == 60
-    assert msgs and msgs[0].msg_type == "trade" and msgs[0].recipients == ["测试乙"]
+    assert msgs and msgs[0].tag == "trade" and msgs[0].recipients == ["测试乙"]
     assert "金钱10" in result["summary"]
     # 纯 give（无 take）：对手方视角只有获得，没有付出
     assert "你获得金钱10" in msgs[0].content
@@ -91,7 +92,7 @@ def test_items_both_ways():
     # 行动者记忆：自己的视角（付出干粮，获得酒壶）
     assert "付出干粮×1" in result["summary"] and "获得酒壶×1" in result["summary"]
     # 对手方私信：镜像视角（你付出酒壶，获得干粮）
-    trade_msg = [m for m in msgs if m.msg_type == "trade"][0]
+    trade_msg = [m for m in msgs if m.tag == "trade"][0]
     assert "你付出酒壶×1" in trade_msg.content and "获得干粮×1" in trade_msg.content
 
 
@@ -171,8 +172,8 @@ def test_bystander_notice_hides_money():
     world = _build_world()
     params = {"target": "测试乙", "give_money": 10, "give_items": {"干粮": 1}, "take_items": {"酒壶": 1}}
     msgs, _ = ACTION.execute("测试甲", params, world)
-    trade_msg = [m for m in msgs if m.msg_type == "trade"]
-    notice = [m for m in msgs if m.msg_type == "action"]
+    trade_msg = [m for m in msgs if m.tag == "trade"]
+    notice = [m for m in msgs if m.tag == "action"]
     assert trade_msg and trade_msg[0].recipients == ["测试乙"]
     # 对手方视角（镜像）：付出的是被拿走的酒壶，获得的是对方给的金钱与干粮
     assert "你付出酒壶×1" in trade_msg[0].content
@@ -193,12 +194,12 @@ def test_tavern_trade_rule():
     engine = RuleEngine()
     scene.setup_rules(engine)
     world = SCENE.init_world()
-    艾莉娅 = Agent.from_config(scene, scene.agents[2], CONFIG, registry=AGENT_REGISTRY)
-    老巴克 = Agent.from_config(scene, scene.agents[0], CONFIG, registry=AGENT_REGISTRY)
+    艾莉娅 = create_agent(scene, scene.agents[2], CONFIG, registry=AGENT_REGISTRY)
+    老巴克 = create_agent(scene, scene.agents[0], CONFIG, registry=AGENT_REGISTRY)
     world.agents = {"艾莉娅": 艾莉娅, "老巴克": 老巴克}
     before = 老巴克.relationships["艾莉娅"]["trust"]
     msg = Message(sender="艾莉娅", recipients=["老巴克"], content="付出金钱5",
-                  msg_type="trade", tick=1)
+                  tag="trade", tick=1)
     engine.trigger("trade", msg, world)
     assert 老巴克.relationships["艾莉娅"]["trust"] == before + 1
 
@@ -245,10 +246,10 @@ def test_trade_save_load_roundtrip():
     ACTION.execute("测试甲", params, world)
     gm_registry = ActionRegistry(include_agent_params=False)
     SCENE.setup_gm(gm_registry)
-    gm = GMAgent.from_config(SCENE, CONFIG, gm_registry)
+    gm = create_gm(SCENE, CONFIG, gm_registry)
     tmp = os.path.join(tempfile.mkdtemp(), "trade.json")
     save_simulation_state(world, gm, "_test", SCENE.name, tmp)
-    world2, _, _, _ = load_simulation_state(tmp, CONFIG, scene_loader=load_scene)
+    world2, _, _, _ = restore_world(tmp, CONFIG, scene_loader=load_scene)
     assert world2.agents["测试甲"].states["inventory"]["金钱"] == 20
     assert world2.agents["测试甲"].states["inventory"]["物品"] == {"干粮": 2, "药草": 3, "酒壶": 1}
     assert world2.agents["测试乙"].states["inventory"]["金钱"] == 60

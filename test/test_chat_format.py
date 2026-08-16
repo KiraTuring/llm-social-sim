@@ -9,7 +9,7 @@ from conftest import make_response
 from core.agent import Agent
 from core.action import ActionRegistry, ActionSpec, Action
 from core.message import Message, MessageBus
-from core.world import WorldState
+from core.world import WorldState, LocationGraph
 from memory.memory import AgentMemory
 
 
@@ -23,7 +23,7 @@ class _DummyAction(ActionSpec):
     def execute(self, agent_name, params, world):
         target = params.get("target", "all")
         content = params.get("content", "")
-        msg = Message(sender=agent_name, recipients=[target], content=content, msg_type="speech", tick=world.tick)
+        msg = Message(sender=agent_name, recipients=[target], content=content, tag="speech", tick=world.tick)
         world.message_bus.send(msg)
         return [msg], {"summary": f"对{target}说: {content}"}
 
@@ -217,7 +217,7 @@ class TestActChatMode(unittest.TestCase):
         self.registry = ActionRegistry()
         self.registry.register(_DummyAction())
         self.agent = _make_agent("chat", self.registry)
-        self.world = WorldState(tick=5, locations=["主厅"])
+        self.world = WorldState(tick=5, geography=LocationGraph(locations=["主厅"]))
         self.world.message_bus = MessageBus()
         self.world.agents["测试"] = self.agent
         self.world.action_order = ["测试"]
@@ -350,7 +350,7 @@ class TestTruncateChatHistory(unittest.TestCase):
             self.assertGreaterEqual(entry["tick"], agent.memory._short_term[0]["tick"])
 
     def _make_world(self, tick: int):
-        w = WorldState(tick=tick, locations=["主厅"])
+        w = WorldState(tick=tick, geography=LocationGraph(locations=["主厅"]))
         w.message_bus = MessageBus()
         w.agents["测试"] = _make_agent("chat")
         w.action_order = ["测试"]
@@ -371,7 +371,7 @@ class TestTextModeUnchanged(unittest.TestCase):
         agent = _make_agent("text")
         agent._last_action = "[speak] 你好"
 
-        world = WorldState(tick=1, locations=["主厅"])
+        world = WorldState(tick=1, geography=LocationGraph(locations=["主厅"]))
         world.message_bus = MessageBus()
         world.agents["测试"] = agent
         agent.memory.add("我记得某事", tick=1)
@@ -389,7 +389,7 @@ class TestTextModeUnchanged(unittest.TestCase):
         registry = ActionRegistry()
         registry.register(_DummyAction())
         agent = _make_agent("text", registry)
-        world = WorldState(tick=1, locations=["主厅"])
+        world = WorldState(tick=1, geography=LocationGraph(locations=["主厅"]))
         world.message_bus = MessageBus()
         world.agents["测试"] = agent
 
@@ -404,7 +404,7 @@ class TestTextModeUnchanged(unittest.TestCase):
         agent = _make_agent("chat")
         agent._last_action = "[speak] 你好"
 
-        world = WorldState(tick=1, locations=["主厅"])
+        world = WorldState(tick=1, geography=LocationGraph(locations=["主厅"]))
         world.message_bus = MessageBus()
         world.agents["测试"] = agent
         agent.memory.add("我记得某事", tick=1)
@@ -420,13 +420,13 @@ class TestTextModeUnchanged(unittest.TestCase):
     def test_perceive_ingests_inbox(self):
         """perceive 摄入收件箱：上下文含新信息、记忆写入、inbox 清空、_perceived_inbox 正确"""
         agent = _make_agent("text")
-        world = WorldState(tick=1, locations=["主厅"])
+        world = WorldState(tick=1, geography=LocationGraph(locations=["主厅"]))
         world.message_bus = MessageBus()
         world.message_bus.register_agent("测试")
         world.agents["测试"] = agent
         world.message_bus.send(Message(
             sender="张三", recipients=["测试"], target="测试",
-            content="你好，测试", msg_type="speech", tick=1,
+            content="你好，测试", tag="speech", tick=1,
         ))
 
         context = asyncio.run(agent.perceive(world))
@@ -446,13 +446,13 @@ class TestTextModeUnchanged(unittest.TestCase):
         agent = _make_agent("text")
         agent.memory.add("旧的记忆", tick=1)
 
-        world = WorldState(tick=2, locations=["主厅"])
+        world = WorldState(tick=2, geography=LocationGraph(locations=["主厅"]))
         world.message_bus = MessageBus()
         world.message_bus.register_agent("测试")
         world.agents["测试"] = agent
         world.message_bus.send(Message(
             sender="张三", recipients=["测试"], target="测试",
-            content="你好，测试", msg_type="speech", tick=2,
+            content="你好，测试", tag="speech", tick=2,
         ))
 
         context = asyncio.run(agent.perceive(world))
@@ -482,7 +482,7 @@ class TestPendingUserMsgStale(unittest.TestCase):
         registry.register(FailingAction())
         agent = _make_agent("chat", registry)
         agent._pending_user_msg = {"role": "user", "content": "旧的上下文", "tick": 1}
-        world = WorldState(tick=2, locations=["主厅"])
+        world = WorldState(tick=2, geography=LocationGraph(locations=["主厅"]))
         world.message_bus = MessageBus()
 
         action = Action(action_type="fail", content="", params={})

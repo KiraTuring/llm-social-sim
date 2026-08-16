@@ -10,8 +10,9 @@ if TYPE_CHECKING:
 class RuleEngine:
     """规则引擎：根据事件触发 Agent 状态变化"""
 
-    def __init__(self):
+    def __init__(self, logger=None):
         self._handlers: dict[str, list[Callable]] = {}
+        self.logger = logger
 
     def on(self, event_type: str):
         """事件监听装饰器"""
@@ -33,5 +34,6 @@ class RuleEngine:
             try:
                 handler(message, world)
             except Exception as e:
-                print(f"[RuleEngine] 处理事件失败: {e}")
+                if self.logger:
+                    self.logger.error(f"[RuleEngine] 处理事件失败: {e}")
 

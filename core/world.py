@@ -1,4 +1,4 @@
-"""世界状态管理。"""
+"""世界状态管理与地理信息。"""
 
 from __future__ import annotations
 
@@ -13,17 +13,12 @@ if TYPE_CHECKING:
     from .agent import Agent
 
 
-# 钱包状态键：角色的经济/物品统一放在 states[INVENTORY_KEY] 下（单一固定键）。
-# 场景在钱包内部自定义资源名（如 金钱/物品/信用点），core 只认识这一个键，
-# 校验支付能力时只暴露行动者自己的钱包（见 build_inventory）。
 INVENTORY_KEY = "inventory"
+ENV_DELETE_SENTINEL = "delete"
 
 
 def build_inventory(states: dict) -> dict:
-    """抽取角色的钱包视图 states[INVENTORY_KEY]（行动者自己的支付能力，供参数校验期使用）。
-
-    返回副本（内层 dict 也取副本），避免调用方误改真实状态。
-    """
+    """抽取角色的钱包视图 states[INVENTORY_KEY]。"""
     wallet = states.get(INVENTORY_KEY)
     if not isinstance(wallet, dict):
         return {}
@@ -33,31 +28,29 @@ def build_inventory(states: dict) -> dict:
     }
 
 
-@dataclass
-class WorldState:
-    """世界状态"""
+class LocationGraph:
+    """地点图与环境状态：与 WorldState 强相关，因此定义在 world.py 内。"""
 
-    tick: int = 0
-    locations: list[str] = field(default_factory=list)
-    connections: list[tuple[str, str]] = field(default_factory=list)
-    _adjacency: dict[str, set[str]] = field(default_factory=dict)
-    _visibility: dict[str, list[str]] = field(default_factory=dict)
-    _reverse_visibility: dict[str, list[str]] = field(default_factory=dict)
-    agents: dict[str, "Agent"] = field(default_factory=dict)
-    npcs: dict[str, NPC] = field(default_factory=dict)
-    event_log: list[TimelineEvent] = field(default_factory=list)
-    action_order: list[str] = field(default_factory=list)
-    message_bus: Any = None
-    environment: dict[str, dict[str, str]] = field(default_factory=dict)
-    interactable_keys: dict[str, list[str]] = field(default_factory=dict)
-    _protected_env_keys: dict[str, set[str]] = field(default_factory=dict)
-    npc_names: set[str] = field(default_factory=set)
-    _agents_by_location: dict[str, list[str]] = field(default_factory=dict)
+    def __init__(
+        self,
+        locations: list[str] | None = None,
+        connections: list[tuple[str, str]] | None = None,
+        interactable_keys: dict[str, list[str]] | None = None,
+        environment: dict[str, dict[str, str]] | None = None,
+    ):
+        self.locations = list(locations or [])
+        self.connections = list(connections or [])
+        self.interactable_keys = dict(interactable_keys or {})
+        self.environment = {k: dict(v) for k, v in (environment or {}).items()}
+
+        self._adjacency: dict[str, set[str]] = {}
+        self._visibility: dict[str, list[str]] = {}
+        self._reverse_visibility: dict[str, list[str]] = {}
+        self._protected_env_keys: dict[str, set[str]] = {}
 
     @staticmethod
     def compute_adjacency(connections: list[tuple[str, str]]) -> dict[str, set[str]]:
-        """从边列表计算双向邻接表"""
-        adj = {}
+        adj: dict[str, set[str]] = {}
         for a, b in connections:
             adj.setdefault(a, set()).add(b)
             adj.setdefault(b, set()).add(a)
@@ -65,8 +58,7 @@ class WorldState:
 
     @staticmethod
     def compute_reverse_visibility(visibility: dict[str, list[str]]) -> dict[str, list[str]]:
-        """从正向可见性计算反向可见性：哪些位置能看到给定位置"""
-        reverse = {}
+        reverse: dict[str, list[str]] = {}
         for loc, visible in visibility.items():
             for vloc in visible:
                 reverse.setdefault(vloc, []).append(loc)
@@ -74,31 +66,48 @@ class WorldState:
 
     @staticmethod
     def compute_protected_env_keys(initial_environment: dict[str, dict[str, str]]) -> dict[str, set[str]]:
-        """从初始环境配置计算受保护的指标 key 集合"""
         return {loc: set(keys.keys()) for loc, keys in initial_environment.items()}
 
+    def rebuild_adjacency(self) -> None:
+        self._adjacency = self.compute_adjacency(self.connections)
+
+    def set_visibility(self, visibility: dict[str, list[str]]) -> None:
+        self._visibility = dict(visibility) if visibility else {}
+        self._reverse_visibility = self.compute_reverse_visibility(self._visibility)
+
+    def apply_scene_config(self, scene) -> None:
+        self.locations = copy.deepcopy(scene.locations)
+        self.connections = copy.deepcopy(scene.connections)
+        self.interactable_keys = copy.deepcopy(scene.interactable_keys)
+        self.rebuild_adjacency()
+        self.set_visibility(scene.visibility or {})
+        self.environment = {k: dict(v) for k, v in scene.initial_environment.items()}
+        self._protected_env_keys = self.compute_protected_env_keys(scene.initial_environment)
+
     def get_adjacent_locations(self, loc: str) -> list[str]:
-        """获取从某个位置可达的相邻位置"""
         if not self.connections:
             return [loc2 for loc2 in self.locations if loc2 != loc]
         return list(self._adjacency.get(loc, set()))
 
+    def get_visible_locations(self, loc: str) -> list[str]:
+        return [loc] + self._visibility.get(loc, [])
+
+    def hearable_locations(self, loc: str) -> list[str]:
+        return [loc] + self._reverse_visibility.get(loc, [])
+
     def update_environment(self, location: str, key: str, value: str) -> str | None:
-        """更新环境状态，如果 location 不合法返回错误信息"""
         if location not in self.locations:
             return f"'{location}' 不是有效位置"
         self.environment.setdefault(location, {})[key] = value
         return None
 
     def modify_environment(self, location: str, key: str, value: str) -> tuple[bool, str]:
-        """GM 专用单一入口：value='delete' 时删除 key，否则更新。
-        返回 (success, message)，message 可直接用作 summary。"""
         if location not in self.locations:
             return False, f"'{location}' 不是有效位置"
-        if value != "delete":
+        if value != ENV_DELETE_SENTINEL:
             self.environment.setdefault(location, {})[key] = value
             return True, f"环境变更: {location}.{key} → {value}"
-        # value == "delete"
+
         if key not in self.environment.get(location, {}):
             return False, f"'{location}' 中不存在指标 '{key}'"
         if key in self._protected_env_keys.get(location, set()):
@@ -107,47 +116,89 @@ class WorldState:
         return True, f"环境指标已删除: {location}.{key}"
 
     def get_environment_summary(self, location: str) -> str:
-        """获取某个位置的格式化环境摘要"""
         env = self.environment.get(location, {})
         if not env:
             return ""
         return ", ".join(f"{k} {v}" for k, v in env.items())
 
-    def get_visible_locations(self, location: str) -> list[str]:
-        """获取从某个位置能观察到哪些位置（含自身）。可扩展支持动态可见性变化"""
-        return [location] + self._visibility.get(location, [])
 
-    def set_visibility(self, visibility: dict[str, list[str]]) -> None:
-        """设置可见性并自动计算逆可见性"""
-        self._visibility = dict(visibility) if visibility else {}
-        self._reverse_visibility = self.compute_reverse_visibility(self._visibility)
+@dataclass
+class WorldState:
+    """世界状态。"""
 
-    _SCENE_DIRECT_FIELDS = ("locations", "connections", "interactable_keys")
+    tick: int = 0
+    agents: dict[str, "Agent"] = field(default_factory=dict)
+    npcs: dict[str, NPC] = field(default_factory=dict)
+    event_log: list[TimelineEvent] = field(default_factory=list)
+    action_order: list[str] = field(default_factory=list)
+    message_bus: Any = None
+    npc_names: set[str] = field(default_factory=set)
+    _agents_by_location: dict[str, list[str]] = field(default_factory=dict)
+    geography: LocationGraph = field(default_factory=LocationGraph)
+
+    # ---- 地理字段薄委托，兼容既有 world.locations / world.environment 写法 ---- #
+    @property
+    def locations(self) -> list[str]:
+        return self.geography.locations
+
+    @locations.setter
+    def locations(self, value) -> None:
+        self.geography.locations = value
+
+    @property
+    def connections(self) -> list[tuple[str, str]]:
+        return self.geography.connections
+
+    @connections.setter
+    def connections(self, value) -> None:
+        self.geography.connections = value
+
+    @property
+    def interactable_keys(self) -> dict[str, list[str]]:
+        return self.geography.interactable_keys
+
+    @interactable_keys.setter
+    def interactable_keys(self, value) -> None:
+        self.geography.interactable_keys = value
+
+    @property
+    def environment(self) -> dict[str, dict[str, str]]:
+        return self.geography.environment
+
+    @environment.setter
+    def environment(self, value) -> None:
+        self.geography.environment = value
 
     def apply_scene_config(self, scene) -> None:
-        """从 scene 复制场景级配置（init 和 load 共用）"""
-        for attr in self._SCENE_DIRECT_FIELDS:
-            setattr(self, attr, copy.deepcopy(getattr(scene, attr)))
-        self._adjacency = self.compute_adjacency(self.connections)
-        self.set_visibility(scene.visibility or {})
-        self.environment = {k: dict(v) for k, v in scene.initial_environment.items()}
-        self._protected_env_keys = self.compute_protected_env_keys(scene.initial_environment)
-        # 静态 NPC 名作为基线；运行时动态添加的 NPC 名（add_npc）需要保留，
-        # 因此这里只追加不覆盖。
+        """从 scene 复制场景级配置（init 和 load 共用）。"""
+        self.geography.apply_scene_config(scene)
         self.npc_names = set(scene.npc_names or [])
+
+    def get_adjacent_locations(self, loc: str) -> list[str]:
+        return self.geography.get_adjacent_locations(loc)
+
+    def update_environment(self, location: str, key: str, value: str) -> str | None:
+        return self.geography.update_environment(location, key, value)
+
+    def modify_environment(self, location: str, key: str, value: str) -> tuple[bool, str]:
+        return self.geography.modify_environment(location, key, value)
+
+    def get_environment_summary(self, location: str) -> str:
+        return self.geography.get_environment_summary(location)
+
+    def get_visible_locations(self, location: str) -> list[str]:
+        return self.geography.get_visible_locations(location)
+
+    def set_visibility(self, visibility: dict[str, list[str]]) -> None:
+        self.geography.set_visibility(visibility)
 
     @property
     def characters(self) -> dict[str, Any]:
-        """统一视图：所有角色（自主 Agent + GM 控制的 NPC）。
-
-        返回只读视图；增删角色请分别操作 self.agents / self.npcs。
-        """
         merged = dict(self.agents)
         merged.update(self.npcs)
         return merged
 
     def _resolve_location(self, name: str) -> str:
-        """解析任意角色（Agent 或 NPC）的位置。不存在时抛 KeyError。"""
         agent = self.agents.get(name)
         if agent is not None:
             return agent.location
@@ -157,10 +208,6 @@ class WorldState:
         raise KeyError(name)
 
     def add_npc(self, npc: NPC) -> str | None:
-        """添加一个 NPC（动态或初始化）。返回错误信息或 None。
-
-        自动：登记到 npcs 与 npc_names、增量更新位置索引。
-        """
         if npc.name in self.agents or npc.name in self.npcs:
             return f"角色 '{npc.name}' 已存在"
         if npc.location not in self.locations:
@@ -172,11 +219,6 @@ class WorldState:
         return None
 
     def remove_npc(self, name: str) -> str | None:
-        """移除一个 NPC（add_npc 的镜像）。返回错误信息或 None。
-
-        从 npcs、npc_names 与位置索引中同步删除——所有读取点
-        （characters/可见性/校验上下文/存档/TUI）都会自动停止看到它。
-        """
         npc = self.npcs.get(name)
         if npc is None:
             return f"'{name}' 不是 NPC"
@@ -196,11 +238,6 @@ class WorldState:
         source_type: str = SOURCE_GM,
         meta: dict | None = None,
     ) -> None:
-        """记录结构化时间线事件。
-
-        默认来源是 GM；NPC / Agent 动作可通过 source / source_type 标注。
-        事件流上限与归档仍由 Phase 3 处理。
-        """
         self.event_log.append(TimelineEvent(
             tick=self.tick,
             text=text,
@@ -210,32 +247,26 @@ class WorldState:
         ))
 
     def event_log_texts(self) -> list[str]:
-        """返回事件文本列表（测试/调试用）。"""
         return [e.text for e in self.event_log]
 
     def event_log_for_tick(self, tick: int) -> list[TimelineEvent]:
-        """返回指定 tick 的事件列表。"""
         return [e for e in self.event_log if e.tick == tick]
 
     def event_log_for_last_ticks(self, n_ticks: int) -> list[TimelineEvent]:
-        """返回最近 n_ticks 个 tick 内的事件（含当前 tick）。"""
         if n_ticks <= 0:
             return []
         min_tick = self.tick - n_ticks + 1
         return [e for e in self.event_log if min_tick <= e.tick <= self.tick]
 
     def get_characters_in_location(self, location: str) -> list[str]:
-        """获取某个位置的所有角色（Agent + NPC，返回副本，调用方可安全修改）"""
         if not self._agents_by_location and (self.agents or self.npcs):
             self.rebuild_location_index()
         return list(self._agents_by_location.get(location, ()))
 
     def get_agents_in_location(self, location: str) -> list[str]:
-        """获取某个位置的所有 Agent（不含 NPC，返回副本）。"""
         return [n for n in self.get_characters_in_location(location) if n not in self.npcs]
 
     def rebuild_location_index(self) -> None:
-        """按当前角色的位置重建索引（引擎启动/存档加载后调用）。"""
         index: dict[str, list[str]] = {}
         for name, agent in self.agents.items():
             index.setdefault(agent.location, []).append(name)
@@ -244,12 +275,6 @@ class WorldState:
         self._agents_by_location = index
 
     def move_character(self, name: str, new_location: str) -> str | None:
-        """移动任意角色（Agent 或 NPC）并增量维护位置索引。返回错误信息或 None。
-
-        只校验名字与位置合法性，不校验可达性——「Move 受可达性限制」是
-        MoveAction 的规则（validate_params），世界层保持无策略，
-        传送门/传送魔法/GM 强制移动等能力可直接调用本方法。
-        """
         if name not in self.characters:
             return f"'{name}' 不存在"
         if new_location not in self.locations:
@@ -267,13 +292,8 @@ class WorldState:
         return None
 
     def get_hearable_agents(self, target: str, *, exclude: str | None = None, use_location: bool = False) -> list[str]:
-        """获取能听到某个位置事件的所有角色（Agent + NPC，同位置 + 可见位置）
-
-        use_location=False (默认): target 是角色名（Agent 或 NPC），自动定位其位置
-        use_location=True:       target 是位置名
-        """
         base_loc = target if use_location else self._resolve_location(target)
-        hearable_locs = [base_loc] + self._reverse_visibility.get(base_loc, [])
+        hearable_locs = self.geography.hearable_locations(base_loc)
         result = []
         for loc in hearable_locs:
             for name in self.get_characters_in_location(loc):
@@ -285,12 +305,10 @@ class WorldState:
         return result
 
     def rotate_order(self):
-        """轮换行动顺序"""
         if len(self.action_order) > 1:
             self.action_order = self.action_order[1:] + [self.action_order[0]]
 
     def build_validation_context(self, agent_name: str) -> dict:
-        """为指定 Agent 或 GM 构建 LLM 参数校验上下文。"""
         base = {
             "agent_name": agent_name,
             "locations": self.locations,
@@ -315,7 +333,5 @@ class WorldState:
             "hearable_agents": self.get_hearable_agents(agent_name),
             "adjacent_locations": self.get_adjacent_locations(agent_location),
             "content_max_length": agent.content_max_length,
-            # 行动者自己的经济状态视图（trade 等动作校验支付能力用，不含他人信息）
-            # getattr 兜底：测试里的 stub agent 可能没有 states
             "inventory": build_inventory(getattr(agent, "states", {})),
         }

@@ -7,9 +7,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.agent import Agent
+from app.config import load_config
+from app.factory import create_agent, create_gm
 from core.action import ActionRegistry
-from core.gm import GMAgent
 from scenarios import load_scene
 
 
@@ -20,22 +20,20 @@ def main():
     parser.add_argument("--gm", action="store_true", help="打印 GM 的 system prompt 与世界上下文")
     args = parser.parse_args()
 
-    import yaml
-
-    config = yaml.safe_load(open(Path(__file__).parent.parent / "config.yaml"))
+    config = load_config()
 
     scene = load_scene(args.scene)
 
     if args.gm:
         gm_registry = ActionRegistry(include_agent_params=False)
         scene.setup_gm(gm_registry)
-        gm = GMAgent.from_config(scene, config, gm_registry)
+        gm = create_gm(scene, config, gm_registry)
 
         registry = ActionRegistry()
         scene.setup(registry)
         world = scene.init_world()
         for cfg in scene.agents:
-            world.agents[cfg["name"]] = Agent.from_config(
+            world.agents[cfg["name"]] = create_agent(
                 scene, cfg, config, registry=registry
             )
 
@@ -60,7 +58,7 @@ def main():
         sys.exit(1)
 
     for cfg in agents:
-        agent = Agent.from_config(scene, cfg, config, registry=registry)
+        agent = create_agent(scene, cfg, config, registry=registry)
 
         prompt = agent.build_system_prompt()
 

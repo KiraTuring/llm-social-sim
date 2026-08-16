@@ -1,6 +1,7 @@
 """通用 Action 实现：speak, whisper, move, observe, interact。"""
 
 from core.action import ActionSpec, validate_content_length
+from core.capabilities import IDLE
 from core.message import Message, BROADCAST
 
 
@@ -52,7 +53,7 @@ class SpeakAction(ActionSpec):
 
         recipients = world.get_hearable_agents(agent_name)
         msg_target = None if target == BROADCAST or not target else target
-        msg = Message(sender=agent_name, recipients=recipients, target=msg_target, content=content, msg_type="speech", tick=world.tick)
+        msg = Message(sender=agent_name, recipients=recipients, target=msg_target, content=content, tag="speech", tick=world.tick)
         world.message_bus.send(msg)
         return [msg], None
 
@@ -106,13 +107,13 @@ class WhisperAction(ActionSpec):
         if not target:
             return [], None
 
-        whisper_msg = Message(sender=agent_name, recipients=[target], target=target, content=content, msg_type="whisper", tick=world.tick)
+        whisper_msg = Message(sender=agent_name, recipients=[target], target=target, content=content, tag="whisper", tick=world.tick)
         world.message_bus.send(whisper_msg)
         messages = [whisper_msg]
 
         notice_recipients = world.get_hearable_agents(agent_name, exclude=target)
         if notice_recipients:
-            notice = Message(sender=agent_name, recipients=notice_recipients, content=f"对 {target} 窃窃私语", msg_type="action", tick=world.tick)
+            notice = Message(sender=agent_name, recipients=notice_recipients, content=f"对 {target} 窃窃私语", tag="action", tick=world.tick)
             world.message_bus.send(notice)
             messages.append(notice)
 
@@ -181,7 +182,7 @@ class MoveAction(ActionSpec):
             sender=agent_name,
             recipients=recipients,
             content=desc,
-            msg_type="action",
+            tag="action",
             tick=world.tick,
         )
         world.message_bus.send(msg)
@@ -254,7 +255,7 @@ class ObserveAction(ActionSpec):
 class ThinkAction(ActionSpec):
     name = "think"
     icon = "🧠"
-    capabilities = frozenset({"idle"})
+    capabilities = frozenset({IDLE})
     description = "思考或等待。在你需要思考、等别人回复、或没有明确可做的事时使用。你的思考会写入你的记忆"
     text_format = "[ACTION]think[/ACTION]\n[THOUGHT]{内心独白}[/THOUGHT]"
 
@@ -338,7 +339,7 @@ class InteractAction(ActionSpec):
         modifications = params.get("modifications", [])
 
         recipients = world.get_hearable_agents(agent_name)
-        msg = Message(sender=agent_name, recipients=recipients, content=content, msg_type="interact", trigger_gm=True, tick=world.tick)
+        msg = Message(sender=agent_name, recipients=recipients, content=content, tag="interact", trigger_gm=True, tick=world.tick)
         world.message_bus.send(msg)
 
         if modifications:

@@ -5,12 +5,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from core.action import Action, ActionRegistry, format_tool_result
+from core.capabilities import IDLE
 from core.character import Character
-from memory.memory import AgentMemory
 
 if TYPE_CHECKING:
+    from core.ports import LLMClient, Memory
     from core.world import WorldState
-    from llm.client import LLMClient
 
 
 class Agent(Character):
@@ -28,7 +28,7 @@ class Agent(Character):
         goal: str,
         location: str,
         relationships: dict,
-        memory: "AgentMemory",
+        memory: "Memory",
         registry: "ActionRegistry",
         content_max_length: int = 200,
         world_description: str = "",
@@ -64,63 +64,6 @@ class Agent(Character):
         if self.logger is not None:
             getattr(self.logger, level)(message)
         print(f"[{self.name}] {message}")
-
-    @classmethod
-    def from_config(cls, scene, cfg, config, *, registry, saved=None, **extra):
-        """创建 Agent。
-
-        saved=None: 全新 agent，从 scene+cfg 构建
-        saved=agent_data: 从存档恢复，scene 提供静态字段，saved 提供运行时状态
-        """
-        prompt_format = config["agent"].get("prompt_format", "text")
-        base = dict(
-            name=cfg["name"],
-            role=cfg["role"],
-            personality=cfg["personality"],
-            goal=cfg["goal"],
-            registry=registry,
-            world_description=scene.world_description,
-            instruction=scene.instruction,
-            prompt_format=prompt_format,
-        )
-
-        if saved is None:
-            runtime = dict(
-                location=cfg["location"],
-                relationships=cfg["relationships"],
-                memory=AgentMemory(
-                    name=cfg["name"],
-                    short_limit=config["agent"]["memory_short_limit"],
-                    compress_threshold=config["agent"]["memory_compress_threshold"],
-                ),
-                content_max_length=config["agent"].get("content_max_length", 200),
-                states=({**dict(scene.states or {}), **dict(cfg.get("states") or {})}),
-                writable_states=set(cfg.get("writable_states") or scene.writable_states or []),
-                private_states=set(cfg.get("private_states") or scene.private_states or []),
-            )
-        else:
-            runtime = dict(
-                location=saved.get("location", cfg["location"]),
-                relationships=saved.get("relationships", cfg["relationships"]),
-                memory=AgentMemory.from_dict(
-                    saved["memory"],
-                    name=cfg["name"],
-                    short_limit=config["agent"]["memory_short_limit"],
-                    compress_threshold=config["agent"]["memory_compress_threshold"],
-                ),
-                content_max_length=saved.get("content_max_length", 200),
-                states=saved.get("states", {}),
-                writable_states=set(saved.get("writable_states", [])),
-                private_states=set(saved.get("private_states", [])),
-            )
-
-        agent = cls(**base, **runtime, **extra)
-
-        if saved is not None:
-            agent._last_observed_result = saved.get("last_observed_result", "")
-            agent._chat_history = saved.get("chat_history", [])
-
-        return agent
 
     def to_dict(self) -> dict:
         """序列化为可保存的 dict（存档用，格式与 save_load 历史 shape 一致）"""
@@ -166,61 +109,10 @@ class Agent(Character):
         return self.memory.recent(limit)
 
     def build_system_prompt(self) -> str:
-        """构建 System Prompt"""
+        """构建 System Prompt。"""
+        from core.prompts import build_agent_system_prompt
 
-        action_names = ", ".join(self.registry.get_action_names())
-
-        desc_lines = self.registry.describe()
-
-        relations_text = "\n".join(
-            f"- {name}: " + "，".join(f"{key}: {value}" for key, value in rel.items())
-            for name, rel in self.relationships.items()
-        )
-
-        world_part = f"\n\n## 世界\n{self.world_description}" if self.world_description else ""
-
-        # 空闲指引按注册表能力生成：场景用 capabilities={"idle"} 标记适合发呆/等待的动作，
-        # core 不假设存在 think/observe 等具体工具，避免引用未注册工具触发重试浪费。
-        idle_actions = self.registry.get_action_names_with_capability("idle")
-        if idle_actions:
-            names = "、".join(idle_actions)
-            idle_guide = f"如果你在思考、等人回复、或没有明确可做的事，优先使用 {names}。"
-        else:
-            idle_guide = "如果你没有明确可做的事，请选择一个副作用最小的可用行动。"
-
-        prompt = f"""## 模拟规则
-你在扮演 {self.name}（{self.role}），在一个持续运行的社交模拟世界中进行角色扮演。
-模拟以 tick 为单位推进，每个 tick 你可以执行一次行动。{world_part}
-
-注意：你在调用工具之前输出的任何对话文字都不会被其他角色看到，也不会对模拟产生任何影响。只有工具调用本身会改变环境和其他角色。
-
-记忆：你过去做的事、说的话和观察到的情况会被记住，在「你最近记得的事」中显示。
-
-其他角色和你一样自主行动——你有自己的目标和性格，他们也有。
-
-行动顺序：所有角色在同一 tick 内按固定顺序依次行动。排在后面的角色可以看到前面角色的行动（说话、移动等），但排在前面的角色要等到下一 tick 才能知道后面的人做了什么。
-
-## 你是谁
-你是 {self.name}（{self.role}）。{self.personality}
-
-## 你的目标
-{self.goal}
-
-## 你能做的事
-行动类型: {action_names}
-{desc_lines}
-
-## 你和其他人的关系
-{relations_text if relations_text else "暂无"}
-
-## 输出要求
-优先选择一个工具来行动。{idle_guide}
-所有工具都包含可选的 internal_monologue 字段（内心独白，别人看不到）。"""
-
-        if self.instruction:
-            prompt += f"\n\n{self.instruction}"
-
-        return prompt
+        return build_agent_system_prompt(self, self.registry)
 
     async def perceive(self, world: "WorldState", llm_client: "LLMClient | None" = None) -> str:
         """感知：收集消息 + 环境 + 记忆。
@@ -245,7 +137,7 @@ class Agent(Character):
             truncated = msg.content[:max_len]
             sender_part = f"{msg.sender}" + (f" -> {msg.target}" if msg.target else "")
             sender_part = sender_part.replace(self.name, "你")
-            msgs_text = f"[{msg.msg_type}] {sender_part}: {truncated}"
+            msgs_text = f"[{msg.tag}] {sender_part}: {truncated}"
             lines.append(f"- {msgs_text}")
             self.memory.add(msgs_text, tick=world.tick)
 

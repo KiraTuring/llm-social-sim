@@ -169,10 +169,10 @@ class SimulationEngine:
                 "recipients": msg.recipients,
                 "target": msg.target,
                 "content": msg.content,
-                "msg_type": msg.msg_type,
+                "tag": msg.tag,
                 "tick": msg.tick,
             })
-            self.rule_engine.trigger(msg.msg_type, msg, self.world)
+            self.rule_engine.trigger(msg.tag, msg, self.world)
 
         return AgentStep(
             agent_name=agent_name,

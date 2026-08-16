@@ -6,10 +6,9 @@ import random
 from typing import TYPE_CHECKING
 
 from core.action import ActionRegistry, format_tool_result
-
 if TYPE_CHECKING:
+    from core.ports import LLMClient
     from core.world import WorldState
-    from llm.client import LLMClient
 
 
 class GMAgent:
@@ -37,24 +36,6 @@ class GMAgent:
         self._gm_history: list[dict] = []
         self.registry = gm_registry
 
-    @classmethod
-    def from_config(cls, scene, config, gm_registry: ActionRegistry):
-        """从 scene 配置和模拟配置构建 GMAgent。"""
-        gm_cfg = scene.get_gm_config()
-        return cls(
-            events=gm_cfg["events"],
-            random_events=gm_cfg["random_events"],
-            chance=config["gm"]["random_event_chance"],
-            use_llm=config["gm"]["use_llm"],
-            llm_chance=config["gm"].get("llm_event_chance", 0.3),
-            llm_prompt=gm_cfg.get("llm_prompt", ""),
-            world_description=scene.world_description,
-            event_tick_window=config["gm"].get("event_tick_window", 3),
-            prompt_format=config["gm"].get("prompt_format", "text"),
-            history_max_messages=config["gm"].get("chat_history_max_messages", 40),
-            gm_registry=gm_registry,
-        )
-
     def to_dict(self) -> dict:
         """序列化为可保存的 dict（存档用）。"""
         return {
@@ -63,16 +44,6 @@ class GMAgent:
             "use_llm": self.use_llm,
             "history": self._gm_history,
         }
-
-    @classmethod
-    def from_dict(cls, scene, config, data: dict, gm_registry: ActionRegistry) -> "GMAgent":
-        """从存档恢复 GM：from_config 构造后应用运行时字段。"""
-        gm = cls.from_config(scene, config, gm_registry)
-        gm.scheduled_events = [tuple(item) for item in data["scheduled_events"]]
-        gm.random_events = data["random_events"]
-        gm.use_llm = data.get("use_llm", config["gm"]["use_llm"])
-        gm._gm_history = data.get("history", [])
-        return gm
 
     async def check_and_inject(self, world: "WorldState", llm_client: "LLMClient | None" = None):
         """每个 tick 检查是否需要注入事件"""
@@ -123,7 +94,7 @@ class GMAgent:
         """广播事件给所有 Agent"""
         from core.message import Message, BROADCAST
 
-        msg = Message(sender="GM", recipients=[BROADCAST], content=event, msg_type="system_event", tick=world.tick)
+        msg = Message(sender="GM", recipients=[BROADCAST], content=event, tag="system_event", tick=world.tick)
         world.message_bus.send(msg)
 
     def _truncate_gm_history(self):
@@ -193,85 +164,18 @@ class GMAgent:
             self._truncate_gm_history()
 
     def _build_gm_prompt(self) -> str:
-        """构建 GM 的 system prompt，自动追加可用工具"""
-        lines = []
-        if self.llm_prompt:
-            lines.append(self.llm_prompt)
-        if self.world_description:
-            lines.append("")
-            lines.append(self.world_description)
+        """构建 GM 的 system prompt。"""
+        from core.prompts import build_gm_prompt
 
-        has_npc = self.registry.has_capability("npc_control")
-
-        response_rule = (
-            "- 留意角色最近的消息，基于角色与环境的互动、角色对 NPC 的对话产生合理的事件响应或后续影响。"
-            "普通玩家之间的聊天通常不需要回应"
-            if has_npc
-            else "- 留意角色最近的消息，基于角色与环境的互动产生合理的事件响应或后续影响。"
-            "普通聊天通常不需要回应"
-        )
-        gm_rule_prompt = f"""
-重要规则：
-- 不要生成和近期事件冲突或简单重复的事件，可以是新事件或对近期事件的后续
-- 禁止创造场景中不存在的位置——所有可用位置已在世界描述中列出
-{response_rule}
-- 事件要简短自然，一句话
-- 最多同时生成一个新事件。可以多次调用工具，但所有调用都围绕同一个事件
-"""
-        lines.append(self._gm_role_rules())
-        lines.append(gm_rule_prompt)
-        lines.append("")
-        lines.append("注意：你在调用工具之前输出的任何对话文字都不会被其他角色看到，也不会对模拟产生任何影响，相当于内心独白。只有工具调用本身会影响环境和其他角色。")
-        lines.append("你可以使用以下工具（可一次调用多个）：")
-        lines.append(self.registry.describe(indent="  "))
-        return "\n".join(lines)
+        return build_gm_prompt(self.registry, self.llm_prompt, self.world_description)
 
     def _gm_role_rules(self) -> str:
-        """按场景是否有 NPC 生成角色控制权规则（无 NPC 场景不自相矛盾）。"""
-        npc_tools = self.registry.get_action_names_with_capability("npc_control")
-        if npc_tools:
-            return (
-                "角色分两类：NPC 由你控制（使用已注册的 NPC 控制工具："
-                f"{', '.join(npc_tools)}）；Player（玩家）是自主角色，禁止替其做决定、发言或改变位置"
-            )
-        return "本场景没有 NPC，所有角色都是自主 Player，禁止替任何角色做决定、发言或改变位置"
+        from core.prompts import _gm_role_rules
+
+        return _gm_role_rules(self.registry)
 
     def _build_world_context(self, world: "WorldState") -> str:
-        """构建世界状态上下文（中等粒度）"""
-        parts = [f"当前是第 {world.tick} 个时间步。"]
+        """构建世界状态上下文（中等粒度）。"""
+        from core.prompts import build_gm_world_context
 
-        locs = {}
-        for name, char in world.characters.items():
-            locs.setdefault(char.location, []).append(name)
-
-        has_npc = bool(world.npcs)
-        if has_npc:
-            parts.append("\n角色位置与状态（Player 自主行动，NPC 由你控制）：")
-        else:
-            parts.append("\n角色位置与状态（Player 自主行动）：")
-        for loc, names in locs.items():
-            statuses = []
-            for n in names:
-                state_str = ", ".join(f"{k}:{v}" for k, v in world.characters[n].states.items())
-                tag = " [NPC]" if (has_npc and n in world.npcs) else (" [Player]" if has_npc else "")
-                statuses.append(f"{n}{tag}({state_str})")
-            parts.append(f"  {loc}: {', '.join(statuses)}")
-
-        env_lines = []
-        for loc in world.locations:
-            summary = world.get_environment_summary(loc)
-            if summary:
-                env_lines.append(f"  {loc}: {summary}")
-        if env_lines:
-            parts.append("\n环境状态：")
-            parts.extend(env_lines)
-
-        events = world.event_log_for_last_ticks(self.event_tick_window)
-        if events:
-            lines = []
-            for e in events:
-                lines.append(f"  [tick {e.tick}] {e.text}")
-            parts.append("\n最近事件：")
-            parts.extend(lines)
-
-        return "\n".join(parts)
+        return build_gm_world_context(world, self.event_tick_window)

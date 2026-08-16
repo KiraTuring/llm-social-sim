@@ -5,9 +5,10 @@
 LLM 驱动的多 Agent 社会模拟引擎：每个 Agent 有性格/目标/记忆，通过 LLM 生成行动（说话、移动、观察、思考），GM（Game Master）注入外部事件驱动世界演进。
 
 ```
-core/           核心模块（engine / action / character / memory / message_bus / world ...）
+core/           纯领域核心（端口、领域模型、引擎、通用算法）
+app/            应用装配层（config / factory，唯一允许 import memory+llm+scenarios+actions）
 actions/        内置动作实现库（common / communication / gm_tools / gm_npc ...）
-scenarios/      场景定义（tavern / murder / spaceship / _test ...）
+scenarios/      场景定义与场景发现/加载（tavern / murder / spaceship / _test ...）
 scripts/        工具脚本（print_prompt.py 等）
 test/           测试
 ```

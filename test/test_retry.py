@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from conftest import OFFLINE_CONFIG as CONFIG, make_response as _make_response, make_multi_response as _make_multi_response
 from llm.client import LLMClient
+from app.factory import create_agent, create_gm
 from core.action import ActionRegistry
 from actions.common import SpeakAction, ObserveAction, MoveAction
 from core.gm import GMAgent
@@ -256,13 +257,13 @@ class TestGMChainTools(unittest.TestCase):
         self.registry = ActionRegistry()
         self.scene.setup(self.registry)
         for cfg in self.scene.agents:
-            self.world.agents[cfg["name"]] = Agent.from_config(
+            self.world.agents[cfg["name"]] = create_agent(
                 self.scene, cfg, CONFIG, registry=self.registry
             )
 
         self.gm_registry = ActionRegistry(include_agent_params=False)
         self.scene.setup_gm(self.gm_registry)
-        self.gm = GMAgent.from_config(self.scene, CONFIG, self.gm_registry)
+        self.gm = create_gm(self.scene, CONFIG, self.gm_registry)
         self.client = LLMClient(CONFIG["llm"], logger=None)
 
     async def _run_chain(self, response):
@@ -322,12 +323,12 @@ class TestGMChainTools(unittest.TestCase):
         agent_registry = ActionRegistry()
         scene.setup(agent_registry)
         for cfg in scene.agents:
-            world.agents[cfg["name"]] = Agent.from_config(
+            world.agents[cfg["name"]] = create_agent(
                 scene, cfg, chat_config, registry=agent_registry
             )
         reg = ActionRegistry(include_agent_params=False)
         scene.setup_gm(reg)
-        gm = GMAgent.from_config(scene, chat_config, reg)
+        gm = create_gm(scene, chat_config, reg)
         client = LLMClient(chat_config["llm"], logger=None)
 
         responses = [
@@ -382,7 +383,7 @@ class TestGMChainTools(unittest.TestCase):
         cfg["gm"]["chat_history_max_messages"] = 3
         reg = ActionRegistry(include_agent_params=False)
         scene.setup_gm(reg)
-        gm = GMAgent.from_config(scene, cfg, reg)
+        gm = create_gm(scene, cfg, reg)
 
         def tc_msg(call_id, tool_id):
             return {

@@ -14,7 +14,7 @@ from core.action import ActionSpec, ActionRegistry
 from core.agent import Agent
 from core.logger import SimLogger
 from core.message import BROADCAST, Message, MessageBus
-from core.world import WorldState
+from core.world import WorldState, LocationGraph
 from llm.client import LLMClient
 from memory.memory import AgentMemory
 
@@ -34,7 +34,7 @@ class TestSpeakAction(ActionSpec):
         recipients = [BROADCAST] if target == BROADCAST else [target]
         msg = Message(
             sender=agent_name, recipients=recipients, content=content,
-            msg_type="speech", tick=world.tick,
+            tag="speech", tick=world.tick,
         )
         world.message_bus.send(msg)
         return [msg]
@@ -93,7 +93,7 @@ async def test_model_text_parse_and_concurrent():
 async def test_agent_perceive_think_flow():
     """Agent perceive → think 真实调用：能产出 Action"""
     _require_api_key()
-    world = WorldState(tick=1, locations=["酒馆"])
+    world = WorldState(tick=1, geography=LocationGraph(locations=["酒馆"]))
     world.message_bus = MessageBus()
 
     registry = ActionRegistry()

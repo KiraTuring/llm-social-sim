@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import re
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional
 
@@ -74,7 +72,9 @@ class ActionRegistry:
         self._include_agent_params = include_agent_params
 
     def register(self, action: ActionSpec) -> None:
-        """注册一个 Action"""
+        """注册一个 Action；重名直接抛错，避免场景配置错误被静默覆盖。"""
+        if action.name in self._actions:
+            raise ValueError(f"Action 重复注册: {action.name}")
         self._actions[action.name] = action
 
     def get(self, name: str) -> ActionSpec | None:
@@ -139,36 +139,10 @@ class ActionRegistry:
 - [ACTION] 必须是以下之一：{', '.join(self.get_action_names())}"""
 
     def parse_text(self, text: str) -> Action:
-        """从文本解析 Action（用于 text_parse 模式）。
+        """从文本解析 Action（用于 text_parse 模式）。"""
+        from core.action_parser import parse_action_text
 
-        缺少 [ACTION] 标签时返回 None（视为无法解析，交由调用方重试/兜底），
-        避免把任意文本静默当成 speak。
-        """
-        thought_match = re.search(r"\[THOUGHT\](.*?)\[/THOUGHT\]", text, re.DOTALL)
-        action_match = re.search(r"\[ACTION\](.*?)\[/ACTION\]", text, re.DOTALL)
-        if action_match is None:
-            return None
-        target_match = re.search(r"\[TARGET\](.*?)\[/TARGET\]", text, re.DOTALL)
-        content_match = re.search(r"\[CONTENT\](.*?)\[/CONTENT\]", text, re.DOTALL)
-        state_match = re.search(r"\[STATE\](.*?)\[/STATE\]", text, re.DOTALL)
-        action_type = action_match.group(1).strip()
-        content = content_match.group(1).strip() if content_match else ""
-        target = target_match.group(1).strip() if target_match else None
-        internal_monologue = thought_match.group(1).strip() if thought_match else ""
-        state_update = None
-        if state_match:
-            try:
-                state_update = json.loads(state_match.group(1).strip())
-            except json.JSONDecodeError:
-                pass
-
-        return Action(
-            action_type=action_type,
-            target=target,
-            content=content,
-            internal_monologue=internal_monologue,
-            state_update=state_update,
-        )
+        return parse_action_text(text)
 
 
 def format_result_values(result: dict | None, max_length: int = 200) -> str:

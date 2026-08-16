@@ -12,7 +12,7 @@
   - 命令严格串行处理（引擎本身是异步单线程）。
   - 任何异常都转为 {"ok": false} 并保持进程存活（quit 除外）。
 
-复用 run.py 的装配逻辑（load_config/_prepare_world/_setup_services），
+复用 app 装配层（app.config.load_config / app.factory.prepare_world / restore_world / setup_services），
 保证与 CLI/TUI 的世界初始化、Action 注册、GM 构建完全一致。
 """
 
@@ -33,16 +33,12 @@ REPO_ROOT = Path(__file__).parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from run import (  # noqa: E402  (run.main 有 __main__ 守卫，导入安全)
-    _load_world,
-    _prepare_world,
-    _setup_services,
-    load_config,
-)
+from app.config import load_config  # noqa: E402
+from app.factory import prepare_world, restore_world, setup_services  # noqa: E402
 from core.action import Action  # noqa: E402
 from core.engine import SimulationEngine  # noqa: E402
 from core.message import BROADCAST, Message  # noqa: E402
-from scenarios import list_available_scenes  # noqa: E402
+from scenarios import list_available_scenes, load_scene  # noqa: E402
 
 
 def _log(line: str) -> None:
@@ -75,7 +71,7 @@ def _extract_state_events(event_log_delta, tick: int) -> list[dict]:
                 "tick": tick,
                 "sender": "GM",
                 "kind": "state",
-                "msg_type": "system_event",
+                "tag": "system_event",
                 "target": None,
                 "content": content,
             })
@@ -133,7 +129,7 @@ class SimBridge:
             except json.JSONDecodeError as e:
                 raise ValueError(f"手动控制文件 JSON 解析失败: {mf}: {e}")
 
-        world, scene, gm, registry, start_tick, _ = _prepare_world(
+        world, scene, gm, registry, start_tick, _ = prepare_world(
             config, scene_name, None, None, None
         )
         return self._adopt(config, world, scene, gm, registry, start_tick, was_load=False)
@@ -143,7 +139,10 @@ class SimBridge:
         if not path:
             raise ValueError("缺少 path 参数")
         config = load_config(args.get("config_path") or str(REPO_ROOT / "config.yaml"))
-        world, scene, gm, registry, start_tick = _load_world(path, config, None)
+        world, scene, gm, registry = restore_world(
+            path, config, scene_loader=load_scene
+        )
+        start_tick = world.tick + 1
         return self._adopt(config, world, scene, gm, registry, start_tick, was_load=True)
 
     async def cmd_step(self, args: dict) -> dict:
@@ -210,7 +209,7 @@ class SimBridge:
             recipients=recipients,
             target=target if target else None,
             content=content,
-            msg_type="system_event",
+            tag="system_event",
             tick=self.world.tick,
         )
         self.world.message_bus.send(msg)
@@ -285,7 +284,7 @@ class SimBridge:
                 self.logger.close()
             except Exception:
                 pass
-        logger, llm, rule_engine = _setup_services(config, scene, gm, world)
+        logger, llm, rule_engine = setup_services(config, scene, gm, world)
         engine = SimulationEngine(world, gm, llm, rule_engine, logger, config)
 
         self.config = config
@@ -333,7 +332,7 @@ class SimBridge:
                 "sender": m.sender,
                 "target": m.target,
                 "content": m.content,
-                "msg_type": m.msg_type,
+                "tag": m.tag,
             }
             for m in world.message_bus.get_recent(20)
         ]
@@ -400,7 +399,7 @@ class SimBridge:
                         "recipients": list(m.recipients) if m.recipients else [],
                         "target": m.target,
                         "content": m.content,
-                        "msg_type": m.msg_type,
+                        "tag": m.tag,
                         "tick": m.tick,
                     }
                     for m in step.messages
@@ -426,7 +425,7 @@ class SimBridge:
                 "tick": m.tick,
                 "sender": m.sender,
                 "kind": kind,
-                "msg_type": m.msg_type,
+                "tag": m.tag,
                 "target": m.target,
                 "content": m.content,
             })

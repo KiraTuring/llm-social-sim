@@ -6,6 +6,7 @@ import tempfile
 from conftest import write_plan
 from core.action import ActionRegistry
 from core.agent import Agent
+from app.factory import create_agent, create_gm
 from core.engine import SimulationEngine
 from core.gm import GMAgent
 from core.logger import SimLogger
@@ -47,15 +48,15 @@ async def build_engine(plans: dict | None = None, rotate_order: bool = False) ->
     world = SCENE.init_world()
     for name, cfg in CFG.items():
         plan = (plans or {}).get(name, {})
-        agent = ManualAgent.from_config(
-            SCENE, cfg, CONFIG, registry=REGISTRY, file_path=write_plan({name: plan})
+        agent = create_agent(
+            SCENE, cfg, CONFIG, registry=REGISTRY, manual_file=write_plan({name: plan})
         )
         world.agents[name] = agent
     world.action_order = [n for n in world.agents if n not in world.npc_names]
 
     gm_registry = ActionRegistry(include_agent_params=False)
     SCENE.setup_gm(gm_registry)
-    gm = GMAgent.from_config(SCENE, CONFIG, gm_registry)
+    gm = create_gm(SCENE, CONFIG, gm_registry)
 
     fd, log_path = tempfile.mkstemp(suffix=".log")
     os.close(fd)

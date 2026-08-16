@@ -1,6 +1,6 @@
 """WorldState 位置索引测试：重建、副本语义、move_character 增量维护与自愈。"""
 
-from core.world import WorldState
+from core.world import WorldState, LocationGraph
 
 
 class _StubAgent:
@@ -22,7 +22,7 @@ class _StubNPC:
 
 def _build_world() -> WorldState:
     """构造含 3 个 agent 的世界（不重建索引，模拟引擎启动前状态）。"""
-    world = WorldState(locations=["主厅", "吧台", "角落"])
+    world = WorldState(geography=LocationGraph(locations=["主厅", "吧台", "角落"]))
     world.agents = {
         "老巴克": _StubAgent("老巴克", "吧台"),
         "雷恩": _StubAgent("雷恩", "角落"),

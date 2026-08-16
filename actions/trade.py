@@ -171,7 +171,7 @@ class TradeAction(ActionSpec):
         # 1. 对手方私信（含金额与物品明细，用对手方自己的视角）
         deal_msg = Message(
             sender=agent_name, recipients=[target], target=target,
-            content=f"你{detail_for_target}", msg_type="trade", tick=world.tick,
+            content=f"你{detail_for_target}", tag="trade", tick=world.tick,
         )
         world.message_bus.send(deal_msg)
         messages = [deal_msg]
@@ -185,7 +185,7 @@ class TradeAction(ActionSpec):
                 notice_text += f"（{visible}）"
             notice = Message(
                 sender=agent_name, recipients=bystanders, content=notice_text,
-                msg_type="action", tick=world.tick,
+                tag="action", tick=world.tick,
             )
             world.message_bus.send(notice)
             messages.append(notice)

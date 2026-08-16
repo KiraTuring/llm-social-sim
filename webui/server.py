@@ -7,7 +7,7 @@
 
 打开浏览器访问 http://127.0.0.1:8080 即可。
 
-后端复用 run.py 的世界装配逻辑（load_config / _prepare_world / _setup_services）
+后端复用 app 装配层（app.config.load_config / app.factory.prepare_world / setup_services）
 与 SimulationEngine，保证 Web 与 CLI/TUI 的模拟行为完全一致。
 """
 
@@ -40,7 +40,8 @@ if str(PROJECT_ROOT) not in sys.path:
 load_dotenv(PROJECT_ROOT / ".env")
 
 # 复用 CLI 的世界装配与引擎，行为与 run.py / TUI 完全一致。
-from run import _prepare_world, _setup_services, load_config  # noqa: E402
+from app.config import load_config  # noqa: E402
+from app.factory import prepare_world, setup_services  # noqa: E402
 from core.engine import SimulationEngine  # noqa: E402
 from core.event import SOURCE_AGENT, SOURCE_GM, SOURCE_ICONS, SOURCE_NPC, SOURCE_RULE  # noqa: E402
 from scenarios import list_available_scenes  # noqa: E402
@@ -136,10 +137,10 @@ class SimSession:
             load_path = str(SAVES_DIR / load_path)
 
         try:
-            world, scene, gm, registry, start_tick, remaining = _prepare_world(
+            world, scene, gm, registry, start_tick, remaining = prepare_world(
                 config, scene_name, [], load_path, max_ticks,
             )
-            logger, llm, rule_engine = _setup_services(config, scene, gm, world)
+            logger, llm, rule_engine = setup_services(config, scene, gm, world)
         except SystemExit as e:  # run.py 装配失败会 sys.exit
             raise ValueError(f"装配失败: {e}") from e
         except Exception as e:

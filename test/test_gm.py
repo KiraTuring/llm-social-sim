@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 from core.action import ActionRegistry
 from core.character import NPC
 from core.gm import GMAgent
-from core.world import WorldState
+from core.world import WorldState, LocationGraph
 from core.message import BROADCAST, Message, MessageBus
 from scenarios._test import _TestScene
 
@@ -18,7 +18,7 @@ def _make_gm_registry() -> ActionRegistry:
 
 
 def _build_world() -> WorldState:
-    world = WorldState(tick=1, locations=["酒馆"])
+    world = WorldState(tick=1, geography=LocationGraph(locations=["酒馆"]))
     world.message_bus = MessageBus()
     return world
 
@@ -89,7 +89,7 @@ async def test_llm_triggered_by_trigger_gm_flag():
     world.tick = 2
     world.message_bus.send(Message(
         sender="测试甲", recipients=[BROADCAST], content="开动引擎",
-        msg_type="interact", tick=1, trigger_gm=True,
+        tag="interact", tick=1, trigger_gm=True,
     ))
     await gm.check_and_inject(world, llm_client=object())
     assert calls == [2]
@@ -107,7 +107,7 @@ async def test_llm_triggered_by_npc_target_fallback():
     world.tick = 2
     world.message_bus.send(Message(
         sender="测试甲", recipients=["警长"], target="警长",
-        content="请问谁来过这里", msg_type="speech", tick=1,
+        content="请问谁来过这里", tag="speech", tick=1,
     ))
     await gm.check_and_inject(world, llm_client=object())
     assert calls == [2]
@@ -125,7 +125,7 @@ async def test_llm_not_triggered_by_plain_speech():
     world.tick = 2
     world.message_bus.send(Message(
         sender="测试甲", recipients=["测试乙"], target="测试乙",
-        content="今天天气不错", msg_type="speech", tick=1,
+        content="今天天气不错", tag="speech", tick=1,
     ))
     await gm.check_and_inject(world, llm_client=object())
     assert calls == []

@@ -1,5 +1,6 @@
 """TUI 信息格式化纯函数测试：工具列表、场景分节白名单、NPC 判断。"""
 
+from app.factory import create_gm
 from core.action import ActionRegistry
 from core.gm import GMAgent
 from render.tui_info import format_agent_tools, format_scene_sections, is_npc
@@ -69,7 +70,7 @@ def test_scene_sections_whitelist():
     world.tick = 6
     gm_registry = ActionRegistry(include_agent_params=False)
     scene.setup_gm(gm_registry)
-    gm = GMAgent.from_config(scene, config, gm_registry)
+    gm = create_gm(scene, config, gm_registry)
 
     sections = format_scene_sections(scene, world, gm, config)
     titles = [t for t, _ in sections]

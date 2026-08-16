@@ -171,7 +171,7 @@ def test_inject_event_and_act_as(bridge):
     assert by_agent["艾莉娅"]["action_type"] == "speak"
     assert by_agent["艾莉娅"]["target"] == "老巴克"
     assert any(
-        m["sender"] == "艾莉娅" and m["msg_type"] == "speech"
+        m["sender"] == "艾莉娅" and m["tag"] == "speech"
         for m in by_agent["艾莉娅"]["messages"]
     )
     # 事件进入世界与消息总线
@@ -354,7 +354,7 @@ def test_step_returns_gm_and_agent_events(bridge):
     assert "events" in tick1
     agent_events = [e for e in tick1["events"] if e["kind"] == "agent"]
     assert any(
-        e["sender"] == "艾莉娅" and e["msg_type"] == "speech" and e["target"] == "雷恩"
+        e["sender"] == "艾莉娅" and e["tag"] == "speech" and e["target"] == "雷恩"
         for e in agent_events
     )
     # actions 应携带 result（如 observe 的观察结果），修复前缺失
@@ -438,7 +438,7 @@ def test_extract_state_events_pure_function(monkeypatch):
         assert e["kind"] == "state"
         assert e["tick"] == 5
         assert e["sender"] == "GM"
-        assert e["msg_type"] == "system_event"
+        assert e["tag"] == "system_event"
 
 
 def test_tavern_scene_prompt_and_states():

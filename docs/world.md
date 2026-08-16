@@ -22,7 +22,7 @@ class Message:
     recipients: list[str]  # 所有收到的人（目标 + 旁观者）
     target: str | None   # 直接目标（如说话对象），None=广播
     content: str
-    msg_type: str
+    tag: str
     tick: int
 ```
 
@@ -34,7 +34,7 @@ class Message:
 
 - `SpeakAction` 发送给 `get_hearable_agents(speaker)`（同位置 + 能看见该位置的人）
 - `MoveAction` 发送给出发位置和到达位置的 hearable agents 并集
-- `RadioAction` 发送消息给目标（`msg_type="radio"`）+ 旁观者通知（`msg_type="action"`）
+- `RadioAction` 发送消息给目标（`tag="radio"`）+ 旁观者通知（`tag="action"`）
 
 ## 事件流（TimelineEvent）
 
@@ -150,7 +150,7 @@ ObserveAction 读取当前位置的环境数据 + 所有可见位置的 agent �
 
 ## 规则引擎
 
-事件驱动模式，监听 `message.msg_type`:
+事件驱动模式，监听 `message.tag`:
 
 ```python
 @engine.on("speech")
@@ -159,7 +159,7 @@ def _on_insult(msg, world):
         world.agents[msg.target].update_relationship(msg.sender, {"trust": -2})
 ```
 
-规则必须在场景的 `setup_rules()` 中注册，核心引擎不包含任何场景数据。可用 msg_type: `speech`, `whisper`, `system_event`, `action`, `trade_offer`...
+规则必须在场景的 `setup_rules()` 中注册，核心引擎不包含任何场景数据。可用 tag: `speech`, `whisper`, `system_event`, `action`, `trade_offer`...
 
 关系属性通过 `Agent.update_relationship(other, changes)` 统一更新：声明了边界的数值属性
 （如 `trust: (-5, 5)`）按增量累加并夹取，未声明的属性（如 `impression`）直接赋值。

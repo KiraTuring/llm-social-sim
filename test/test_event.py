@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from core.event import SOURCE_AGENT, SOURCE_GM, SOURCE_NPC, TimelineEvent
-from core.save_load import SAVE_VERSION, _migrate
+from core.save_load import SAVE_VERSION, migrate_save_data
 from core.world import WorldState
 
 
@@ -61,7 +61,7 @@ def test_save_load_v1_event_log_migration():
             "[tick 5] 壁炉暗了下来",
         ],
     }
-    migrated = _migrate(old_save)
+    migrated = migrate_save_data(old_save)
     assert migrated["version"] == SAVE_VERSION == 2
     assert migrated["event_log"][0] == {
         "tick": 3,
@@ -80,5 +80,5 @@ def test_save_load_v2_event_log_passthrough():
             {"tick": 2, "text": "已有结构化事件", "source": "警长", "source_type": SOURCE_NPC},
         ],
     }
-    migrated = _migrate(data)
+    migrated = migrate_save_data(data)
     assert migrated["event_log"] == data["event_log"]

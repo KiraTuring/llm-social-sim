@@ -155,9 +155,9 @@ GM 使用的 `ActionRegistry` 使用 `include_agent_params=False`（不含 `inte
 `radio` 的消息流：
 
 ```
-发送方 ──→ 目标（msg_type="radio"，全内容）
-       ├→ 发送方旁观者（msg_type="action"："对着无线电说了几句话"）
-       └→ 接收方旁观者（msg_type="action"，sender=接收者："身上的无线电中传来一段通话声"）
+发送方 ──→ 目标（tag="radio"，全内容）
+       ├→ 发送方旁观者（tag="action"："对着无线电说了几句话"）
+       └→ 接收方旁观者（tag="action"，sender=接收者："身上的无线电中传来一段通话声"）
 ```
 
 旁观者在两个位置都能看到"有人在用无线电"，但都不知道内容、不知道通话对象。
@@ -179,8 +179,8 @@ GM 使用的 `ActionRegistry` 使用 `include_agent_params=False`（不含 `inte
 ### 消息流
 
 ```
-行动者 ──→ 对手方（msg_type="trade"，含金额与物品明细）
-       └→ 旁观者（msg_type="action"："与 X 进行了一笔交易（物品名）"——只列物品，不列金额）
+行动者 ──→ 对手方（tag="trade"，含金额与物品明细）
+       └→ 旁观者（tag="action"："与 X 进行了一笔交易（物品名）"——只列物品，不列金额）
 ```
 
 交易完成后可在 `setup_rules()` 里监听 `trade` 事件（如 tavern 的信任规则：对手方对发起方 trust +1）。

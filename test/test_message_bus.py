@@ -7,7 +7,7 @@ import asyncio
 from core.action import ActionRegistry
 from core.agent import Agent
 from core.message import BROADCAST, Message, MessageBus
-from core.world import WorldState
+from core.world import WorldState, LocationGraph
 from memory.memory import AgentMemory
 
 
@@ -16,7 +16,7 @@ def _msg(sender: str, content: str, recipients: list[str] | None = None, tick: i
         sender=sender,
         recipients=recipients if recipients is not None else [BROADCAST],
         content=content,
-        msg_type="speech",
+        tag="speech",
         tick=tick,
     )
 
@@ -93,7 +93,7 @@ def test_agent_ingests_all_inbox_messages():
     bus = MessageBus(max_inbox_per_agent=3)
     bus.register_agent("测试")
 
-    world = WorldState(tick=1, locations=["主厅"])
+    world = WorldState(tick=1, geography=LocationGraph(locations=["主厅"]))
     world.message_bus = bus
     world.agents["测试"] = Agent(
         name="测试",
@@ -125,7 +125,7 @@ def test_trigger_gm_default_false_and_roundtrip():
 
     flagged = Message(
         sender="甲", recipients=["乙"], content="开动引擎",
-        msg_type="interact", tick=1, trigger_gm=True,
+        tag="interact", tick=1, trigger_gm=True,
     )
     data = flagged.to_dict()
     assert data["trigger_gm"] is True
@@ -140,7 +140,7 @@ def test_from_dict_tolerates_missing_trigger_gm():
     """旧存档消息 dict 缺 trigger_gm 键时回退 False，向后兼容。"""
     old = {
         "sender": "甲", "recipients": ["乙"], "content": "hi",
-        "msg_type": "speech", "tick": 1, "target": None,
+        "tag": "speech", "tick": 1, "target": None,
     }
     restored = Message.from_dict(old)
     assert restored.trigger_gm is False

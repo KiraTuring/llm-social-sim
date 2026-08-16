@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch, MagicMock, AsyncMock
 
 from conftest import make_llm_config
-from core.world import WorldState
+from core.world import WorldState, LocationGraph
 from core.message import MessageBus
 from core.action import ActionRegistry
 from core.scene import Scene
@@ -95,7 +95,7 @@ class TestVisibilitySafe(unittest.TestCase):
 
     def test_world_default_visible_locations(self):
         """WorldState 默认 get_visible_locations 应只返回自身"""
-        w = WorldState(locations=["a", "b"])
+        w = WorldState(geography=LocationGraph(locations=["a", "b"]))
         self.assertEqual(w.get_visible_locations("a"), ["a"])
 
     def test_scene_none_visibility(self):
@@ -140,7 +140,7 @@ class TestVisibilitySafe(unittest.TestCase):
 
     def test_visible_locations_never_crash(self):
         """get_visible_locations 对各种输入不抛异常"""
-        w = WorldState(locations=["a", "b"])
+        w = WorldState(geography=LocationGraph(locations=["a", "b"]))
         self.assertEqual(w.get_visible_locations("不存在"), ["不存在"])
 
         w.set_visibility({})

@@ -7,12 +7,13 @@ from pathlib import Path
 
 import pytest
 from conftest import write_plan
+from app.factory import create_agent, create_gm, restore_world
 from core.action import ActionRegistry
 from core.agent import Agent
 from core.gm import GMAgent
 from core.manual_agent import ManualAgent
 from core.message import Message, BROADCAST
-from core.save_load import SAVE_VERSION, save_simulation_state, load_simulation_state
+from core.save_load import SAVE_VERSION, save_simulation_state
 from core.scene import validate_agent_configs
 from scenarios import load_scene
 from scenarios.tavern import TavernScene
@@ -58,27 +59,27 @@ def build_world(plan_path: str):
     world = SCENE.init_world()
     for name, cfg in CFG.items():
         if name == "老巴克":
-            world.agents[name] = ManualAgent.from_config(
-                SCENE, cfg, CONFIG, registry=REGISTRY, file_path=plan_path
+            world.agents[name] = create_agent(
+                SCENE, cfg, CONFIG, registry=REGISTRY, manual_file=plan_path
             )
         else:
-            world.agents[name] = Agent.from_config(SCENE, cfg, CONFIG, registry=REGISTRY)
+            world.agents[name] = create_agent(SCENE, cfg, CONFIG, registry=REGISTRY)
     world.action_order = list(world.agents)
     world.tick = 3
     world.add_event("屋外传来马蹄声")
     world.update_environment("壁炉旁", "火焰大小", "微弱")
     world.message_bus.send(Message(
         sender="GM", recipients=[BROADCAST], content="窗外下起了雨",
-        msg_type="system_event", tick=3,
+        tag="system_event", tick=3,
     ))
     world.message_bus.send(Message(
         sender="老巴克", recipients=["艾莉娅"], target="艾莉娅",
-        content="欢迎光临", msg_type="speech", tick=3,
+        content="欢迎光临", tag="speech", tick=3,
     ))
 
     gm_registry = ActionRegistry(include_agent_params=False)
     SCENE.setup_gm(gm_registry)
-    gm = GMAgent.from_config(SCENE, CONFIG, gm_registry)
+    gm = create_gm(SCENE, CONFIG, gm_registry)
     gm._gm_history = [
         {"role": "user", "content": "t3 上下文", "tick": 3},
         {"role": "assistant", "content": "窗外下起了雨", "tick": 3},
@@ -98,7 +99,7 @@ def _save_world():
 def test_roundtrip():
     """往返一致：world/agent/gm/ManualAgent"""
     save_path, _, world, gm = _save_world()
-    world2, scene2, gm2, _ = load_simulation_state(save_path, CONFIG, scene_loader=load_scene)
+    world2, scene2, gm2, _ = restore_world(save_path, CONFIG, scene_loader=load_scene)
     assert scene2.name == SCENE.name
     assert world2.tick == world.tick
     assert world2.locations == world.locations
@@ -149,4 +150,4 @@ def test_unknown_version_raises():
     bad_path = os.path.join(tempfile.mkdtemp(), "bad.json")
     Path(bad_path).write_text(json.dumps({"version": 99}), encoding="utf-8")
     with pytest.raises(ValueError):
-        load_simulation_state(bad_path, CONFIG, scene_loader=load_scene)
+        restore_world(bad_path, CONFIG, scene_loader=load_scene)

@@ -5,6 +5,7 @@ import tempfile
 
 import pytest
 from conftest import write_plan
+from app.factory import create_agent
 from core.action import ActionRegistry
 from actions.common import SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction
 from core.manual_agent import ManualAgent
@@ -36,8 +37,8 @@ async def build_world(plans: dict | None = None) -> tuple:
     agents = {}
     for name, cfg in CFG.items():
         plan = (plans or {}).get(name, {})
-        agent = ManualAgent.from_config(
-            SCENE, cfg, CONFIG, registry=REGISTRY, file_path=write_plan({name: plan})
+        agent = create_agent(
+            SCENE, cfg, CONFIG, registry=REGISTRY, manual_file=write_plan({name: plan})
         )
         world.agents[name] = agent
         agents[name] = agent
@@ -92,7 +93,7 @@ async def test_speak_executes_and_produces_message():
     action = await think(agent, world, 1)
     messages = await agent.act(action, world)
     assert action.action_type == "speak", action
-    assert any(m.msg_type == "speech" for m in messages), messages
+    assert any(m.tag == "speech" for m in messages), messages
 
 
 async def test_move_executes_and_changes_location():
@@ -139,9 +140,9 @@ async def test_whisper_cross_location_returns_none():
 def test_missing_file_raises():
     """文件缺失 → FileNotFoundError"""
     with pytest.raises(FileNotFoundError):
-        ManualAgent.from_config(
+        create_agent(
             SCENE, CFG["老巴克"], CONFIG, registry=REGISTRY,
-            file_path="/nonexistent/manual.json",
+            manual_file="/nonexistent/manual.json",
         )
 
 
@@ -151,7 +152,7 @@ def test_invalid_json_raises():
     with os.fdopen(fd, "w") as f:
         f.write("{not valid json")
     with pytest.raises(ValueError):
-        ManualAgent.from_config(SCENE, CFG["老巴克"], CONFIG, registry=REGISTRY, file_path=path)
+        create_agent(SCENE, CFG["老巴克"], CONFIG, registry=REGISTRY, manual_file=path)
 
 
 async def test_content_with_tags_not_parsed():

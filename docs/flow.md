@@ -25,7 +25,7 @@ engine = SimulationEngine(world, gm, llm, rule_engine, logger, config)
 
 辅助属性：`engine.next_agent` / `engine.pending_agents` 供 UI 显示进度（如 `3/5`）。
 
-服务（logger/LLM/rule_engine）统一由 `run.py::_setup_services` 创建后注入，TUI 不再自行构建。注意 `Scene.get_gm_config()` 会深拷贝 `gm_events`——GM 触发时会移除已触发事件，不拷贝会让同一进程里的多个引擎互相干扰。
+服务（logger/LLM/rule_engine）统一由 `app.factory.setup_services` 创建后注入，TUI 不再自行构建。注意 `Scene.get_gm_config()` 会深拷贝 `gm_events`——GM 触发时会移除已触发事件，不拷贝会让同一进程里的多个引擎互相干扰。
 
 ## 上下文顺序
 
@@ -40,14 +40,14 @@ perceive() 构建的 LLM prompt 顺序：
 
 ## Agent 创建
 
-`run.py` 通过 `Agent.from_config(scene, cfg, config, registry=registry)` 创建 agent（registry 由场景 `setup()` 装配后**构造注入**，运行期不再改变）。存档加载时传 `saved=agent_data` 恢复运行时状态：
+`app/factory.py` 通过 `app.factory.create_agent(scene, cfg, config, registry=registry)` 创建 agent（registry 由场景 `setup()` 装配后**构造注入**，运行期不再改变）。存档加载时传 `saved=agent_data` 恢复运行时状态：
 
 ```python
 # 新建 (from_config 内部根据 scene+cfg 计算 states, 新建空记忆)
-agent = Agent.from_config(scene, cfg, config, registry=registry)
+agent = app.factory.create_agent(scene, cfg, config, registry=registry)
 
 # 存档恢复 (saved 覆盖运行时字段, scene 提供 world_description/instruction 等)
-agent = Agent.from_config(scene, cfg, config, registry=registry, saved=agent_data)
+agent = app.factory.create_agent(scene, cfg, config, registry=registry, saved=agent_data)
 ```
 
 保存时所有 agent 字段由 `Agent.to_dict()` 序列化（GM 由 `GMAgent.to_dict()`，存档版本迁移入口为 `save_load._migrate()`），包括 `states`、`writable_states`、`private_states`、`last_observed_result`。
@@ -97,7 +97,7 @@ python3 run.py --scene tavern --ticks 5 --mode auto --manual 老巴克 --manual-
 - **`agent.act()`**: 每次执行 action 后写入 `[{action_type}] 你: {content[:content_max_length]} (目标: {target})`
 - **`ObserveAction.execute()`**: 通过 `action.result` 写入 `[observed] 你在{位置} | 看到: {人名}({角色})在{位置} - 情绪:{情绪}，...`
 - **`ThinkAction.execute()`**: 通过 `action.result` 写入 `[thought] {内心独白}`
-- **`perceive()`**: 将收到的 inbox 消息写入记忆，格式 `[{msg_type}] 你: {content[:content_max_length]}`（`你` 替换了 sender/target 中的自身名字）
+- **`perceive()`**: 将收到的 inbox 消息写入记忆，格式 `[{tag}] 你: {content[:content_max_length]}`（`你` 替换了 sender/target 中的自身名字）
 
 所有截断长度由 `content_max_length`（config，默认 200）统一控制。
 

@@ -60,7 +60,7 @@ class NarrateAction(ActionSpec):
             recipients = [BROADCAST]
 
         msg = Message(sender="GM", recipients=recipients, target=target if target else None,
-                      content=content, msg_type="system_event", tick=world.tick)
+                      content=content, tag="system_event", tick=world.tick)
         world.message_bus.send(msg)
         prefix = f"[{target}] " if target else ""
         world.add_event(f"旁白: {prefix}{content}")

@@ -20,7 +20,7 @@ class Message:
     sender: str
     recipients: list[str]
     content: str
-    msg_type: str
+    tag: str
     tick: int
     target: str | None = None
     trigger_gm: bool = False
@@ -31,7 +31,7 @@ class Message:
             "sender": self.sender,
             "recipients": self.recipients,
             "content": self.content,
-            "msg_type": self.msg_type,
+            "tag": self.tag,
             "tick": self.tick,
             "target": self.target,
             "trigger_gm": self.trigger_gm,
@@ -40,7 +40,15 @@ class Message:
     @classmethod
     def from_dict(cls, data: dict) -> "Message":
         """从 dict 恢复；旧存档缺 trigger_gm 字段时回退为 False（向后兼容）。"""
-        return cls(**{**data, "trigger_gm": data.get("trigger_gm", False)})
+        return cls(
+            sender=data["sender"],
+            recipients=data["recipients"],
+            content=data["content"],
+            tag=data["tag"],
+            tick=data["tick"],
+            target=data.get("target"),
+            trigger_gm=data.get("trigger_gm", False),
+        )
 
 
 class MessageBus:
@@ -86,7 +94,7 @@ class MessageBus:
 
     @classmethod
     def from_dict(cls, data: dict) -> "MessageBus":
-        """从 dict 恢复 MessageBus"""
+        """从 dict 恢复 MessageBus。"""
         bus = cls()
         bus._known_agents = set(data["known_agents"])
         bus._messages = [Message.from_dict(m) for m in data["messages"]]
