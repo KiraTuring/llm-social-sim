@@ -215,11 +215,14 @@ window.__ModuleLoader__.load({
 				}).catch((e) => setErr(String((e && e.message) || e))).finally(() => setSaving(false));
 			};
 
-			const row = { display: "flex", gap: 8, alignItems: "center", margin: "12px 0" };
+			const card = { border: "1px solid rgba(128,128,128,0.35)", borderRadius: 8, padding: "10px 14px" };
+			const head = { fontSize: 14, fontWeight: 600, margin: "0 0 6px" };
+			const row = { display: "flex", gap: 8, alignItems: "center", margin: "8px 0" };
 			const desc = { fontSize: 12, color: "rgba(128,128,128,0.9)", margin: "4px 0" };
 			const errStyle = { fontSize: 12, color: "#c87828", margin: "4px 0" };
 
-			return h("div", null,
+			return h("div", { style: card },
+				h("div", { style: head }, "社会模拟"),
 				h("p", { style: desc }, "LLM 社会模拟引擎的实时控制面板（输入框上方 dock）。关闭后面板不显示、不轮询；sim_* 工具与 /sim-bridge/rpc 不受影响。修改立即生效。"),
 				h("div", { style: row },
 					h("input", { type: "checkbox", checked: enabled, disabled: saving, onChange: toggle }),
@@ -232,8 +235,9 @@ window.__ModuleLoader__.load({
 		function apply(ctx) {
 			const connection = ctx.get("connection");
 			const api = (connection && connection.api) || null;
-			ctx.slots.inject("settings.section", () => ctx.slots.register(
-				{ name: "settings.section", id: "sim-bridge", order: 25, label: "社会模拟" },
+			// 插件卡片：显示在 设置 → 插件 → 插件配置 页签
+			ctx.slots.inject("settings.plugin.item", () => ctx.slots.register(
+				{ name: "settings.plugin.item", id: "sim-bridge", order: 40, label: "社会模拟" },
 				() => React.createElement(SettingsSection, { api })
 			));
 			ctx.slots.inject("conversation.input.dock", () => ctx.slots.register(
