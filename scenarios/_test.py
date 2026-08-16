@@ -2,7 +2,7 @@
 
 命名用下划线前缀（`_test` → `_TestScene`）：
 - `list_available_scenes()` 的 glob `[!_]*.py` 不会收录它，`--list-scenes` 不出现
-- 但 `core/scene_loader.py::load_scene` 仍能通过模块路径解析，存档往返测试可用
+- 但 `scenarios/__init__.py::load_scene` 仍能通过模块路径解析，存档往返测试可用
 """
 
 from core.scene import Scene

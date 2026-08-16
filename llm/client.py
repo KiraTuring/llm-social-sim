@@ -376,7 +376,7 @@ class LLMClient:
             self.logger.log_llm_call(
                 agent_name=agent_name, tick=tick, mode="tool_call",
                 system_prompt=system_prompt, messages=messages,
-                schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
+                schema_or_guide=str(tool_schemas), raw_response=raw_response,
             )
 
     def _handle_tool_call_error(
@@ -403,14 +403,14 @@ class LLMClient:
                 self.logger.log_llm_call(
                     agent_name=agent_name, tick=tick, mode="tool_call",
                     system_prompt=system_prompt, messages=messages,
-                    schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
+                    schema_or_guide=str(tool_schemas), raw_response=raw_response,
                 )
             return "retry", feedback
         if self.logger:
             self.logger.log_llm_call(
                 agent_name=agent_name, tick=tick, mode="tool_call",
                 system_prompt=system_prompt, messages=messages,
-                schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
+                schema_or_guide=str(tool_schemas), raw_response=raw_response,
             )
         self._status("warning", f"{agent_name} 重试耗尽，本次无行动")
         return "fallback", None
@@ -476,7 +476,7 @@ class LLMClient:
                         self.logger.log_llm_call(
                             agent_name=agent_name, tick=tick, mode="tool_call",
                             system_prompt=system_prompt, messages=messages,
-                            schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=parsed,
+                            schema_or_guide=str(tool_schemas), raw_response=raw_response,
                         )
                     return "success", (choice.message.content, actions)
                 if status == "fallback":
@@ -489,7 +489,7 @@ class LLMClient:
                     self.logger.log_llm_call(
                         agent_name=agent_name, tick=tick, mode="tool_call",
                         system_prompt=system_prompt, messages=messages,
-                        schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
+                        schema_or_guide=str(tool_schemas), raw_response=raw_response,
                     )
                 return "success", (choice.message.content, [])
             if retry < max_retries:
@@ -498,14 +498,14 @@ class LLMClient:
                     self.logger.log_llm_call(
                         agent_name=agent_name, tick=tick, mode="tool_call",
                         system_prompt=system_prompt, messages=messages,
-                        schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
+                        schema_or_guide=str(tool_schemas), raw_response=raw_response,
                     )
                 return "retry", "请选择一个可用的工具来行动，不要只输出文字。"
             if self.logger:
                 self.logger.log_llm_call(
                     agent_name=agent_name, tick=tick, mode="tool_call",
                     system_prompt=system_prompt, messages=messages,
-                    schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
+                    schema_or_guide=str(tool_schemas), raw_response=raw_response,
                 )
             self._status("warning", f"{agent_name} 重试耗尽，本次无行动")
             return "fallback", (choice.message.content, [])
@@ -569,14 +569,14 @@ class LLMClient:
                         self.logger.log_llm_call(
                             agent_name=agent_name, tick=tick, mode="text_parse",
                             system_prompt=system_prompt, messages=messages,
-                            schema_or_guide=text_guide, raw_response=raw_response, parsed_action=None,
+                            schema_or_guide=text_guide, raw_response=raw_response,
                         )
                     return "retry", error
                 if self.logger:
                     self.logger.log_llm_call(
                         agent_name=agent_name, tick=tick, mode="text_parse",
                         system_prompt=system_prompt, messages=messages,
-                        schema_or_guide=text_guide, raw_response=raw_response, parsed_action=None,
+                        schema_or_guide=text_guide, raw_response=raw_response,
                     )
                 self._status("warning", f"{agent_name} 重试耗尽，本次无行动")
                 return "fallback", (text, None)
@@ -592,7 +592,7 @@ class LLMClient:
                 self.logger.log_llm_call(
                     agent_name=agent_name, tick=tick, mode="text_parse",
                     system_prompt=system_prompt, messages=messages,
-                    schema_or_guide=text_guide, raw_response=raw_response, parsed_action=parsed_action,
+                    schema_or_guide=text_guide, raw_response=raw_response,
                 )
 
             return "success", (text, action)

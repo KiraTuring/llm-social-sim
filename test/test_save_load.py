@@ -13,7 +13,8 @@ from core.gm import GMAgent
 from core.manual_agent import ManualAgent
 from core.message import Message, BROADCAST
 from core.save_load import SAVE_VERSION, save_simulation_state, load_simulation_state
-from core.scene_loader import validate_agent_configs
+from core.scene import validate_agent_configs
+from scenarios import load_scene
 from scenarios.tavern import TavernScene
 
 SCENE = TavernScene()
@@ -97,7 +98,7 @@ def _save_world():
 def test_roundtrip():
     """往返一致：world/agent/gm/ManualAgent"""
     save_path, _, world, gm = _save_world()
-    world2, scene2, gm2, _ = load_simulation_state(save_path, CONFIG)
+    world2, scene2, gm2, _ = load_simulation_state(save_path, CONFIG, scene_loader=load_scene)
     assert scene2.name == SCENE.name
     assert world2.tick == world.tick
     assert world2.locations == world.locations
@@ -148,4 +149,4 @@ def test_unknown_version_raises():
     bad_path = os.path.join(tempfile.mkdtemp(), "bad.json")
     Path(bad_path).write_text(json.dumps({"version": 99}), encoding="utf-8")
     with pytest.raises(ValueError):
-        load_simulation_state(bad_path, CONFIG)
+        load_simulation_state(bad_path, CONFIG, scene_loader=load_scene)

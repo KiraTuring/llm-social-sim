@@ -122,7 +122,7 @@ def setup_gm(self, registry: ActionRegistry):
         registry.register(action_cls())
 ```
 
-基类 `Scene.setup_gm()` **默认只注册 `narrate`**（最基础的 GM 能力）。场景覆盖 `setup_gm()` 时全量声明自己需要的工具——例如 murder 场景明确只有 3 个角色、无其他人物，就**不注册 `npc_add`**，也不注册 `modify_environment`（prompt 禁止添加新证据）。自定义 GM 工具同样在此注册：
+基类 `Scene.setup_gm()` **不注册任何工具**（core 不 import `actions/`）。场景覆盖 `setup_gm()` 时全量声明自己需要的工具——例如 murder 场景明确只有 3 个角色、无其他人物，就**不注册 `npc_add`**，也不注册 `modify_environment`（prompt 禁止添加新证据）。自定义 GM 工具同样在此注册：
 
 ```python
 class MyScene(Scene):

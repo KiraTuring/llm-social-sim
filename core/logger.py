@@ -36,7 +36,6 @@ class SimLogger:
         messages: list[dict],
         schema_or_guide: str,
         raw_response: str,
-        parsed_action: dict | None,
     ):
         """记录 LLM 调用的完整信息"""
         self.logger.info(
@@ -46,7 +45,6 @@ class SimLogger:
         self.logger.debug(f"=== USER MESSAGES ===\n{messages}")
         self.logger.debug(f"=== TOOL SCHEMA / TEXT GUIDE ===\n{schema_or_guide}")
         self.logger.debug(f"=== RAW RESPONSE ===\n{raw_response}")
-        # self.logger.info(f"=== PARSED ACTION ===\n{parsed_action}")
 
     def log_tick_start(self, tick: int):
         """记录 tick 开始"""

@@ -8,7 +8,7 @@ from conftest import write_plan
 from core.action import ActionRegistry
 from actions.common import SpeakAction, WhisperAction, MoveAction, ObserveAction, InteractAction
 from core.manual_agent import ManualAgent
-from core.scene_loader import validate_agent_configs
+from core.scene import validate_agent_configs
 from scenarios.tavern import TavernScene
 
 SCENE = TavernScene()

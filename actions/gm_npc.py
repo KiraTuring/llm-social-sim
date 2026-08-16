@@ -9,6 +9,7 @@ from core.message import Message
 class AddNpcAction(ActionSpec):
     name = "npc_add"
     icon = "🆕"
+    capabilities = frozenset({"npc_control"})
     description = "动态创建一个新的 NPC 角色，使其出现在指定位置并可由 GM 通过 npc_speak 控制。用于剧情需要临时登场的角色"
     text_format = "[ACTION]npc_add[/ACTION]\n[CONTENT]{NPC名} 在 {位置}，身份:{角色}[/CONTENT]"
 
@@ -66,6 +67,7 @@ class AddNpcAction(ActionSpec):
 class NpcSpeakAction(ActionSpec):
     name = "npc_speak"
     icon = "💬"
+    capabilities = frozenset({"npc_control"})
     description = "控制 NPC 说话：让指定 NPC 角色说出指定内容，消息流对 Agent 透明。旁观者看到的跟普通说话一样"
     text_format = "[ACTION]npc_speak[/ACTION]\n[TARGET]{NPC名}[/TARGET]\n[CONTENT]{内容}[/CONTENT]"
 
@@ -122,6 +124,7 @@ class NpcSpeakAction(ActionSpec):
 class NpcMoveAction(ActionSpec):
     name = "npc_move"
     icon = "🚶"
+    capabilities = frozenset({"npc_control"})
     description = "移动一个 NPC 到任意有效位置（GM 全能，不受连通性限制），用于角色走动或事件结束后离场"
     text_format = "[ACTION]npc_move[/ACTION]\n[TARGET]{NPC名}[/TARGET]\n[CONTENT]{目标位置}[/CONTENT]"
 
@@ -193,6 +196,7 @@ class NpcMoveAction(ActionSpec):
 class RemoveNpcAction(ActionSpec):
     name = "npc_remove"
     icon = "🚪"
+    capabilities = frozenset({"npc_control"})
     description = "移除一个 NPC（叙事上表现为'xx离开了'）。静默执行，离开的播报请用 narrate 自行描述"
     text_format = "[ACTION]npc_remove[/ACTION]\n[TARGET]{NPC名}[/TARGET]\n[CONTENT]离开描述（可选）[/CONTENT]"
 

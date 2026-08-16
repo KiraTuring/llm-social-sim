@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from core.agent import Agent
 from core.action import ActionRegistry
 from core.gm import GMAgent
-from core.scene_loader import load_scene
+from scenarios import load_scene
 
 
 def main():

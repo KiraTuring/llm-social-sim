@@ -41,7 +41,7 @@ from run import (  # noqa: E402  (run.main 有 __main__ 守卫，导入安全)
 )
 from core.action import Action  # noqa: E402
 from core.engine import SimulationEngine  # noqa: E402
-from core.scene_loader import list_available_scenes  # noqa: E402
+from scenarios import list_available_scenes  # noqa: E402
 
 
 def _log(line: str) -> None:

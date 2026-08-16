@@ -8,7 +8,6 @@ from core.action import ActionRegistry
 from core.message import MessageBus
 from core.agent import Agent
 from core.manual_agent import ManualAgent
-from core.scene_loader import load_scene
 
 SAVE_VERSION = 2
 
@@ -79,7 +78,12 @@ def save_simulation_state(world, gm, scene_module: str, scene_display: str, path
     path_obj.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def load_simulation_state(path: str, config: dict):
+def load_simulation_state(path: str, config: dict, *, scene_loader):
+    """从存档恢复世界状态。
+
+    scene_loader 由调用方（组合根）注入，用于按存档中的场景名加载 Scene；
+    core 不 import scenarios/，因此本函数不猜测场景位置与命名约定。
+    """
     from core.world import WorldState
     from core.gm import GMAgent
 
@@ -89,7 +93,7 @@ def load_simulation_state(path: str, config: dict):
     if data.get("version") != SAVE_VERSION:
         raise ValueError(f"不支持的存档版本: {data.get('version')}")
 
-    scene = load_scene(data["scene"])
+    scene = scene_loader(data["scene"])
     display_name = data.get("scene_display", data["scene"])
     print(f"载入存档: {display_name}")
 

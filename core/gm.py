@@ -200,14 +200,14 @@ class GMAgent:
             lines.append("")
             lines.append(self.world_description)
 
-        has_npc = bool({"npc_speak", "npc_move", "npc_remove"} & set(self.registry.get_action_names()))
+        has_npc = self.registry.has_capability("npc_control")
 
         response_rule = (
-            "- 留意角色最近的消息，基于角色与环境的互动产生合理的事件响应或后续影响。"
-            "注意你要回应的是交互行为(interact)和角色对 NPC 的对话(speech)，普通聊天不需要回应"
+            "- 留意角色最近的消息，基于角色与环境的互动、角色对 NPC 的对话产生合理的事件响应或后续影响。"
+            "普通玩家之间的聊天通常不需要回应"
             if has_npc
             else "- 留意角色最近的消息，基于角色与环境的互动产生合理的事件响应或后续影响。"
-            "注意你要回应的是交互行为(interact)，普通聊天不需要回应"
+            "普通聊天通常不需要回应"
         )
         gm_rule_prompt = f"""
 重要规则：
@@ -227,11 +227,11 @@ class GMAgent:
 
     def _gm_role_rules(self) -> str:
         """按场景是否有 NPC 生成角色控制权规则（无 NPC 场景不自相矛盾）。"""
-        tool_names = set(self.registry.get_action_names())
-        if {"npc_speak", "npc_move", "npc_remove"} & tool_names:
+        npc_tools = self.registry.get_action_names_with_capability("npc_control")
+        if npc_tools:
             return (
-                "角色分两类：NPC 由你控制（说话用 npc_speak、移动用 npc_move、"
-                "移除用 npc_remove）；Player（玩家）是自主角色，禁止替其做决定、发言或改变位置"
+                "角色分两类：NPC 由你控制（使用已注册的 NPC 控制工具："
+                f"{', '.join(npc_tools)}）；Player（玩家）是自主角色，禁止替其做决定、发言或改变位置"
             )
         return "本场景没有 NPC，所有角色都是自主 Player，禁止替任何角色做决定、发言或改变位置"
 

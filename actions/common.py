@@ -254,6 +254,7 @@ class ObserveAction(ActionSpec):
 class ThinkAction(ActionSpec):
     name = "think"
     icon = "🧠"
+    capabilities = frozenset({"idle"})
     description = "思考或等待。在你需要思考、等别人回复、或没有明确可做的事时使用。你的思考会写入你的记忆"
     text_format = "[ACTION]think[/ACTION]\n[THOUGHT]{内心独白}[/THOUGHT]"
 

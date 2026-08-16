@@ -9,6 +9,16 @@ from core.rules import RuleEngine
 from core.world import WorldState
 
 
+REQUIRED_AGENT_KEYS = {"name", "role", "personality", "goal", "location", "relationships"}
+
+
+def validate_agent_configs(agents: list[dict]) -> None:
+    """校验 Agent 配置是否包含所有必需字段。"""
+    for i, cfg in enumerate(agents):
+        if missing := REQUIRED_AGENT_KEYS - cfg.keys():
+            raise ValueError(f"Agent #{i} ({cfg.get('name', '?')}) 缺少必需字段: {missing}")
+
+
 class Scene:
     """场景基类"""
 
@@ -36,21 +46,17 @@ class Scene:
         pass
 
     def setup_gm(self, registry: ActionRegistry) -> None:
-        """注册 GM 可用工具。基类默认只注册 narrate（最基础的 GM 能力）。
+        """注册 GM 可用工具。
 
-        场景需要更多工具时覆盖本方法做全量白名单注册（与 setup() 的
-        Agent 工具格式一致）——要什么就注册什么，不要则不注册：
+        基类保持零依赖：不 import actions/，也不注册任何具体工具。
+        场景按需覆盖本方法做全量白名单注册——要什么就注册什么，不要则不注册：
         ```
         def setup_gm(self, registry):
-            from actions.gm_tools import NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction
-            from actions.gm_npc import NpcSpeakAction, AddNpcAction
-            for action_cls in [NarrateAction, ModifyEnvironmentAction, ModifyCharStateAction, NpcSpeakAction, AddNpcAction]:
-                registry.register(action_cls())
+            # 在场景模块中从 actions/ 导入具体工具后注册
+            ...
         ```
         """
-        from actions.gm_tools import NarrateAction
-
-        registry.register(NarrateAction())
+        pass
 
     def setup_rules(self, engine: RuleEngine) -> None:
         """注册场景特定的规则"""

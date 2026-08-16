@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional
@@ -35,6 +36,11 @@ class ActionSpec(ABC):
     text_format: str
     icon: str = "▶"                       # UI 展示图标（纯字符串，与框架无关）
     result_labels: dict[str, str] = {}    # result key -> 展示名，如 {"observed": "观察"}
+    capabilities: frozenset[str] = frozenset()  # 声明式能力标签，core 据此判断行为，不依赖具体 Action 名
+
+    def has_capability(self, capability: str) -> bool:
+        """该 Action 是否具备某能力。"""
+        return capability in self.capabilities
 
     @abstractmethod
     def execute(self, agent_name: str, params: dict, world: "WorldState") -> tuple[list["Message"], dict | None]:
@@ -78,6 +84,14 @@ class ActionRegistry:
     def get_action_names(self) -> list[str]:
         """获取所有注册的 Action 名称"""
         return list(self._actions.keys())
+
+    def has_capability(self, capability: str) -> bool:
+        """是否注册了具备某能力的 Action（core 用来做能力判断，而非按名字找工具）。"""
+        return any(action.has_capability(capability) for action in self._actions.values())
+
+    def get_action_names_with_capability(self, capability: str) -> list[str]:
+        """返回具备某能力的所有 Action 名称。"""
+        return [name for name, action in self._actions.items() if action.has_capability(capability)]
 
     def get_display_meta(self) -> dict:
         """返回所有 Action 的 UI 展示元数据 {name: {icon, result_labels}}。
@@ -143,7 +157,6 @@ class ActionRegistry:
         internal_monologue = thought_match.group(1).strip() if thought_match else ""
         state_update = None
         if state_match:
-            import json
             try:
                 state_update = json.loads(state_match.group(1).strip())
             except json.JSONDecodeError:
@@ -158,11 +171,18 @@ class ActionRegistry:
         )
 
 
+def format_result_values(result: dict | None, max_length: int = 200) -> str:
+    """把 result 的 value 拼成一行摘要（空 result 返回空串）。"""
+    if not result:
+        return ""
+    return " | ".join(str(v)[:max_length] for v in result.values())
+
+
 def format_tool_result(action_type: str, result: dict | None, max_length: int = 200) -> str:
     """统一的工具返回摘要，用于 tool role 消息"""
     if not result:
         return f"'{action_type}' 已执行"
-    return " | ".join(str(v)[:max_length] for v in result.values())
+    return format_result_values(result, max_length)
 
 
 def validate_content_length(content: str, context: dict, max_default: int = 200) -> str | None:

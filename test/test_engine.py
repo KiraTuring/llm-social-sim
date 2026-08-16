@@ -11,7 +11,7 @@ from core.gm import GMAgent
 from core.logger import SimLogger
 from core.manual_agent import ManualAgent
 from core.rules import RuleEngine
-from core.scene_loader import validate_agent_configs
+from core.scene import validate_agent_configs
 from memory.memory import AgentMemory
 from scenarios.tavern import TavernScene
 

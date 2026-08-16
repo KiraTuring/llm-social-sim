@@ -13,6 +13,7 @@ from core.gm import GMAgent
 from core.message import Message
 from core.rules import RuleEngine
 from core.save_load import save_simulation_state, load_simulation_state
+from scenarios import load_scene
 from scenarios._test import _TestScene
 
 SCENE = _TestScene()
@@ -247,7 +248,7 @@ def test_trade_save_load_roundtrip():
     gm = GMAgent.from_config(SCENE, CONFIG, gm_registry)
     tmp = os.path.join(tempfile.mkdtemp(), "trade.json")
     save_simulation_state(world, gm, "_test", SCENE.name, tmp)
-    world2, _, _, _ = load_simulation_state(tmp, CONFIG)
+    world2, _, _, _ = load_simulation_state(tmp, CONFIG, scene_loader=load_scene)
     assert world2.agents["测试甲"].states["inventory"]["金钱"] == 20
     assert world2.agents["测试甲"].states["inventory"]["物品"] == {"干粮": 2, "药草": 3, "酒壶": 1}
     assert world2.agents["测试乙"].states["inventory"]["金钱"] == 60

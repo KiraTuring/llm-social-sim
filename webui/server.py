@@ -43,7 +43,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 from run import _prepare_world, _setup_services, load_config  # noqa: E402
 from core.engine import SimulationEngine  # noqa: E402
 from core.event import SOURCE_AGENT, SOURCE_GM, SOURCE_ICONS, SOURCE_NPC, SOURCE_RULE  # noqa: E402
-from core.scene_loader import list_available_scenes  # noqa: E402
+from scenarios import list_available_scenes  # noqa: E402
 from core.save_load import save_simulation_state  # noqa: E402
 from render.tui_info import format_scene_sections  # noqa: E402
 

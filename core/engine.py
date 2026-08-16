@@ -21,6 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from core.action import format_result_values
 from core.event import SOURCE_AGENT
 
 if TYPE_CHECKING:
@@ -53,7 +54,7 @@ def _format_action_event_text(agent_name: str, action: "Action") -> str:
     if action.content:
         parts.append(f": {action.content}")
     if action.result:
-        result_text = " | ".join(str(v)[:200] for v in action.result.values())
+        result_text = format_result_values(action.result, 200)
         if result_text:
             parts.append(f"(结果: {result_text})")
     if action.internal_monologue:

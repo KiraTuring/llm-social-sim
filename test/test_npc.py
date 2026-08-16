@@ -14,6 +14,7 @@ from core.character import Character, NPC
 from core.gm import GMAgent
 from core.scene import Scene
 from core.save_load import save_simulation_state, load_simulation_state
+from scenarios import load_scene
 from render.tui_info import is_npc
 from scenarios._test import _TestScene
 
@@ -252,7 +253,7 @@ def test_npc_save_load_roundtrip():
     gm = GMAgent.from_config(SCENE, CONFIG, gm_registry)
     tmp = os.path.join(tempfile.mkdtemp(), "npc.json")
     save_simulation_state(world, gm, "_test", SCENE.name, tmp)
-    world2, scene2, gm2, _ = load_simulation_state(tmp, CONFIG)
+    world2, scene2, gm2, _ = load_simulation_state(tmp, CONFIG, scene_loader=load_scene)
     assert "神秘旅人" in world2.npcs
     assert "神秘旅人" in world2.npc_names
     assert world2.npcs["神秘旅人"].location == "书房"
@@ -274,18 +275,18 @@ def test_removed_npc_not_restored_after_load():
     gm = GMAgent.from_config(SCENE, CONFIG, gm_registry)
     tmp = os.path.join(tempfile.mkdtemp(), "npc-removed.json")
     save_simulation_state(world, gm, "_test", SCENE.name, tmp)
-    world3, scene3, gm3, _ = load_simulation_state(tmp, CONFIG)
+    world3, scene3, gm3, _ = load_simulation_state(tmp, CONFIG, scene_loader=load_scene)
     assert "神秘旅人" not in world3.npcs and "神秘旅人" not in world3.npc_names
     assert "测试守卫" not in world3.npcs and "测试守卫" not in world3.npc_names
     assert world3.npc_names == set(world3.npcs.keys()), world3.npc_names
 
 
 def test_gm_tool_whitelist():
-    """GM 工具白名单：测试场景注册全部 7 个工具，基类默认只注册 narrate"""
+    """GM 工具白名单：测试场景注册全部 7 个工具，基类零依赖不注册任何工具"""
     test_tools = _gm_tool_names(SCENE)
     assert {"narrate", "modify_environment", "modify_char_state", "npc_speak", "npc_add", "npc_move", "npc_remove"} <= test_tools
 
     base_reg = ActionRegistry(include_agent_params=False)
     Scene().setup_gm(base_reg)
     base_tools = {s["function"]["name"] for s in base_reg.get_tool_schemas()}
-    assert base_tools == {"narrate"}, base_tools
+    assert base_tools == set(), base_tools
