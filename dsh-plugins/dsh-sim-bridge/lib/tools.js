@@ -2,13 +2,17 @@
 /**
  * dsh-sim-bridge — 模型工具半（preset 行）。
  *
- * `inject: ['simBridge']` 解析 host 平面的 simBridge 服务，注册 12 个 sim_*
- * 工具，全部委托给 `ctx.simBridge.command(cmd, args)`。不发布任何服务 →
- * 组合行无需 isolate realm。随 preset 挂载：仅「社会模拟」preset 的会话可见。
+ * `inject: ['simBridge', 'tools']`：simBridge 解析 host 平面的 simBridge 服务，
+ * `tools` 声明工具注册表（cordis 对未 inject 的服务属性访问会拦截——缺 `tools`
+ * 时 `ctx.tools.register` 抛 `cannot get property "tools" without inject`，被
+ * 下方 try/catch 吞掉后 12 个 sim_* 工具会全部静默注册失败，而 apply 仍正常
+ * 返回，preset 挂载照常成功、persona 生效，唯独工具缺失）。
+ * 注册 12 个 sim_* 工具，全部委托给 `ctx.simBridge.command(cmd, args)`。
+ * 不发布任何服务 → 组合行无需 isolate realm。仅「社会模拟」preset 的会话可见。
  */
 
 module.exports = {
-  inject: ['simBridge'],
+  inject: ['simBridge', 'tools'],
   apply(ctx) {
     const simBridge = ctx.simBridge
     const registerErrors = []

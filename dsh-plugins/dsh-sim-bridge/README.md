@@ -34,4 +34,6 @@ LLM 社会模拟引擎（本仓库）的 DSH 持久插件。**单包双面 + 双
 
 - `curl -X POST -H 'content-type: application/json' -d '{"cmd":"list_scenes"}' http://127.0.0.1:3080/sim-bridge/rpc` — 路由存活检查。
 - 路由/服务状态：`sim_diag` 工具返回 `routeError`、`bridgeAlive`、`worldActive` 等。
-- 已踩过的坑（勿回退）：host 行不能用 `ctx.get('webServer')`（挂载时序问题，用 inject）；`ctx.effect` 传 disposer 要包箭头函数（setup/teardown 语义）；host 平面 `sandboxPolicy.workspaceRoot` 会回退成 HOME，仓库路径用常量。
+- **已踩过的坑（勿回退）**：
+  - `lib/tools.js` 的 `inject` 必须同时声明 `'simBridge'` **和 `'tools'`**：cordis 对未 inject 的服务属性访问会抛 `cannot get property "tools" without inject`。缺 `tools` 时 `ctx.tools.register` 的异常被 defineTool 的 try/catch 吞掉，12 个 sim_* 工具全部静默注册失败，而 apply 正常返回 → preset 挂载照常成功、persona 生效，唯独工具缺失（表现为：系统提示有「社会模拟」指南但工具列表没有 sim_*，路由 `/sim-bridge/rpc` 却正常）。
+  - host 行不能用 `ctx.get('webServer')`（挂载时序问题，用 inject）；`ctx.effect` 传 disposer 要包箭头函数（setup/teardown 语义）；host 平面 `sandboxPolicy.workspaceRoot` 会回退成 HOME，仓库路径用常量。
