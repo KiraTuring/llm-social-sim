@@ -190,10 +190,12 @@ window.__ModuleLoader__.load({
 			const [err, setErr] = React.useState("");
 			const [saving, setSaving] = React.useState(false);
 
+			// 注意：api 网关 RPC 统一返回 { result: { ok, value | error } } 信封
 			React.useEffect(() => {
 				if (!api) return;
 				api.settings.describe({}).then((r) => {
-					const ns = (r && r.namespaces || []).find((n) => n.ns === "sim-bridge");
+					const d = r && r.result && r.result.ok ? r.result.value : null;
+					const ns = (d && d.namespaces || []).find((n) => n.ns === "sim-bridge");
 					if (ns) {
 						setEnabled(!!(ns.value && ns.value.panelEnabled));
 						setRev(ns.revision);
@@ -209,9 +211,14 @@ window.__ModuleLoader__.load({
 					ns: "sim-bridge",
 					patch: { panelEnabled: !enabled },
 					expectedRevision: rev === null ? undefined : rev,
-				}).then((view) => {
-					setEnabled(!!(view && view.value && view.value.panelEnabled));
-					if (view && typeof view.revision === "number") setRev(view.revision);
+				}).then((r) => {
+					const view = r && r.result && r.result.ok ? r.result.value : null;
+					if (!view) {
+						setErr((r && r.result && r.result.error && r.result.error.message) || "写入失败");
+						return;
+					}
+					setEnabled(!!(view.value && view.value.panelEnabled));
+					if (typeof view.revision === "number") setRev(view.revision);
 				}).catch((e) => setErr(String((e && e.message) || e))).finally(() => setSaving(false));
 			};
 
