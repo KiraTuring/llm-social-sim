@@ -422,6 +422,7 @@ class TestTextModeUnchanged(unittest.TestCase):
         agent = _make_agent("text")
         world = WorldState(tick=1, locations=["主厅"])
         world.message_bus = MessageBus()
+        world.message_bus.register_agent("测试")
         world.agents["测试"] = agent
         world.message_bus.send(Message(
             sender="张三", recipients=["测试"], target="测试",
@@ -447,6 +448,7 @@ class TestTextModeUnchanged(unittest.TestCase):
 
         world = WorldState(tick=2, locations=["主厅"])
         world.message_bus = MessageBus()
+        world.message_bus.register_agent("测试")
         world.agents["测试"] = agent
         world.message_bus.send(Message(
             sender="张三", recipients=["测试"], target="测试",

@@ -115,6 +115,11 @@ def _setup_services(config: dict, scene, gm, world=None):
     llm = LLMClient(config["llm"], logger)
     gm.logger = logger
     if world is not None:
+        mb_cfg = config.get("message_bus", {})
+        world.message_bus.set_limits(
+            max_messages=mb_cfg.get("max_messages"),
+            max_inbox_per_agent=mb_cfg.get("max_inbox_per_agent"),
+        )
         for agent in world.agents.values():
             agent.logger = logger
 

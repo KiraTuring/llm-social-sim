@@ -29,7 +29,6 @@ OFFLINE_CONFIG = {
         "memory_short_limit": 10,
         "memory_compress_threshold": 30,
         "content_max_length": 200,
-        "inbox_limit": 5,
     },
     "gm": {
         "prompt_format": "text",

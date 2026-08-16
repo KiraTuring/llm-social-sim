@@ -35,13 +35,31 @@ class Message:
 class MessageBus:
     """消息总线，负责消息分发和存储。
 
-    TODO(Phase 3): 有界消息存储，裁剪时归档到持久化文件。
+    有界存储：全局消息数和单个 Agent 收件箱都在 send 阶段裁剪到上限；
+    裁剪时是否归档由 Phase 3 决定。
     """
 
-    def __init__(self):
+    def __init__(self, max_messages: int = 500, max_inbox_per_agent: int = 10):
+        self.max_messages = max_messages
+        self.max_inbox_per_agent = max_inbox_per_agent
         self._messages: list[Message] = []
         self._inboxes: dict[str, list[Message]] = {}
         self._known_agents: set[str] = set()
+
+    def set_limits(self, max_messages: int | None = None,
+                   max_inbox_per_agent: int | None = None) -> None:
+        """运行时更新上限（run.py 从配置注入，便于 load 后覆盖默认值）。"""
+        if max_messages is not None:
+            self.max_messages = max_messages
+        if max_inbox_per_agent is not None:
+            self.max_inbox_per_agent = max_inbox_per_agent
+            # 已存在的 inbox 立即按新上限裁剪
+            for name in list(self._inboxes):
+                if max_inbox_per_agent <= 0:
+                    self._inboxes[name] = []
+                else:
+                    self._inboxes[name] = self._inboxes[name][-max_inbox_per_agent:]
+        self._trim_messages()
 
     def to_dict(self) -> dict:
         """序列化为可保存的 dict（替代直接访问私有属性）"""
@@ -74,21 +92,29 @@ class MessageBus:
         self._known_agents.add(agent_name)
 
     def send(self, msg: Message) -> None:
-        """发送消息"""
+        """发送消息。
+
+        只投递给已注册的 Agent，避免为 NPC/未知角色创建永远不清理的 inbox。
+        全局消息流和单个 inbox 都在这里裁剪到配置上限。
+        """
         self._messages.append(msg)
+        self._trim_messages()
 
         if BROADCAST in msg.recipients:
-            for agent_name in self._known_agents:
-                if agent_name == msg.sender:
-                    continue
-                if agent_name not in self._inboxes:
-                    self._inboxes[agent_name] = []
-                self._inboxes[agent_name].append(msg)
+            recipients = [n for n in self._known_agents if n != msg.sender]
         else:
-            for recipient in msg.recipients:
-                if recipient not in self._inboxes:
-                    self._inboxes[recipient] = []
-                self._inboxes[recipient].append(msg)
+            recipients = [r for r in msg.recipients if r in self._known_agents]
+
+        for recipient in recipients:
+            inbox = self._inboxes.setdefault(recipient, [])
+            inbox.append(msg)
+            if len(inbox) > self.max_inbox_per_agent:
+                del inbox[: len(inbox) - self.max_inbox_per_agent]
+
+    def _trim_messages(self) -> None:
+        """全局消息流只保留最近 max_messages 条。"""
+        if len(self._messages) > self.max_messages:
+            del self._messages[: len(self._messages) - self.max_messages]
 
     def get_inbox(self, agent_name: str) -> list[Message]:
         """获取某人的收件箱"""

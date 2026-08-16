@@ -24,7 +24,14 @@ agent:
   memory_short_limit: 10
   memory_compress_threshold: 30
   content_max_length: 200  # 记忆和消息的统一截断长度
-  inbox_limit: 5           # 每次 perceive 看到的收件箱消息数
+```
+
+### MessageBus 配置
+
+```yaml
+message_bus:
+  max_messages: 500        # 全局消息流保留上限，超出后从头部裁剪
+  max_inbox_per_agent: 10  # 每个 Agent 收件箱保留上限，send 时即裁剪
 ```
 
 ### GM 配置

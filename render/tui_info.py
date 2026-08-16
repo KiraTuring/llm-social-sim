@@ -84,7 +84,6 @@ def format_scene_sections(scene, world, gm, config) -> list[tuple[str, str]]:
         f"短期记忆上限: {agent_cfg.get('memory_short_limit', '?')}",
         f"压缩阈值: {agent_cfg.get('memory_compress_threshold', '?')}",
         f"内容截断: {agent_cfg.get('content_max_length', '?')}",
-        f"收件箱上限: {agent_cfg.get('inbox_limit', '?')}",
     ]
     sections.append(("🤖 Agent 参数", "\n".join(agent_lines)))
 
@@ -105,6 +104,11 @@ def format_scene_sections(scene, world, gm, config) -> list[tuple[str, str]]:
         f"自动间隔: {sim_cfg.get('auto_delay', '?')}s",
         f"行动顺序轮换: {'开启' if sim_cfg.get('rotate_order') else '关闭'}",
     ]
+    mb_cfg = config.get("message_bus", {})
+    sim_lines.append(
+        f"消息上限: {mb_cfg.get('max_messages', '?')} | "
+        f"收件箱上限: {mb_cfg.get('max_inbox_per_agent', '?')}"
+    )
     manual_agents = sim_cfg.get("manual_agents") or []
     if manual_agents:
         sim_lines.append("手动控制: " + ", ".join(manual_agents))

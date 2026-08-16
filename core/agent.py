@@ -32,7 +32,6 @@ class Agent(Character):
         memory: "AgentMemory",
         registry: "ActionRegistry",
         content_max_length: int = 200,
-        inbox_limit: int = 5,
         world_description: str = "",
         states: dict | None = None,
         writable_states: set | None = None,
@@ -48,7 +47,6 @@ class Agent(Character):
         self.memory = memory
         self.registry = registry
         self.content_max_length = content_max_length
-        self.inbox_limit = inbox_limit
         self.world_description = world_description
         self.instruction = instruction
         self.prompt_format = prompt_format
@@ -84,7 +82,6 @@ class Agent(Character):
             registry=registry,
             world_description=scene.world_description,
             instruction=scene.instruction,
-            inbox_limit=config["agent"].get("inbox_limit", 5),
             prompt_format=prompt_format,
         )
 
@@ -236,7 +233,7 @@ class Agent(Character):
         max_len = self.content_max_length
 
         lines = []
-        for msg in inbox[-self.inbox_limit:]:
+        for msg in inbox:
             truncated = msg.content[:max_len]
             sender_part = f"{msg.sender}" + (f" -> {msg.target}" if msg.target else "")
             sender_part = sender_part.replace(self.name, "你")
