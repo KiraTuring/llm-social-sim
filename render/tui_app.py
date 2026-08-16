@@ -270,7 +270,7 @@ class SimulationTuiApp(App):
                 await engine.begin_tick(tick)
 
                 # GM 事件随后追加
-                await self._render_gm_events()
+                await self._render_tick_events()
 
                 # 按单个 Agent 步进：每个角色行动完立即刷新 UI
                 while engine.next_agent:
@@ -326,8 +326,11 @@ class SimulationTuiApp(App):
         scroll.scroll_end(animate=False)
         await self._trim_event_scroll(scroll)
 
-    async def _render_gm_events(self):
-        """begin_tick 后追加渲染本 tick 新增的事件（按来源显示图标）。"""
+    async def _render_tick_events(self):
+        """begin_tick 后追加渲染本 tick 新增的 GM / NPC 事件。
+
+        Agent 行动由 _render_agent_step 渲染，这里不展示，避免重复。
+        """
         self._update_hint_visibility()
         scroll = self.query_one("#event-scroll", VerticalScroll)
         for event in self.world.event_log[self._events_rendered:]:
