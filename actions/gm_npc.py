@@ -2,6 +2,7 @@
 
 from core.action import ActionSpec
 from core.character import NPC
+from core.event import SOURCE_NPC
 from core.message import Message
 
 
@@ -53,7 +54,11 @@ class AddNpcAction(ActionSpec):
         error = world.add_npc(npc)
         if error is not None:
             return [], {"result": error}
-        world.add_event(f"新 NPC 出现: {npc.name}（{npc.role or '身份未知'}）在{npc.location}")
+        world.add_event(
+            f"新 NPC 出现: {npc.name}（{npc.role or '身份未知'}）在{npc.location}",
+            source=npc.name,
+            source_type=SOURCE_NPC,
+        )
         return [], {"result": f"NPC '{npc.name}' 已出现在{npc.location}"}
 
 
@@ -104,7 +109,11 @@ class NpcSpeakAction(ActionSpec):
         )
         world.message_bus.send(msg)
         suffix = f" -> {target}" if target else ""
-        world.add_event(f"NPC {npc_name}{suffix}: {content}")
+        world.add_event(
+            f"NPC {npc_name}{suffix}: {content}",
+            source=npc_name,
+            source_type=SOURCE_NPC,
+        )
         return [msg], None
 
 
@@ -170,7 +179,11 @@ class NpcMoveAction(ActionSpec):
             tick=world.tick,
         )
         world.message_bus.send(msg)
-        world.add_event(f"NPC {npc_name}: {desc}")
+        world.add_event(
+            f"NPC {npc_name}: {desc}",
+            source=npc_name,
+            source_type=SOURCE_NPC,
+        )
         return [msg], {"result": f"NPC '{npc_name}' 已从{old_loc}移动到{target}"}
 
 
@@ -207,5 +220,9 @@ class RemoveNpcAction(ActionSpec):
         error = world.remove_npc(npc_name)
         if error is not None:
             return [], {"result": error}
-        world.add_event(f"NPC {npc_name} 离开了")
+        world.add_event(
+            f"NPC {npc_name} 离开了",
+            source=npc_name,
+            source_type=SOURCE_NPC,
+        )
         return [], {"result": f"NPC '{npc_name}' 已移除"}

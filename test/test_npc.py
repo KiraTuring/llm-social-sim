@@ -33,7 +33,7 @@ CONFIG = {
         "use_llm": False,
         "random_event_chance": 0.0,
         "llm_event_chance": 0.0,
-        "message_limit": 5,
+        "event_tick_window": 3,
     },
 }
 
@@ -76,7 +76,7 @@ def test_add_npc_creates_and_indexes():
     assert "神秘旅人" in world.get_characters_in_location("书房")
     assert "神秘旅人" not in world.get_agents_in_location("书房")
     assert "已出现在书房" in result["result"]
-    assert any("新 NPC 出现" in e for e in world.event_log)
+    assert any("新 NPC 出现" in e.text for e in world.event_log)
 
 
 def test_add_npc_validation_rejects():
@@ -167,7 +167,7 @@ def test_npc_move_success(source, target):
         assert npc_name not in world.get_characters_in_location("书房")
         assert msgs and msgs[0].sender == npc_name and msgs[0].msg_type == "action"
         assert target in result["result"]
-        assert any(f"移动到了{target}" in e for e in world.event_log)
+        assert any(f"移动到了{target}" in e.text for e in world.event_log)
 
 
 def test_npc_move_validation_rejects():
@@ -193,7 +193,7 @@ def test_npc_remove_success(source):
         msgs, result = RemoveNpcAction().execute("GM", {"npc_name": npc_name}, world)
         assert msgs == [], "npc_remove 应静默，不发消息"
         assert "已移除" in result["result"]
-        assert any(f"{npc_name} 离开了" in e for e in world.event_log)
+        assert any(f"{npc_name} 离开了" in e.text for e in world.event_log)
     else:
         world = SCENE.init_world()
         world.rebuild_location_index()

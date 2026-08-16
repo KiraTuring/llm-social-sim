@@ -41,7 +41,7 @@ def format_scene_sections(scene, world, gm, config) -> list[tuple[str, str]]:
         f"LLM 事件: {'开启' if getattr(gm, 'use_llm', False) else '关闭'}",
         f"随机事件概率: {gm_cfg.get('random_event_chance', '?')} | "
         f"LLM 事件概率: {gm_cfg.get('llm_event_chance', '?')}",
-        f"消息上限: {gm_cfg.get('message_limit', '?')} | "
+        f"事件窗口: 最近 {gm_cfg.get('event_tick_window', '?')} tick | "
         f"prompt 格式: {gm_cfg.get('prompt_format', '?')} | "
         f"历史上限: {gm_cfg.get('chat_history_max_messages', '?')}",
     ]

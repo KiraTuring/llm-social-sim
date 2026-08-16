@@ -34,7 +34,7 @@ def _config() -> dict:
             "use_llm": True,
             "random_event_chance": 0.2,
             "llm_event_chance": 0.2,
-            "message_limit": 5,
+            "event_tick_window": 3,
         },
     }
 

@@ -36,7 +36,7 @@ OFFLINE_CONFIG = {
         "use_llm": False,
         "random_event_chance": 0.0,
         "llm_event_chance": 0.0,
-        "message_limit": 5,
+        "event_tick_window": 3,
     },
 }
 

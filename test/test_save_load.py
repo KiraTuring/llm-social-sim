@@ -34,7 +34,7 @@ CONFIG = {
         "use_llm": True,
         "random_event_chance": 0.2,
         "llm_event_chance": 0.2,
-        "message_limit": 5,
+        "event_tick_window": 3,
     },
 }
 
@@ -133,7 +133,9 @@ def test_format_stable():
     """存档格式稳定：key 逐项匹配现有 schema"""
     save_path, plan_path, _, _ = _save_world()
     raw = json.loads(Path(save_path).read_text(encoding="utf-8"))
-    assert raw["version"] == SAVE_VERSION == 1
+    assert raw["version"] == SAVE_VERSION == 2
+    assert isinstance(raw["event_log"], list)
+    assert all(isinstance(e, dict) for e in raw["event_log"])
     assert set(raw.keys()) == TOP_LEVEL_KEYS, set(raw.keys())
     assert set(raw["gm"].keys()) == GM_KEYS
     assert set(raw["agents"]["雷恩"].keys()) == AGENT_KEYS

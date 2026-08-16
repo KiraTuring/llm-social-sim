@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from core.character import NPC
+from core.event import SOURCE_GM, TimelineEvent
 
 if TYPE_CHECKING:
     from .agent import Agent
@@ -41,7 +42,7 @@ class WorldState:
     _reverse_visibility: dict[str, list[str]] = field(default_factory=dict)
     agents: dict[str, "Agent"] = field(default_factory=dict)
     npcs: dict[str, NPC] = field(default_factory=dict)
-    event_log: list[str] = field(default_factory=list)
+    event_log: list[TimelineEvent] = field(default_factory=list)
     action_order: list[str] = field(default_factory=list)
     message_bus: Any = None
     environment: dict[str, dict[str, str]] = field(default_factory=dict)
@@ -185,12 +186,40 @@ class WorldState:
                 old_bucket.remove(name)
         return None
 
-    def add_event(self, event: str):
-        """记录事件。
+    def add_event(
+        self,
+        text: str,
+        source: str = "GM",
+        source_type: str = SOURCE_GM,
+        meta: dict | None = None,
+    ) -> None:
+        """记录结构化时间线事件。
 
-        TODO(Phase 3): 有界事件存储，裁剪时归档到持久化文件。
+        默认来源是 GM；NPC / Agent 动作可通过 source / source_type 标注。
+        事件流上限与归档仍由 Phase 3 处理。
         """
-        self.event_log.append(f"[tick {self.tick}] {event}")
+        self.event_log.append(TimelineEvent(
+            tick=self.tick,
+            text=text,
+            source=source,
+            source_type=source_type,
+            meta=meta,
+        ))
+
+    def event_log_texts(self) -> list[str]:
+        """返回事件文本列表（测试/调试用）。"""
+        return [e.text for e in self.event_log]
+
+    def event_log_for_tick(self, tick: int) -> list[TimelineEvent]:
+        """返回指定 tick 的事件列表。"""
+        return [e for e in self.event_log if e.tick == tick]
+
+    def event_log_for_last_ticks(self, n_ticks: int) -> list[TimelineEvent]:
+        """返回最近 n_ticks 个 tick 内的事件（含当前 tick）。"""
+        if n_ticks <= 0:
+            return []
+        min_tick = self.tick - n_ticks + 1
+        return [e for e in self.event_log if min_tick <= e.tick <= self.tick]
 
     def get_characters_in_location(self, location: str) -> list[str]:
         """获取某个位置的所有角色（Agent + NPC，返回副本，调用方可安全修改）"""

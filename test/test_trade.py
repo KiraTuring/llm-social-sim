@@ -31,7 +31,7 @@ CONFIG = {
         "use_llm": False,
         "random_event_chance": 0.0,
         "llm_event_chance": 0.0,
-        "message_limit": 5,
+        "event_tick_window": 3,
     },
 }
 
@@ -62,7 +62,7 @@ def _ctx(world, agent_name: str) -> dict:
 # ---------- 转移正确性 ----------
 
 def test_money_transfer():
-    """纯 give（支付/送礼）：金钱双向增减，对手方收 trade 私信，事件入 log"""
+    """纯 give（支付/送礼）：金钱双向增减，对手方收 trade 私信（行动事件由引擎统一记录）"""
     world = _build_world()
     ctx = _ctx(world, "测试甲")
     params = {"target": "测试乙", "give_money": 10}
@@ -74,7 +74,8 @@ def test_money_transfer():
     assert "金钱10" in result["summary"]
     # 纯 give（无 take）：对手方视角只有获得，没有付出
     assert "你获得金钱10" in msgs[0].content
-    assert any("交易" in e for e in world.event_log)
+    # Action.execute 直接调用不写 event_log；引擎 step_agent 会统一记录 Agent 行动事件
+    assert world.event_log == []
 
 
 def test_items_both_ways():

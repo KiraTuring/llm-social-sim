@@ -56,9 +56,12 @@ class MyScene(Scene):
 
 - 当前 tick
 - 各位置的角色分布（含情绪/精力）
-- 最近 15 条消息（从 `MessageBus.get_recent(message_limit)` 获取，含所有 msg_type）
+- 最近 `event_tick_window` 个 tick 内的事件（从 `world.event_log` 获取，只读事件文本）
 
 计划/随机事件在 LLM 调用前已写入 `event_log`，GM 可看到它们避免生成冲突内容。
+`event_log` 中的条目是结构化 `TimelineEvent`（`core/event.py`），默认来源为 GM；
+NPC 动作（`npc_add` / `npc_speak` / `npc_move` / `npc_remove`）标记为 `source_type="npc"`，
+Agent 动作（如 `trade`）标记为 `source_type="agent"`，CLI/TUI 据此区分展示。
 
 ## 校验上下文
 

@@ -45,7 +45,7 @@ def make_config(log_file: str) -> dict:
             "use_llm": False,
             "random_event_chance": 0.0,
             "llm_event_chance": 0.0,
-            "message_limit": 5,
+            "event_tick_window": 3,
         },
         "simulation": {
             "max_ticks": 20,

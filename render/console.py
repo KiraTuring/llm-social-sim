@@ -3,6 +3,15 @@
 from rich.console import Console
 from rich.panel import Panel
 
+from core.event import SOURCE_AGENT, SOURCE_GM, SOURCE_NPC, SOURCE_RULE
+
+EVENT_STYLES = {
+    SOURCE_GM: ("🎲 GM", "bold yellow"),
+    SOURCE_NPC: ("🎭 NPC", "bold magenta"),
+    SOURCE_AGENT: ("👤", "bold cyan"),
+    SOURCE_RULE: ("⚙️", "bold white"),
+}
+
 
 class ConsoleRenderer:
     """控制台渲染器"""
@@ -35,10 +44,12 @@ class ConsoleRenderer:
 
         self.console.print(f"[bold blue]┌─ Tick {world.tick} ─{'─' * 34}┐[/bold blue]")
 
-        tick_events = [e for e in world.event_log if f"[tick {world.tick}]" in e]
+        tick_events = world.event_log_for_tick(world.tick)
         for event in tick_events:
-            content = event.replace(f"[tick {world.tick}] ", "")
-            self.console.print(f"[bold yellow]🎲 GM: {content}[/bold yellow]")
+            if event.source_type not in (SOURCE_GM, SOURCE_NPC):
+                continue  # Agent 行动由角色面板渲染，避免顶部事件区重复展示
+            prefix, style = EVENT_STYLES.get(event.source_type, ("🎲 GM", "bold yellow"))
+            self.console.print(f"[{style}]{prefix}: {event.text}[/{style}]")
 
         for name in world.action_order:
             agent = world.agents[name]

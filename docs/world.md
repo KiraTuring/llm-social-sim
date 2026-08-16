@@ -36,6 +36,40 @@ class Message:
 - `MoveAction` 发送给出发位置和到达位置的 hearable agents 并集
 - `RadioAction` 发送消息给目标（`msg_type="radio"`）+ 旁观者通知（`msg_type="action"`）
 
+## 事件流（TimelineEvent）
+
+`world.event_log` 记录结构化时间线事件，不再使用带 `[tick N]` 前缀的字符串：
+
+```python
+@dataclass
+class TimelineEvent:
+    tick: int
+    text: str
+    source: str = "GM"
+    source_type: str = "gm"  # gm | npc | agent | rule
+    meta: dict | None = None
+```
+
+写入时通过 `WorldState.add_event()` 标注来源：
+
+```python
+world.add_event("旁白：窗外下起了雨")                          # 默认 GM
+world.add_event("NPC 说话", source="警长", source_type="npc")
+world.add_event("交易", source="艾莉娅", source_type="agent")
+```
+
+读取辅助方法：
+
+- `world.event_log_texts()` → `list[str]`（事件文本，测试/调试用）
+- `world.event_log_for_tick(tick)` → `list[TimelineEvent]`
+
+CLI / TUI 渲染层按 `source_type` 显示不同前缀和颜色，不再把交易、NPC 台词等误标成 `🎲 GM`。
+
+`SimulationEngine.step_agent()` 会把每个 Agent 行动统一写入 `event_log`：
+`text` 是 GM 可读的摘要（如 `艾莉娅 whisper -> 雷恩: ...`），`meta` 保留
+`action_type / target / content / result / internal_monologue / state_update`
+等完整结构化信息。GM 上下文只读 `text`，不读 `meta`。
+
 ## 可见性系统（Visibility）
 
 观察范围大于交互范围。场景通过 `visibility` 定义每个位置能看到的其他位置：

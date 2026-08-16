@@ -34,7 +34,7 @@ CONFIG = {
         "use_llm": False,
         "random_event_chance": 0.0,
         "llm_event_chance": 0.0,
-        "message_limit": 5,
+        "event_tick_window": 3,
     },
     "simulation": {"rotate_order": False},
     "logging": {"level": "INFO"},
@@ -105,11 +105,40 @@ async def test_agent_level_steps_then_engine_reusable():
     logger.close()
 
 
+async def test_agent_action_recorded_to_event_log():
+    """每个 Agent 行动统一写入 event_log：text 给 GM，meta 含 state_update 等完整信息"""
+    engine, world, logger = await build_engine({
+        "老巴克": {
+            "1": {
+                "action_type": "speak",
+                "target": "艾莉娅",
+                "content": "欢迎光临",
+                "internal_monologue": "招呼客人",
+                "params": {"state_update": {"情绪": "平静"}},
+            },
+        },
+    })
+    await engine.run_tick(1)
+
+    agent_events = [e for e in world.event_log_for_tick(1) if e.source_type == "agent"]
+    assert len(agent_events) == len(world.action_order)
+
+    speak_events = [e for e in agent_events if e.meta and e.meta["action_type"] == "speak"]
+    assert len(speak_events) == 1
+    event = speak_events[0]
+    assert event.source == "老巴克"
+    assert "老巴克 speak" in event.text
+    assert "欢迎光临" in event.text
+    assert "招呼客人" in event.text
+    assert event.meta["state_update"] == {"情绪": "平静"}
+    logger.close()
+
+
 async def test_gm_scheduled_event_injected():
     """GM 计划事件注入（tick 3 酒馆闷雷）"""
     engine, world, logger = await build_engine()
     await engine.begin_tick(3)
-    assert any("闷雷" in e for e in world.event_log), world.event_log
+    assert any("闷雷" in e.text for e in world.event_log), world.event_log_texts()
     assert world.environment["壁炉旁"].get("火焰大小") == "旺盛"
     await engine.end_tick()
     logger.close()

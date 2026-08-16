@@ -1,6 +1,7 @@
 """模拟状态保存与加载"""
 
 import json
+import re
 from pathlib import Path
 
 from core.action import ActionRegistry
@@ -9,14 +10,44 @@ from core.agent import Agent
 from core.manual_agent import ManualAgent
 from core.scene_loader import load_scene
 
-SAVE_VERSION = 1
+SAVE_VERSION = 2
+
+
+def _migrate_event_log(events: list) -> list[dict]:
+    """v1 字符串事件迁移到 v2 结构化事件。
+
+    v1 格式形如 "[tick 3] 屋外传来马蹄声"；迁移时解析 tick，来源无法
+    还原，统一标记为 GM。
+    """
+    migrated = []
+    for item in events:
+        if isinstance(item, dict):
+            migrated.append(item)
+            continue
+        match = re.match(r"^\[tick (\d+)\] (.*)$", item, re.DOTALL)
+        if match:
+            migrated.append({
+                "tick": int(match.group(1)),
+                "text": match.group(2),
+                "source": "GM",
+                "source_type": "gm",
+            })
+        else:
+            migrated.append({
+                "tick": 0,
+                "text": item,
+                "source": "GM",
+                "source_type": "gm",
+            })
+    return migrated
 
 
 def _migrate(data: dict) -> dict:
-    """存档版本迁移入口：旧版本在此升级到最新格式，返回迁移后的 dict。
-
-    目前只有 version 1，直接原样返回；未来格式演进只改这一处。
-    """
+    """存档版本迁移入口：旧版本在此升级到最新格式，返回迁移后的 dict。"""
+    if data.get("version") == 1:
+        data = dict(data)
+        data["version"] = SAVE_VERSION
+        data["event_log"] = _migrate_event_log(data.get("event_log", []))
     return data
 
 
@@ -29,7 +60,7 @@ def save_simulation_state(world, gm, scene_module: str, scene_display: str, path
         "locations": world.locations,
         "connections": [[a, b] for a, b in world.connections],
         "action_order": world.action_order,
-        "event_log": world.event_log,
+        "event_log": [e.to_dict() for e in world.event_log],
         "environment": world.environment,
         "message_bus": world.message_bus.to_dict(),
         "gm": gm.to_dict(),
@@ -65,10 +96,12 @@ def load_simulation_state(path: str, config: dict):
     registry = ActionRegistry()
     scene.setup(registry)
 
+    from core.event import TimelineEvent
+
     world = WorldState()
     world.tick = data["tick"]
     world.apply_scene_config(scene)
-    world.event_log = data["event_log"]
+    world.event_log = [TimelineEvent.from_dict(e) for e in data["event_log"]]
     world.action_order = data["action_order"]
     world.connections = [tuple(p) for p in data.get("connections", [])]
     world._adjacency = WorldState.compute_adjacency(world.connections)

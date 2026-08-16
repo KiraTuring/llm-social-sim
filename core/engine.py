@@ -21,6 +21,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from core.event import SOURCE_AGENT
+
 if TYPE_CHECKING:
     from core.action import Action
     from core.gm import GMAgent
@@ -37,6 +39,26 @@ class AgentStep:
     action: "Action | None"
     messages: list["Message"]
     tick: int
+
+
+def _format_action_event_text(agent_name: str, action: "Action") -> str:
+    """把 Agent 行动格式化为 GM 可读的文本摘要。
+
+    完整结构化信息（含 state_update）由调用方写入 event_log 的 meta，
+    GM 只读 text。
+    """
+    parts = [f"{agent_name} {action.action_type}"]
+    if action.target:
+        parts.append(f"-> {action.target}")
+    if action.content:
+        parts.append(f": {action.content}")
+    if action.result:
+        result_text = " | ".join(str(v)[:200] for v in action.result.values())
+        if result_text:
+            parts.append(f"(结果: {result_text})")
+    if action.internal_monologue:
+        parts.append(f"(内心: {action.internal_monologue})")
+    return " ".join(parts)
 
 
 class SimulationEngine:
@@ -115,6 +137,21 @@ class SimulationEngine:
         messages = await agent.act(action, self.world)
 
         self.agent_actions[agent_name] = action
+
+        if action is not None:
+            self.world.add_event(
+                _format_action_event_text(agent_name, action),
+                source=agent_name,
+                source_type=SOURCE_AGENT,
+                meta={
+                    "action_type": action.action_type,
+                    "target": action.target,
+                    "content": action.content,
+                    "result": action.result,
+                    "internal_monologue": action.internal_monologue,
+                    "state_update": action.state_update or action.params.get("state_update"),
+                },
+            )
 
         action_dict = {
             "action_type": action.action_type,

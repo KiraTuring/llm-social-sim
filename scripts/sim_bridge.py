@@ -58,11 +58,17 @@ _STATE_EVENT_PREFIXES = ("新 NPC 出现:", "环境变更:", "环境指标已删
 _STATE_EVENT_LEAVE_RE = re.compile(r"^NPC .+ 离开了$")
 
 
-def _extract_state_events(event_log_delta: list[str], tick: int) -> list[dict]:
-    """从 event_log 增量中提取纯状态事件，返回与 events 数组同构的条目。"""
+def _extract_state_events(event_log_delta, tick: int) -> list[dict]:
+    """从 event_log 增量中提取纯状态事件，返回与 events 数组同构的条目。
+
+    event_log_delta 的元素可以是 TimelineEvent，也可以是旧版字符串。
+    """
     out = []
-    for line in event_log_delta:
-        content = line.split("] ", 1)[-1] if line.startswith("[tick ") else line
+    for item in event_log_delta:
+        if hasattr(item, "text"):
+            content = item.text
+        else:
+            content = item.split("] ", 1)[-1] if item.startswith("[tick ") else item
         if content.startswith(_STATE_EVENT_PREFIXES) or _STATE_EVENT_LEAVE_RE.match(content):
             out.append({
                 "tick": tick,
@@ -304,7 +310,7 @@ class SimBridge:
             "agents": agents,
             "npcs": npcs,
             "recent_messages": recent,
-            "event_log_tail": world.event_log[-10:],
+            "event_log_tail": [f"[tick {e.tick}] {e.text}" for e in world.event_log[-10:]],
             "action_order": list(world.action_order),
             "available_actions": self.registry.get_action_names(),
             "pending_actions": list(self._pending_actions.keys()),

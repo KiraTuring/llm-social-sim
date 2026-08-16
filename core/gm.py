@@ -20,7 +20,7 @@ class GMAgent:
     def __init__(self, events: list, random_events: list, chance: float,
                  gm_registry: ActionRegistry, use_llm: bool = False,
                  llm_chance: float = 0.0, llm_prompt: str = "",
-                 world_description: str = "", logger=None, message_limit: int = 15,
+                 world_description: str = "", logger=None, event_tick_window: int = 3,
                  prompt_format: str = "text", history_max_messages: int = 40):
         self.scheduled_events = events
         self.random_events = random_events
@@ -30,7 +30,7 @@ class GMAgent:
         self.llm_prompt = llm_prompt
         self.world_description = world_description
         self.logger = logger
-        self.message_limit = message_limit
+        self.event_tick_window = event_tick_window
         self.prompt_format = prompt_format
         self.history_max_messages = history_max_messages
         self._gm_history: list[dict] = []
@@ -48,7 +48,7 @@ class GMAgent:
             llm_chance=config["gm"].get("llm_event_chance", 0.3),
             llm_prompt=gm_cfg.get("llm_prompt", ""),
             world_description=scene.world_description,
-            message_limit=config["gm"].get("message_limit", 15),
+            event_tick_window=config["gm"].get("event_tick_window", 3),
             prompt_format=config["gm"].get("prompt_format", "text"),
             history_max_messages=config["gm"].get("chat_history_max_messages", 40),
             gm_registry=gm_registry,
@@ -265,13 +265,12 @@ class GMAgent:
             parts.append("\n环境状态：")
             parts.extend(env_lines)
 
-        if world.message_bus:
-            msgs = []
-            for m in world.message_bus.get_recent(self.message_limit):
-                target_str = f" -> {m.target}" if m.target else ""
-                msgs.append(f"  [tick {m.tick}] [{m.sender}] ({m.msg_type}{target_str}): {m.content}")
-            if msgs:
-                parts.append("\n最近收到的消息：")
-                parts.extend(msgs)
+        events = world.event_log_for_last_ticks(self.event_tick_window)
+        if events:
+            lines = []
+            for e in events:
+                lines.append(f"  [tick {e.tick}] {e.text}")
+            parts.append("\n最近事件：")
+            parts.extend(lines)
 
         return "\n".join(parts)

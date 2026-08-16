@@ -36,10 +36,10 @@ class MessageBus:
     """消息总线，负责消息分发和存储。
 
     有界存储：全局消息数和单个 Agent 收件箱都在 send 阶段裁剪到上限；
-    裁剪时是否归档由 Phase 3 决定。
+    超出上限后直接丢弃，不做持久化归档。
     """
 
-    def __init__(self, max_messages: int = 500, max_inbox_per_agent: int = 10):
+    def __init__(self, max_messages: int = 100, max_inbox_per_agent: int = 10):
         self.max_messages = max_messages
         self.max_inbox_per_agent = max_inbox_per_agent
         self._messages: list[Message] = []

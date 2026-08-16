@@ -32,9 +32,22 @@ async def test_scheduled_events_injected_at_tick():
     for tick in range(1, 6):
         world.tick = tick
         await gm.check_and_inject(world)
-    log = "\n".join(world.event_log)
-    assert "穿黑甲的士兵" in log and "[tick 2]" in log
-    assert "马蹄声" in log and "[tick 4]" in log
+    texts_at_2 = world.event_log_for_tick(2)
+    texts_at_4 = world.event_log_for_tick(4)
+    assert any("穿黑甲的士兵" in e.text for e in texts_at_2), texts_at_2
+    assert any("马蹄声" in e.text for e in texts_at_4), texts_at_4
+
+
+def test_gm_context_reads_event_log_text_not_meta():
+    """GM 上下文读 event_log 的 text，不读 meta。"""
+    world = _build_world()
+    world.add_event("旁白: 测试事件", source="GM", source_type="gm", meta={"secret": "不应出现"})
+    gm = GMAgent(events=[], random_events=[], chance=0.0, gm_registry=_make_gm_registry())
+    ctx = gm._build_world_context(world)
+    assert "最近事件" in ctx
+    assert "旁白: 测试事件" in ctx
+    assert "不应出现" not in ctx
+    assert "最近收到的消息" not in ctx
 
 
 async def test_random_event_injected_with_chance_1():
@@ -49,5 +62,5 @@ async def test_random_event_injected_with_chance_1():
     for tick in range(1, 4):
         world.tick = tick
         await gm.check_and_inject(world)
-    log = "\n".join(world.event_log)
+    log = "\n".join(world.event_log_texts())
     assert any(name in log for name in ("醉汉", "壁炉")), log

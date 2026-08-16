@@ -282,7 +282,7 @@ class TestGMChainTools(unittest.TestCase):
         ))
         self.assertIn("流浪汉", self.world.npcs)
         self.assertIn("流浪汉", self.world.npc_names)
-        self.assertNotIn("不是 NPC", "\n".join(self.world.event_log))
+        self.assertNotIn("不是 NPC", "\n".join(self.world.event_log_texts()))
 
     def test_npc_add_then_speak_across_turns(self):
         """跨 turn：turn0 npc_add，turn1 npc_speak（ReAct 循环内校验上下文逐 turn 重建）"""
@@ -306,7 +306,7 @@ class TestGMChainTools(unittest.TestCase):
         asyncio.run(run())
         self.assertIn("吟游诗人", self.world.npcs)
         self.assertEqual(self.world.npcs["吟游诗人"].location, "书房")
-        self.assertNotIn("不是 NPC", "\n".join(self.world.event_log))
+        self.assertNotIn("不是 NPC", "\n".join(self.world.event_log_texts()))
 
     def test_chat_second_trigger_tool_pairing(self):
         """chat 模式：一次响应多个工具后，_gm_history 必须保持 assistant(tool_calls)/tool 配对，

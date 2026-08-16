@@ -8,7 +8,15 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Header, Tree, Static, Button, Label, Collapsible
 
+from core.event import SOURCE_AGENT, SOURCE_GM, SOURCE_NPC, SOURCE_RULE
 from render.tui_screens import _esc, AgentInfoScreen, LocationInfoScreen, SceneInfoScreen
+
+EVENT_STYLES = {
+    SOURCE_GM: ("🎲", "yellow"),
+    SOURCE_NPC: ("🎭", "magenta"),
+    SOURCE_AGENT: ("👤", "cyan"),
+    SOURCE_RULE: ("⚙️", "white"),
+}
 
 
 class SimulationTuiApp(App):
@@ -319,14 +327,19 @@ class SimulationTuiApp(App):
         await self._trim_event_scroll(scroll)
 
     async def _render_gm_events(self):
-        """begin_tick 后追加渲染本 tick 新增的 GM 事件。"""
+        """begin_tick 后追加渲染本 tick 新增的事件（按来源显示图标）。"""
         self._update_hint_visibility()
         scroll = self.query_one("#event-scroll", VerticalScroll)
-        prefix = f"[tick {self.world.tick}] "
         for event in self.world.event_log[self._events_rendered:]:
-            if event.startswith(prefix):
-                content = event[len(prefix):]
-                scroll.mount(Static(f"[bold yellow]🎲 {_esc(content)}[/bold yellow]", classes="gm-event"))
+            if event.tick != self.world.tick:
+                continue
+            if event.source_type not in (SOURCE_GM, SOURCE_NPC):
+                continue  # Agent 行动由 _render_agent_step 渲染，避免重复
+            icon, color = EVENT_STYLES.get(event.source_type, ("🎲", "yellow"))
+            scroll.mount(Static(
+                f"[{color}]{icon} {_esc(event.text)}[/{color}]",
+                classes="gm-event",
+            ))
         self._events_rendered = len(self.world.event_log)
         scroll.scroll_end(animate=False)
         await self._trim_event_scroll(scroll)

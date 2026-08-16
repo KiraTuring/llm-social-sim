@@ -30,7 +30,7 @@ agent:
 
 ```yaml
 message_bus:
-  max_messages: 500        # 全局消息流保留上限，超出后从头部裁剪
+  max_messages: 100        # 全局消息流保留上限，超出后直接丢弃
   max_inbox_per_agent: 10  # 每个 Agent 收件箱保留上限，send 时即裁剪
 ```
 
@@ -43,7 +43,7 @@ gm:
   use_llm: true
   random_event_chance: 0.2
   llm_event_chance: 0.5
-  message_limit: 15                  # 世界上下文中显示的消息数
+  event_tick_window: 3               # GM 上下文读取最近 N 个 tick 内的事件
 ```
 
 ## 日志系统

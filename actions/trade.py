@@ -180,8 +180,6 @@ class TradeAction(ActionSpec):
             world.message_bus.send(notice)
             messages.append(notice)
 
-        # 事件日志：显式带上行动者名，避免无主语的「付出/获得」产生歧义
-        world.add_event(f"交易: {agent_name} ↔ {target}: {agent_name}{detail}")
         return messages, {"summary": f"交易完成: {detail}"}
 
     @staticmethod
