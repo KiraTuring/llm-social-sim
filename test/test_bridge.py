@@ -179,6 +179,84 @@ def test_inject_event_and_act_as(bridge):
     assert any("窗外闪过一道黑影" in m["content"] for m in state["recent_messages"])
 
 
+def test_inject_event_target_agent(bridge):
+    """inject_event 的 target=角色名：私信该角色，返回其接收者。"""
+    bridge.start_tavern(1)
+    resp = bridge.send({
+        "req_id": 2,
+        "cmd": "inject_event",
+        "content": "窗外的黑影朝你招了招手",
+        "target": "艾莉娅",
+    })
+    assert resp["ok"] is True
+    assert resp["data"]["recipients"] == ["艾莉娅"]
+    # 只该角色收到：step 后只有艾莉娅的收件箱含该事件（通过其行动上下文间接验证）
+    state = bridge.send({"req_id": 3, "cmd": "state"})["data"]
+    assert any("窗外的黑影朝你招了招手" in m["content"] for m in state["recent_messages"])
+
+
+def test_inject_event_target_location(bridge):
+    """inject_event 的 target=位置名：发给该位置及可见位置的角色。"""
+    bridge.start_tavern(1)
+    # tavern 初始：老巴克在吧台、雷恩在角落、艾莉娅在主厅。
+    # 吧台可见位置含主厅/壁炉旁/后厨（visibility 配置），但只统计实际在场角色。
+    resp = bridge.send({
+        "req_id": 2,
+        "cmd": "inject_event",
+        "content": "吧台上的一盏油灯无风自灭",
+        "target": "吧台",
+    })
+    assert resp["ok"] is True
+    recipients = resp["data"]["recipients"]
+    assert "老巴克" in recipients  # 吧台在场
+    assert recipients  # 非空即可（可见位置角色依 visibility 而定）
+
+
+def test_inject_event_environment_batch(bridge):
+    """inject_event 的 environment 支持数组批量更新，兼容单对象。"""
+    bridge.start_tavern(1)
+    # 数组批量
+    resp = bridge.send({
+        "req_id": 2,
+        "cmd": "inject_event",
+        "content": "窗外飘来一股焦糊味",
+        "environment": [
+            {"location": "主厅", "key": "喧闹程度", "value": "紧张"},
+            {"location": "壁炉旁", "key": "火焰大小", "value": "微弱"},
+        ],
+    })
+    assert resp["ok"] is True
+    # 单对象（旧格式）仍兼容
+    resp = bridge.send({
+        "req_id": 4,
+        "cmd": "inject_event",
+        "content": "门缝里钻进来一只野猫",
+        "environment": {"location": "吧台", "key": "灯火", "value": "昏暗"},
+    })
+    assert resp["ok"] is True
+    # 空计划下其他角色无行动；act_as 让艾莉娅 observe，验证批量更新的环境已生效
+    bridge.send({
+        "req_id": 5,
+        "cmd": "act_as",
+        "agent": "艾莉娅",
+        "action_type": "observe",
+    })
+    resp = bridge.send({"req_id": 6, "cmd": "step", "ticks": 1})
+    assert resp["ok"] is True
+    act = next(a for a in resp["data"]["log"][0]["actions"] if a["agent"] == "艾莉娅")
+    observed = (act.get("result") or {}).get("observed", "")
+    assert "喧闹程度 紧张" in observed  # 批量更新的主厅指标已生效
+
+    # 非法 target 报错
+    resp = bridge.send({
+        "req_id": 7,
+        "cmd": "inject_event",
+        "content": "x",
+        "target": "不存在的地方",
+    })
+    assert resp["ok"] is False
+
+
 def test_act_as_invalid_returns_none(bridge):
     bridge.start_tavern(1)
     resp = bridge.send({

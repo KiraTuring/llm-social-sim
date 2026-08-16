@@ -101,14 +101,15 @@ module.exports = {
       { type: 'object', properties: {} })
 
     defineTool('inject_event', 'sim_inject_event',
-      '以 GM 身份向世界注入一条外部事件（广播给所有角色，可选同步修改环境状态）',
+      '以 GM 身份注入外部事件。默认广播给所有角色；target 可定向到角色（私信）或位置（该位置及可见位置的人）；可选同步更新一个或多个环境状态',
       {
         type: 'object',
         properties: {
           content: S('string', '事件内容，一句话'),
+          target: S('string', '可选：接收目标——留空=广播；角色名=私信该角色；位置名=发给身处该位置及能看到该位置的所有人'),
           environment: {
             type: 'object',
-            description: '可选：同时更新某个位置的环境状态',
+            description: '可选：环境状态更新。传单个对象 {location,key,value} 更新一处，或传对象数组 [{location,key,value},...] 批量更新多处',
             properties: {
               location: S('string', '环境位置名'),
               key: S('string', '环境指标 key'),

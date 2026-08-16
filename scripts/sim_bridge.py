@@ -41,6 +41,7 @@ from run import (  # noqa: E402  (run.main 有 __main__ 守卫，导入安全)
 )
 from core.action import Action  # noqa: E402
 from core.engine import SimulationEngine  # noqa: E402
+from core.message import BROADCAST, Message  # noqa: E402
 from scenarios import list_available_scenes  # noqa: E402
 
 
@@ -171,20 +172,54 @@ class SimBridge:
         content = args.get("content")
         if not content:
             raise ValueError("缺少 content 参数")
-        env = args.get("environment") or {}
-        if env:
-            loc = env.get("location")
-            key = env.get("key")
-            value = env.get("value")
+
+        # 环境更新：兼容单对象（旧格式 {location,key,value}）与数组（多组批量）
+        env = args.get("environment") or []
+        if isinstance(env, dict):
+            env = [env]
+        for item in env:
+            loc = item.get("location")
+            key = item.get("key")
+            value = item.get("value")
             if not (loc and key):
                 raise ValueError("environment 需要 location 和 key")
             err = self.world.update_environment(loc, key, value)
             if err:
                 raise ValueError(err)
+
+        # target 解析（与 NarrateAction 同语义）：留空=广播；角色名=私信；位置名=该位置及可见位置。
+        # 非空但非法时显式报错，避免 GM 打错名字把本应私信的内容误广播出去。
+        target = args.get("target") or ""
+        if target:
+            if target in self.world.characters:
+                recipients = [target]
+            elif target in self.world.locations:
+                recipients = self.world.get_hearable_agents(target, use_location=True)
+                if not recipients:
+                    raise ValueError(f"'{target}' 及可见位置均无人在场")
+            else:
+                raise ValueError(
+                    f"'{target}' 不是有效角色或位置，可选角色: {', '.join(self.world.agents)}，"
+                    f"可选位置: {', '.join(self.world.locations)}"
+                )
+        else:
+            recipients = [BROADCAST]
+
+        msg = Message(
+            sender="GM",
+            recipients=recipients,
+            target=target if target else None,
+            content=content,
+            msg_type="system_event",
+            tick=self.world.tick,
+        )
+        self.world.message_bus.send(msg)
         self.world.add_event(content)
-        self.gm._broadcast_event(content, self.world)
         _log(f"GM 事件注入: {content}")
-        return {"ok": True, "tick": self.world.tick}
+        result = {"ok": True, "tick": self.world.tick}
+        if target:
+            result["recipients"] = [r for r in recipients if r != BROADCAST]
+        return result
 
     def cmd_act_as(self, args: dict) -> dict:
         self._require_world()
