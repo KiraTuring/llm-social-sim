@@ -352,6 +352,7 @@ class SimBridge:
                 "target": action.target,
                 "content": action.content,
                 "internal_monologue": action.internal_monologue,
+                "result": action.result,
                 "messages": [
                     {
                         "sender": m.sender,
@@ -431,6 +432,11 @@ class SimBridge:
                 if act["content"]:
                     action_line += f": {act['content']}"
             lines.append(f"{icon} {name}{action_line}")
+            result = act.get("result") or {}
+            if result:
+                for key, value in result.items():
+                    label = {"observed": "观察", "summary": "结果"}.get(key, key)
+                    lines.append(f"📊 {label}: {value}")
             if act["internal_monologue"]:
                 lines.append(f"💭 {name}（内心）: {act['internal_monologue']}")
 

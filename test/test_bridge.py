@@ -275,6 +275,11 @@ def test_step_returns_gm_and_agent_events(bridge):
         e["sender"] == "艾莉娅" and e["msg_type"] == "speech" and e["target"] == "雷恩"
         for e in agent_events
     )
+    # actions 应携带 result（如 observe 的观察结果），修复前缺失
+    for action in tick1["actions"]:
+        assert "result" in action
+    observe_actions = [a for a in tick1["actions"] if a["action_type"] == "observe"]
+    assert observe_actions and all(a["result"] for a in observe_actions)
 
     # 推进到 tick 3：tavern 计划事件（GM system_event）应进入 events
     resp = bridge.send({"req_id": 4, "cmd": "step", "ticks": 2})
@@ -303,6 +308,8 @@ def test_step_narrative_view(bridge):
     assert "Tick 1" in narrative
     assert "艾莉娅" in narrative
     assert "你信那斗篷客的话吗？" in narrative
+    # observe 的 result 应渲染进 narrative（如 "📊 观察: ..."）
+    assert "📊 观察" in narrative
 
     # raw 视图（默认）不生成 narrative 字段
     resp = bridge.send({"req_id": 4, "cmd": "step", "ticks": 1})
