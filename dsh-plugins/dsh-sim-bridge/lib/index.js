@@ -22,7 +22,7 @@ const REPO_ROOT_FALLBACK = '/Users/haitongwang/Work/llm_playground'
 // 挂载，apply 时 ctx.get 会拿到 undefined——那是此前路由注册静默失败的根因）。
 module.exports = {
   inject: ['subprocess', 'webServer'],
-  apply(ctx) {
+  apply(ctx, config) {
     const state = {
       child: null,
       chain: Promise.resolve(),
@@ -30,6 +30,8 @@ module.exports = {
       worldActive: false,
       repoRoot: REPO_ROOT_FALLBACK,
       routeError: null,
+      // 面板开关（host 组合行 config.panelEnabled，默认 true；false 时 Client 面板不渲染）
+      panelEnabled: !(config && config.panelEnabled === false),
     }
 
     const subprocess = ctx.subprocess
@@ -168,6 +170,7 @@ module.exports = {
     command,
     state,
     diag: () => ({
+      panelEnabled: state.panelEnabled,
       worldActive: state.worldActive,
       bridgeAlive: !!(state.child && !state.child.dead),
       repoRoot: state.repoRoot,
@@ -199,7 +202,16 @@ module.exports = {
           body = {}
         }
         const result = { ok: false }
-        if (body && typeof body.cmd === 'string' && body.cmd) {
+        if (body && body.cmd === 'config') {
+          // 配置命令不触碰桥接进程（不 spawn），直接返回 host 配置
+          result.ok = true
+          result.data = {
+            panelEnabled: state.panelEnabled,
+            worldActive: state.worldActive,
+            bridgeAlive: !!(state.child && !state.child.dead),
+            routeError: state.routeError,
+          }
+        } else if (body && typeof body.cmd === 'string' && body.cmd) {
           const args = {}
           for (const k of Object.keys(body)) if (k !== 'cmd') args[k] = body[k]
           try {

@@ -30,6 +30,18 @@ LLM 社会模拟引擎（本仓库）的 DSH 持久插件。**单包双面 + 双
 3. preset 行已写入 `~/.dsh/.agent-presets/sim-bridge/agent.cordis.yml`（`name: dsh-sim-bridge/tools`）。
 4. **重启 DSH**：host 组合与 clientModules 首次扫描都依赖重启；浏览器刷新页面加载新 boot manifest 后，面板出现在输入框上方。
 
+## 配置
+
+host 行支持 `config.panelEnabled`（默认 `true`）：设为 `false` 时 Client 面板整体不渲染、不轮询（工具与 `/sim-bridge/rpc` 不受影响）。改配置需重启 DSH 生效。
+
+```yaml
+- insert:
+    - id: sim-bridge-host
+      name: dsh-sim-bridge
+      config:
+        panelEnabled: false
+```
+
 ## 排障
 
 - `curl -X POST -H 'content-type: application/json' -d '{"cmd":"list_scenes"}' http://127.0.0.1:3080/sim-bridge/rpc` — 路由存活检查。

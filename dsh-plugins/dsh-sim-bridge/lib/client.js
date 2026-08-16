@@ -35,6 +35,7 @@ window.__ModuleLoader__.load({
 			const [expanded, setExpanded] = React.useState(() => {
 				try { return localStorage.getItem("dsh-sim-bridge-panel-expanded") === "1"; } catch (e) { return false; }
 			});
+			const [panelEnabled, setPanelEnabled] = React.useState(true);
 
 			const refresh = React.useCallback(async () => {
 				try {
@@ -46,17 +47,28 @@ window.__ModuleLoader__.load({
 				}
 			}, []);
 
+			// host 配置（config.panelEnabled）：false 时整个面板不渲染、不轮询
 			React.useEffect(() => {
+				rpc("config", {}).then((r) => {
+					if (r && r.ok && r.data && typeof r.data.panelEnabled === "boolean") {
+						setPanelEnabled(r.data.panelEnabled);
+					}
+				}).catch(() => {});
+			}, []);
+
+			React.useEffect(() => {
+				if (!panelEnabled) return;
 				refresh();
 				const timer = setInterval(() => { refresh(); }, 3000);
 				return () => clearInterval(timer);
-			}, [refresh]);
+			}, [refresh, panelEnabled]);
 
 			React.useEffect(() => {
+				if (!panelEnabled) return;
 				rpc("list_scenes", {}).then((r) => {
 					if (r && r.ok && r.data && Array.isArray(r.data.scenes)) setScenes(r.data.scenes);
 				}).catch(() => {});
-			}, []);
+			}, [panelEnabled]);
 
 			React.useEffect(() => {
 				try { localStorage.setItem("dsh-sim-bridge-panel-expanded", expanded ? "1" : "0"); } catch (e) { /* ignore */ }
@@ -116,6 +128,9 @@ window.__ModuleLoader__.load({
 				? "运行中 · tick " + (snap.tick !== undefined ? snap.tick : "?") + " · " + (snap.scene || "")
 				: (snap && snap.error ? "桥接错误: " + snap.error : "未启动");
 			const pill = { borderRadius: 10, padding: "1px 8px", fontSize: 12, border: "1px solid " + (running ? "rgba(46,160,67,0.6)" : "rgba(200,120,40,0.6)"), color: running ? "#2ea043" : "#c87828" };
+
+			// 所有 hooks 之后才能条件返回（React 规则）
+			if (!panelEnabled) return null;
 
 			return h("div", { style: box },
 				h("div", { style: row },
