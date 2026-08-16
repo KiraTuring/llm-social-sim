@@ -8,6 +8,16 @@ from dataclasses import dataclass
 BROADCAST = "all"
 """发送给 \"all\" 表示广播给所有已知 Agent"""
 
+# 消息类型常量：所有 msg_type 的单一事实来源（动作发送 / 规则监听 / GM 触发共用）。
+# 新消息类型先在常量表声明，避免魔法字符串散落。
+MSG_SPEECH = "speech"
+MSG_WHISPER = "whisper"
+MSG_ACTION = "action"
+MSG_INTERACT = "interact"
+MSG_SYSTEM_EVENT = "system_event"
+MSG_RADIO = "radio"
+MSG_TRADE = "trade"
+
 
 @dataclass
 class Message:

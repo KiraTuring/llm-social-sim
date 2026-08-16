@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from core.action import ActionSpec, validate_content_length
-from core.message import Message
+from core.message import MSG_ACTION, MSG_TRADE, Message
 from core.world import INVENTORY_KEY
 
 if TYPE_CHECKING:
@@ -170,7 +170,7 @@ class TradeAction(ActionSpec):
         # 1. 对手方私信（含金额与物品明细，用对手方自己的视角）
         deal_msg = Message(
             sender=agent_name, recipients=[target], target=target,
-            content=f"你{detail_for_target}", msg_type="trade", tick=world.tick,
+            content=f"你{detail_for_target}", msg_type=MSG_TRADE, tick=world.tick,
         )
         world.message_bus.send(deal_msg)
         messages = [deal_msg]
@@ -184,7 +184,7 @@ class TradeAction(ActionSpec):
                 notice_text += f"（{visible}）"
             notice = Message(
                 sender=agent_name, recipients=bystanders, content=notice_text,
-                msg_type="action", tick=world.tick,
+                msg_type=MSG_ACTION, tick=world.tick,
             )
             world.message_bus.send(notice)
             messages.append(notice)

@@ -180,6 +180,13 @@ class Agent(Character):
 
         world_part = f"\n\n## 世界\n{self.world_description}" if self.world_description else ""
 
+        # 空闲指引按注册表生成：think 未注册的场景（如 tavern/spaceship）提示词
+        # 不引用不存在的工具，避免 LLM 调用 think 触发"工具不存在"重试浪费。
+        if "think" in self.registry.get_action_names():
+            idle_guide = "如果你在思考、等人回复、或没有明确可做的事，用 think 工具代替 observe。"
+        else:
+            idle_guide = "如果你没有明确可做的事，用 observe 观察四周即可。"
+
         prompt = f"""## 模拟规则
 你在扮演 {self.name}（{self.role}），在一个持续运行的社交模拟世界中进行角色扮演。
 模拟以 tick 为单位推进，每个 tick 你可以执行一次行动。{world_part}
@@ -206,7 +213,7 @@ class Agent(Character):
 {relations_text if relations_text else "暂无"}
 
 ## 输出要求
-优先选择一个工具来行动。如果你在思考、等人回复、或没有明确可做的事，用 think 工具代替 observe。
+优先选择一个工具来行动。{idle_guide}
 所有工具都包含可选的 internal_monologue 字段（内心独白，别人看不到）。"""
 
         if self.instruction:

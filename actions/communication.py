@@ -1,7 +1,7 @@
 """通讯 Action 实现：无线电通讯等远程通信。"""
 
 from core.action import ActionSpec, validate_content_length
-from core.message import Message
+from core.message import MSG_ACTION, MSG_RADIO, Message
 
 
 class RadioAction(ActionSpec):
@@ -60,7 +60,7 @@ class RadioAction(ActionSpec):
         # 1. Send full message to target
         target_msg = Message(
             sender=agent_name, recipients=[target], target=target,
-            content=content, msg_type="radio", tick=world.tick,
+            content=content, msg_type=MSG_RADIO, tick=world.tick,
         )
         world.message_bus.send(target_msg)
         msgs = [target_msg]
@@ -70,7 +70,7 @@ class RadioAction(ActionSpec):
         if speaker_bystanders:
             speaker_notice = Message(
                 sender=agent_name, recipients=speaker_bystanders, target=None,
-                content="对着无线电说了几句话", msg_type="action", tick=world.tick,
+                content="对着无线电说了几句话", msg_type=MSG_ACTION, tick=world.tick,
             )
             world.message_bus.send(speaker_notice)
             msgs.append(speaker_notice)
@@ -80,7 +80,7 @@ class RadioAction(ActionSpec):
         if target_bystanders:
             target_notice = Message(
                 sender=target, recipients=target_bystanders, target=None,
-                content="身上的无线电中传来一段通话声", msg_type="action", tick=world.tick,
+                content="身上的无线电中传来一段通话声", msg_type=MSG_ACTION, tick=world.tick,
             )
             world.message_bus.send(target_notice)
             msgs.append(target_notice)

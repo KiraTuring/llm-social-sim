@@ -6,6 +6,7 @@ import random
 from typing import TYPE_CHECKING
 
 from core.action import ActionRegistry, format_tool_result
+from core.message import BROADCAST, MSG_INTERACT, MSG_SYSTEM_EVENT, Message
 
 if TYPE_CHECKING:
     from core.world import WorldState
@@ -89,7 +90,7 @@ class GMAgent:
         if self.use_llm and llm_client:
             recent = world.message_bus.get_recent(50)
             trigger = any(
-                (m.msg_type == "interact" or
+                (m.msg_type == MSG_INTERACT or
                  m.target in world.npc_names)
                 and m.tick == world.tick - 1
                 for m in recent
@@ -120,9 +121,7 @@ class GMAgent:
 
     def _broadcast_event(self, event: str, world: "WorldState"):
         """广播事件给所有 Agent"""
-        from core.message import Message, BROADCAST
-
-        msg = Message(sender="GM", recipients=[BROADCAST], content=event, msg_type="system_event", tick=world.tick)
+        msg = Message(sender="GM", recipients=[BROADCAST], content=event, msg_type=MSG_SYSTEM_EVENT, tick=world.tick)
         world.message_bus.send(msg)
 
     def _truncate_gm_history(self):

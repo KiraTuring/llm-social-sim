@@ -1,5 +1,6 @@
 """宇宙飞船场景：封闭空间内的角色张力，适合测试 GM 和 agent 行为。"""
 
+from core.message import MSG_SYSTEM_EVENT
 from core.rules import RuleEngine
 from core.scene import Scene
 
@@ -140,7 +141,7 @@ class SpaceshipScene(Scene):
     }
 
     def setup_rules(self, engine: RuleEngine):
-        @engine.on("system_event")
+        @engine.on(MSG_SYSTEM_EVENT)
         def _on_system_event(msg, world):
             scary_words = ["异常", "故障", "偏离", "警告", "危险"]
             if any(word in msg.content for word in scary_words):

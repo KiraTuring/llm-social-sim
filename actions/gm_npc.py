@@ -3,7 +3,7 @@
 from core.action import ActionSpec
 from core.character import NPC
 from core.event import SOURCE_NPC
-from core.message import Message
+from core.message import MSG_ACTION, MSG_SPEECH, Message
 
 
 class AddNpcAction(ActionSpec):
@@ -105,7 +105,7 @@ class NpcSpeakAction(ActionSpec):
         msg = Message(
             sender=npc_name, recipients=recipients,
             target=target if target else None,
-            content=content, msg_type="speech", tick=world.tick,
+            content=content, msg_type=MSG_SPEECH, tick=world.tick,
         )
         world.message_bus.send(msg)
         suffix = f" -> {target}" if target else ""
@@ -175,7 +175,7 @@ class NpcMoveAction(ActionSpec):
             sender=npc_name,
             recipients=recipients,
             content=desc,
-            msg_type="action",
+            msg_type=MSG_ACTION,
             tick=world.tick,
         )
         world.message_bus.send(msg)

@@ -1,6 +1,6 @@
 """酒馆场景：角色定义、初始状态、GM事件表。"""
 
-from core.message import BROADCAST
+from core.message import BROADCAST, MSG_SPEECH, MSG_SYSTEM_EVENT, MSG_TRADE
 from core.rules import RuleEngine
 from core.scene import Scene
 
@@ -132,7 +132,7 @@ class TavernScene(Scene):
     def setup_rules(self, engine: RuleEngine):
         """酒馆场景的规则：辱骂/称赞影响信任，恐怖事件影响情绪"""
 
-        @engine.on("speech")
+        @engine.on(MSG_SPEECH)
         def _on_speech(msg, world):
             if not msg.recipients or msg.recipients == [BROADCAST]:
                 return
@@ -152,7 +152,7 @@ class TavernScene(Scene):
                         agent.update_relationship(sender, {"trust": 1})
 
         # 交易完成后：对手方对发起方增加信任
-        @engine.on("trade")
+        @engine.on(MSG_TRADE)
         def _on_trade(msg, world):
             if msg.recipients and msg.recipients[0] in world.agents:
                 target = world.agents[msg.recipients[0]]
@@ -160,7 +160,7 @@ class TavernScene(Scene):
                 if sender in target.relationships:
                     target.update_relationship(sender, {"trust": 1})
 
-        @engine.on("system_event")
+        @engine.on(MSG_SYSTEM_EVENT)
         def _on_system_event(msg, world):
             scary_words = ["危险", "杀", "威胁", "追杀"]
             if any(word in msg.content for word in scary_words):
