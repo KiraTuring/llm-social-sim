@@ -1,44 +1,37 @@
 # dsh-sim-bridge
 
-LLM 社会模拟引擎（本仓库）的 DSH 持久插件。作为 agent preset 的一行挂载，
-为会话提供 `sim_*` 模型工具，通过 `scripts/sim_bridge.py`（JSONL over stdio）
-桥接模拟引擎。
+LLM 社会模拟引擎（本仓库）的 DSH 持久插件。**单包双面 + 双平面**：
 
-## 组成
+- **host 组合行**（`~/.dsh/profiles/web/cordis.patch.yml` 的 `sim-bridge-host`）：
+  `lib/index.js` 提供 `simBridge` 服务（桥接进程 + JSONL 命令总线 + 世界状态）、
+  注册 `/sim-bridge/rpc` HTTP 路由，并声明 `dsh.client` 让 clientModules 提供
+  `lib/client.js` 实时面板 bundle（渲染在 `conversation.input.dock`）。
+- **preset 行**（`社会模拟` preset 的 `tool-sim-bridge` → `dsh-sim-bridge/tools`）：
+  `lib/tools.js` `inject: ['simBridge']`，注册 12 个 sim_* 模型工具委托给该服务。
 
-- `lib/index.js` — Host 半插件（CommonJS，cordis plugin 函数）：
-  注册 `sim_list_scenes / sim_start / sim_step / sim_state / sim_list_actions /
-  sim_inject_event / sim_act_as / sim_query_agent / sim_save / sim_load /
-  sim_quit / sim_diag`，用 `ctx.subprocess` 拉起桥接进程，懒启动、需要世界的
-  命令未启动时不 spawn、quit 后不复活、stop 时 terminate。
-  只注册模型工具、不发布服务 → 组合行无需 isolate realm。
-- `package.json` — 包名 `dsh-sim-bridge`，零运行时依赖（raw JSON Schema 手写）。
+世界是**进程级单例**（所有「社会模拟」会话与面板共享同一桥接进程/世界）。
+
+## 文件
+
+| 文件 | 作用 |
+|---|---|
+| `lib/index.js` | host 半：simBridge 服务 + `/sim-bridge/rpc` 路由（inject `subprocess`/`webServer` 硬依赖；`ctx.effect(() => disposer)` 包裹清理） |
+| `lib/tools.js` | preset 半：12 个 sim_* 工具（含 `sim_list_actions`、`sim_diag`），委托 `ctx.simBridge.command` |
+| `lib/client.js` | 面板 bundle（`__ModuleLoader__` 格式 + React + fetch RPC + 3s 轮询） |
+| `package.json` | main + `./tools`/`./client` exports + `dsh.client` 声明 |
 
 ## 安装（一次性）
 
-组合 loader 只按包名从 profile 的 node_modules 解析，因此需要把本目录链接进
-profile 安装（DSH 重启不丢，pnpm 重装 profile 后需重跑）：
+1. 链接进 profile（pnpm 重装后需重跑）：
+   ```bash
+   ln -sfn <repo>/dsh-plugins/dsh-sim-bridge ~/.dsh/profiles/web/node_modules/dsh-sim-bridge
+   ```
+2. host 行已写入 `~/.dsh/profiles/web/cordis.patch.yml`（`- insert: [{id: sim-bridge-host, name: dsh-sim-bridge}]`）。
+3. preset 行已写入 `~/.dsh/.agent-presets/sim-bridge/agent.cordis.yml`（`name: dsh-sim-bridge/tools`）。
+4. **重启 DSH**：host 组合与 clientModules 首次扫描都依赖重启；浏览器刷新页面加载新 boot manifest 后，面板出现在输入框上方。
 
-```bash
-ln -sfn <repo>/dsh-plugins/dsh-sim-bridge ~/.dsh/profiles/web/node_modules/dsh-sim-bridge
-```
+## 排障
 
-## 工作区门控
-
-DSH 的 preset 是部署级全局的（`agentPresets.list()` 扫全部 roots，picker 无工作区
-过滤），无法让 preset 只出现在某个工作区。因此插件按会话的
-`sandboxPolicy.workspaceRoot` 自检：仅当等于 `llm_playground` 时注册 sim_* 工具，
-其他工作区的会话挂载本 preset 时注册为空（能力上等价于"只在仓库工作区可用"）。
-
-## Preset
-
-`~/.dsh/.agent-presets/sim-bridge/agent.cordis.yml` 由 `standard` 复制而来，
-末尾追加一行：
-
-```yaml
-- id: tool-sim-bridge
-  name: dsh-sim-bridge
-```
-
-校验：`agentPresets.standingKeyFor('sim-bridge')` 返回 mounted OK。
-新会话选择「社会模拟」preset 即获得全部 sim_* 工具（随 preset 持久，重启不丢）。
+- `curl -X POST -H 'content-type: application/json' -d '{"cmd":"list_scenes"}' http://127.0.0.1:3080/sim-bridge/rpc` — 路由存活检查。
+- 路由/服务状态：`sim_diag` 工具返回 `routeError`、`bridgeAlive`、`worldActive` 等。
+- 已踩过的坑（勿回退）：host 行不能用 `ctx.get('webServer')`（挂载时序问题，用 inject）；`ctx.effect` 传 disposer 要包箭头函数（setup/teardown 语义）；host 平面 `sandboxPolicy.workspaceRoot` 会回退成 HOME，仓库路径用常量。

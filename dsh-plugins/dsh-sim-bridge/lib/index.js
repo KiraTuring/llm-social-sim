@@ -1,42 +1,41 @@
 'use strict'
 /**
- * dsh-sim-bridge — LLM 社会模拟引擎的 DSH 持久插件（Host 半）。
+ * dsh-sim-bridge — LLM 社会模拟引擎的 DSH 插件（Host 半，web 组合行）。
  *
- * 注册 sim_* 模型工具（sim_list_scenes / sim_start / sim_step / sim_state /
- * sim_list_actions / sim_inject_event / sim_act_as / sim_query_agent / sim_save /
- * sim_load / sim_quit / sim_diag），通过 `scripts/sim_bridge.py`（JSONL over
- * stdio）桥接本仓库的模拟引擎。作为 agent preset 的一行挂载：会话级、随 preset 持久。
+ * 提供 `simBridge` 服务（桥接进程 + JSONL 命令总线 + 世界状态）并注册
+ * `/sim-bridge/rpc` HTTP 路由（Client 面板共用）。模型工具不在这里注册——
+ * 它们在 `lib/tools.js`（preset 行，inject simBridge 后委托给本服务）。
+ *
+ * 平面：host 组合（web profile cordis.patch.yml）。桥接进程/世界为进程级单例，
+ * 所有「社会模拟」会话与面板共享同一实例。
  *
  * 约定：
- * - 不发布任何 Service，只注册模型工具 → 不需要 isolate realm。
- * - 使用 ctx.subprocess（host 平面的抽象服务）拉起桥接进程，尊重执行世界。
- * - 进程懒启动：只有 start/load/list_scenes 会 spawn；需要世界的命令在未启动时
+ * - 不发布到 isolate realm（这是 host 平面的共享服务）。
+ * - 进程懒启动：只有 start/load/list_scenes 会 spawn；需要世界的命令未启动时
  *   直接报错而不 spawn；quit 后不复活；stop/卸载时 terminate 清理。
  */
 
 const REPO_ROOT_FALLBACK = '/Users/haitongwang/Work/llm_playground'
 
-module.exports = function simBridgePlugin(ctx) {
-  const state = {
-    child: null,
-    chain: Promise.resolve(),
-    seq: 0,
-    worldActive: false,
-    repoRoot: REPO_ROOT_FALLBACK,
-    registerErrors: [],
-  }
+// subprocess/webServer 是硬依赖：用 inject 声明，cordis 会 park 插件直到两者
+// 就绪再执行 apply（patch 插入的 host 行在 root ctx 上可能先于 webServer 提供者
+// 挂载，apply 时 ctx.get 会拿到 undefined——那是此前路由注册静默失败的根因）。
+module.exports = {
+  inject: ['subprocess', 'webServer'],
+  apply(ctx) {
+    const state = {
+      child: null,
+      chain: Promise.resolve(),
+      seq: 0,
+      worldActive: false,
+      repoRoot: REPO_ROOT_FALLBACK,
+      routeError: null,
+    }
 
-  const subprocess = ctx.get('subprocess')
-  const sandboxPolicy = ctx.get('sandboxPolicy')
-  if (sandboxPolicy && sandboxPolicy.workspaceRoot) state.repoRoot = sandboxPolicy.workspaceRoot
-
-  // 工作区门控：sim 工具只在本仓库工作区生效。DSH 的 preset 是部署级全局的
-  // （list() 扫全部 roots、picker 无工作区过滤），无法让 preset 只出现在某个
-  // 工作区；这里改为按会话 workspaceRoot 自检——别的项目里挂载本 preset 时
-  // 不注册任何 sim_* 工具，避免无关项目出现无关工具。
-  const normalize = (p) => String(p || '').replace(/[\\/]+$/, '')
-  const ALLOWED_WORKSPACE = normalize(REPO_ROOT_FALLBACK)
-  if (normalize(state.repoRoot) !== ALLOWED_WORKSPACE) return
+    const subprocess = ctx.subprocess
+    const webServer = ctx.webServer
+    // 桥接进程/世界是进程级单例：仓库路径是部署事实。不能用
+    // sandboxPolicy.workspaceRoot（host 平面无会话，它只会回退成 HOME 目录）。
 
   // ---------- 桥接进程（JSONL over stdio） ----------
 
@@ -150,173 +149,93 @@ module.exports = function simBridgePlugin(ctx) {
     }
   }
 
-  // ---------- 工具注册 ----------
+  // ---------- simBridge 服务 ----------
 
-  const renderText = (args, value) => [{ type: 'text', text: JSON.stringify(value, null, 2) }]
-  const output = { schema: {}, render: renderText }
+  // 需要世界的命令：未启动时直接报错（不 spawn）
+  const WORLD_COMMANDS = new Set(['step', 'state', 'list_actions', 'inject_event', 'act_as', 'query_agent', 'save'])
 
-  // opts: { requiresWorld?: boolean, execute?: (args, exec) => Promise }
-  function defineTool(cmd, name, description, parameters, opts) {
-    const requiresWorld = !!(opts && opts.requiresWorld)
-    const executeOverride = opts && opts.execute
-    const definition = {
-      name,
-      description,
-      parameters,
-      output,
-      async execute(args, exec) {
-        if (requiresWorld && !state.worldActive) {
-          throw new Error('尚未启动模拟：请先调用 sim_start（或 sim_load 从存档恢复）')
-        }
-        const run = executeOverride
-          ? executeOverride(args, exec)
-          : enqueue(cmd, args || {})
-        if (exec && exec.signal && !executeOverride) {
-          return Promise.race([run, new Promise((_, reject) => {
-            const onAbort = () => { exec.signal.removeEventListener('abort', onAbort); reject(new Error('工具调用已取消')) }
-            if (exec.signal.aborted) { reject(new Error('工具调用已取消')); return }
-            exec.signal.addEventListener('abort', onAbort, { once: true })
-          })])
-        }
-        return run
-      },
+  async function command(cmd, args) {
+    if (WORLD_COMMANDS.has(cmd) && !state.worldActive) {
+      throw new Error('尚未启动模拟：请先调用 sim_start（或 sim_load 从存档恢复）')
     }
-    try {
-      ctx.tools.register(definition)
-    } catch (e) {
-      const msg = ((e && e.message) || e)
-      state.registerErrors.push(name + ': ' + msg)
-      ctx.logger.warn('[sim-bridge] register tool ' + name + ' failed: ' + msg)
-    }
+    const data = await enqueue(cmd, args || {})
+    if (cmd === 'start' || cmd === 'load') state.worldActive = true
+    if (cmd === 'quit') state.worldActive = false
+    return data
   }
 
-  const S = (type, description, required) => {
-    const node = { type, description }
-    if (required) node.required = true
-    return node
+  const simBridge = {
+    command,
+    state,
+    diag: () => ({
+      worldActive: state.worldActive,
+      bridgeAlive: !!(state.child && !state.child.dead),
+      repoRoot: state.repoRoot,
+      routeError: state.routeError,
+      bridgeStderrTail: stderrTail(),
+    }),
+  }
+  ctx.provide('simBridge', simBridge)
+
+  // ---------- HTTP 路由（Client 面板共用） ----------
+
+  // webServer 已通过 inject 保证就绪；注册结果记入 state.routeError 供排障。
+  try {
+    const dispose = webServer.register({
+      kind: 'exact',
+      path: '/sim-bridge/rpc',
+      async handler(req, res) {
+        if (req.method !== 'POST') {
+          res.writeHead(405, { 'content-type': 'text/plain; charset=utf-8' })
+          res.end('POST only')
+          return
+        }
+        let body = {}
+        try {
+          const chunks = []
+          for await (const chunk of req) chunks.push(chunk)
+          body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')
+        } catch (e) {
+          body = {}
+        }
+        const result = { ok: false }
+        if (body && typeof body.cmd === 'string' && body.cmd) {
+          const args = {}
+          for (const k of Object.keys(body)) if (k !== 'cmd') args[k] = body[k]
+          try {
+            result.ok = true
+            result.data = await simBridge.command(body.cmd, args)
+          } catch (e) {
+            result.ok = false
+            result.error = String((e && e.message) || e)
+          }
+        } else {
+          result.error = '缺少 cmd'
+        }
+        const text = JSON.stringify(result)
+        res.writeHead(200, {
+          'content-type': 'application/json; charset=utf-8',
+          'content-length': Buffer.byteLength(text),
+        })
+        res.end(text)
+      },
+    })
+    // cordis 的 ctx.effect(fn) 会立即调用 fn，并把 fn 的返回值当 teardown——
+    // 因此必须包一层返回 disposer 的箭头函数，绝不能直接把 dispose 传进去。
+    if (typeof dispose === 'function') ctx.effect(() => dispose)
+    state.routeError = null
+  } catch (e) {
+    state.routeError = String((e && e.message) || e)
+    ctx.logger.warn('[sim-bridge] register route failed: ' + state.routeError)
   }
 
-  defineTool('list_scenes', 'sim_list_scenes',
-    '列出所有可用的社会模拟场景（如 tavern / murder / spaceship）',
-    { type: 'object', properties: {} })
+  // ---------- 生命周期清理 ----------
 
-  defineTool('start', 'sim_start',
-    '启动一个新的社会模拟世界（LLM 驱动，角色按人格/目标自主行动，GM 注入事件）',
-    {
-      type: 'object',
-      properties: {
-        scene: S('string', '场景名，先用 sim_list_scenes 查看'),
-        config_path: S('string', '可选：config.yaml 路径（默认仓库根目录）'),
-        manual_agents: { type: 'array', description: '可选：手动控制的角色名（不调用 LLM）', items: { type: 'string' } },
-        manual_file: S('string', '可选：手动控制计划 JSON 文件路径'),
-      },
-      required: ['scene'],
-    }, {
-      execute: async (args) => {
-        const data = await enqueue('start', args || {})
-        state.worldActive = true
-        return data
-      },
-    })
-
-  defineTool('step', 'sim_step',
-    '推进模拟 N 个 tick（默认 1），返回每个角色的行动与消息',
-    { type: 'object', properties: { ticks: S('integer', '推进的 tick 数，>= 1') } },
-    { requiresWorld: true })
-
-  defineTool('state', 'sim_state',
-    '查看当前世界快照：tick、场景、角色位置/状态、可用行动、最近消息、事件日志',
-    { type: 'object', properties: {} }, { requiresWorld: true })
-
-  defineTool('list_actions', 'sim_list_actions',
-    '列出当前场景注册给角色的全部行动类型（供 sim_act_as 选用）',
-    { type: 'object', properties: {} }, { requiresWorld: true })
-
-  defineTool('inject_event', 'sim_inject_event',
-    '以 GM 身份向世界注入一条外部事件（广播给所有角色，可选同步修改环境状态）',
-    {
-      type: 'object',
-      properties: {
-        content: S('string', '事件内容，一句话'),
-        environment: {
-          type: 'object',
-          description: '可选：同时更新某个位置的环境状态',
-          properties: {
-            location: S('string', '环境位置名'),
-            key: S('string', '环境指标 key'),
-            value: S('string', '环境指标值'),
-          },
-        },
-      },
-      required: ['content'],
-    }, { requiresWorld: true })
-
-  defineTool('act_as', 'sim_act_as',
-    '替指定角色安排下一次行动（在下一 tick 该角色行动时执行，非法则回退观察）',
-    {
-      type: 'object',
-      properties: {
-        agent: S('string', '要控制的角色名'),
-        action_type: S('string', '行动类型，先用 sim_list_actions 查看可用值'),
-        target: S('string', '行动目标（角色名或位置）'),
-        content: S('string', '行动内容'),
-        internal_monologue: S('string', '内心独白（其他角色不可见）'),
-        params: { description: '额外行动参数（如状态修改）' },
-      },
-      required: ['agent', 'action_type'],
-    }, { requiresWorld: true })
-
-  defineTool('query_agent', 'sim_query_agent',
-    '查看某个角色的档案：性格、目标、位置、关系、最近记忆',
-    { type: 'object', properties: { agent: S('string', '角色名') }, required: ['agent'] },
-    { requiresWorld: true })
-
-  defineTool('save', 'sim_save',
-    '保存当前世界状态到存档文件',
-    { type: 'object', properties: { path: S('string', '存档路径（默认 saves/bridge_run.json）') } },
-    { requiresWorld: true })
-
-  defineTool('load', 'sim_load',
-    '从存档文件恢复世界并继续运行',
-    { type: 'object', properties: { path: S('string', '存档文件路径') }, required: ['path'] }, {
-      execute: async (args) => {
-        const data = await enqueue('load', args || {})
-        state.worldActive = true
-        return data
-      },
-    })
-
-  defineTool('quit', 'sim_quit',
-    '关闭模拟进程，释放 LLM 连接与日志句柄',
-    { type: 'object', properties: {} }, {
-      execute: async () => {
-        const data = await enqueue('quit', {})
-        state.worldActive = false
-        if (state.child) {
-          try { state.child.handle.terminate() } catch (e) { /* ignore */ }
-          state.child.dead = true
-        }
-        return data
-      },
-    })
-
-  defineTool('diag', 'sim_diag',
-    '诊断：报告插件运行状态（桥接进程、世界是否启动、注册错误、桥接 stderr 尾部）',
-    { type: 'object', properties: {} }, {
-      execute: async () => ({
-        worldActive: state.worldActive,
-        bridgeAlive: !!(state.child && !state.child.dead),
-        repoRoot: state.repoRoot,
-        registerErrors: state.registerErrors,
-        bridgeStderrTail: stderrTail(),
-      }),
-    })
-
-  // 生命周期清理：插件停止/卸载时 terminate 子进程
-  ctx.effect(() => {
+  ctx.effect(() => () => {
     if (state.child && !state.child.dead) {
       try { state.child.handle.terminate() } catch (e) { /* ignore */ }
       state.child.dead = true
     }
   })
+  },
 }
