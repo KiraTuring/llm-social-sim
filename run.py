@@ -129,12 +129,13 @@ def _setup_services(config: dict, scene, gm, world=None):
     return logger, llm, rule_engine
 
 
-def _make_renderer(config: dict, scene) -> ConsoleRenderer:
+def _make_renderer(config: dict, scene, registry=None) -> ConsoleRenderer:
     """创建控制台渲染器（仅 CLI 路径使用）"""
     return ConsoleRenderer(
         render_config=scene.render_config,
         show_full_inbox=config["simulation"].get("show_full_inbox", False),
         show_full_monologue=config["simulation"].get("show_full_monologue", True),
+        registry=registry,
     )
 
 
@@ -185,7 +186,7 @@ async def run_simulation(config: dict, scene_name: str, max_ticks: int | None = 
         _print_scene_header(scene)
 
     logger, llm, rule_engine = _setup_services(config, scene, gm, world)
-    renderer = _make_renderer(config, scene)
+    renderer = _make_renderer(config, scene, registry)
     engine = SimulationEngine(world, gm, llm, rule_engine, logger, config)
 
     actual_mode = mode or config["simulation"]["mode"]

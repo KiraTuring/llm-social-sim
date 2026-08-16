@@ -3,12 +3,6 @@
 
 const $ = (sel) => document.querySelector(sel);
 
-const ACTION_ICONS = {
-  speak: "💬", whisper: "🤫", move: "👣", observe: "👁", think: "🧠",
-  interact: "🤚", radio: "📻", trade: "🤝", narrate: "🎲",
-};
-const SOURCE_ICONS = { gm: "🎲", npc: "🎭", agent: "👤", rule: "⚙️" };
-
 const state = {
   snapshot: null,
   lastEventTotal: 0,
@@ -403,12 +397,16 @@ function renderEvents() {
 
 function renderEvent(ev) {
   const el = document.createElement("div");
-  const icon = SOURCE_ICONS[ev.source_type] || "•";
+  const snap = state.snapshot || {};
+  const sourceIcons = snap.source_icons || {};
+  const actionMeta = snap.action_meta || {};
+  const icon = sourceIcons[ev.source_type] || "•";
   el.className = "event " + (ev.source_type || "");
 
   if (ev.source_type === "agent") {
     const meta = ev.meta || {};
-    const actionIcon = ACTION_ICONS[meta.action_type] || "▶";
+    const am = actionMeta[meta.action_type] || {};
+    const actionIcon = am.icon || "▶";
     let title = `<span class="icon">${actionIcon}</span>`;
     title += `<span class="text"><span class="who">${esc(ev.source)}</span>`;
     title += ` <span class="action-type">${esc(meta.action_type || "?")}</span>`;
@@ -418,9 +416,9 @@ function renderEvent(ev) {
 
     el.innerHTML = `<div class="line">${title}</div>`;
 
-    // result 直接展示（不折叠），label 对齐 TUI：observed -> 观察
+    // result 直接展示（不折叠），label 从 ActionSpec.result_labels 读
     if (meta.result && typeof meta.result === "object" && Object.keys(meta.result).length) {
-      const labelMap = { observed: "观察" };
+      const labelMap = am.result_labels || {};
       const rows = Object.entries(meta.result).map(([k, v]) =>
         `<div class="result-row">${esc(labelMap[k] || k)}: ${esc(typeof v === "object" ? JSON.stringify(v) : v)}</div>`
       ).join("");

@@ -5,6 +5,8 @@ from textual.containers import VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Static, Button
 
+from core.event import SOURCE_AGENT, SOURCE_ICONS, SOURCE_NPC
+
 
 def _esc(text: str) -> str:
     """转义 Rich 标记，避免 LLM 输出中的方括号被当作样式解析。"""
@@ -117,9 +119,9 @@ class AgentInfoScreen(ModalScreen):
                 yield Button("关闭", id="close-btn")
                 return
 
-            title = f"👤 {_esc(agent.name)}"
+            title = f"{SOURCE_ICONS[SOURCE_AGENT]} {_esc(agent.name)}"
             if is_npc(self.agent_name, self.world):
-                title = f"🎭 {_esc(agent.name)} (NPC)"
+                title = f"{SOURCE_ICONS[SOURCE_NPC]} {_esc(agent.name)} (NPC)"
             if getattr(agent, "agent_type", "") == "ManualAgent":
                 title += " [手动]"
             yield Static(f"[bold]{title}[/bold]")

@@ -31,6 +31,7 @@ def _wallet(states: dict) -> dict:
 
 class TradeAction(ActionSpec):
     name = "trade"
+    icon = "🤝"
     description = (
         "与同一位置的另一个角色交易：give 是你付出的（金钱或物品），take 是你获得的（金钱或物品）。"
         "take 必须伴随 give（有来有往），纯 give（支付/送礼）允许。旁观者能看到交易的物品，看不到金额"

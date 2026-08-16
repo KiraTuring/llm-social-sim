@@ -42,7 +42,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 # 复用 CLI 的世界装配与引擎，行为与 run.py / TUI 完全一致。
 from run import _prepare_world, _setup_services, load_config  # noqa: E402
 from core.engine import SimulationEngine  # noqa: E402
-from core.event import SOURCE_AGENT, SOURCE_GM, SOURCE_NPC, SOURCE_RULE  # noqa: E402
+from core.event import SOURCE_AGENT, SOURCE_GM, SOURCE_ICONS, SOURCE_NPC, SOURCE_RULE  # noqa: E402
 from core.scene_loader import list_available_scenes  # noqa: E402
 from core.save_load import save_simulation_state  # noqa: E402
 from render.tui_info import format_scene_sections  # noqa: E402
@@ -431,6 +431,11 @@ class SimSession:
             },
             "tools": {
                 "agent": self.registry.get_action_names() if self.registry else [],
+            },
+            "source_icons": SOURCE_ICONS,
+            "action_meta": {
+                **(self.registry.get_display_meta() if self.registry else {}),
+                **(gm.registry.get_display_meta() if getattr(gm, "registry", None) else {}),
             },
             "config_sections": [
                 {"title": title, "body": body} for title, body in config_sections

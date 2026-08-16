@@ -3,13 +3,13 @@
 from rich.console import Console
 from rich.panel import Panel
 
-from core.event import SOURCE_AGENT, SOURCE_GM, SOURCE_NPC, SOURCE_RULE
+from core.event import SOURCE_AGENT, SOURCE_GM, SOURCE_ICONS, SOURCE_NPC, SOURCE_RULE
 
 EVENT_STYLES = {
-    SOURCE_GM: ("🎲 GM", "bold yellow"),
-    SOURCE_NPC: ("🎭 NPC", "bold magenta"),
-    SOURCE_AGENT: ("👤", "bold cyan"),
-    SOURCE_RULE: ("⚙️", "bold white"),
+    SOURCE_GM: (SOURCE_ICONS[SOURCE_GM] + " GM", "bold yellow"),
+    SOURCE_NPC: (SOURCE_ICONS[SOURCE_NPC] + " NPC", "bold magenta"),
+    SOURCE_AGENT: (SOURCE_ICONS[SOURCE_AGENT], "bold cyan"),
+    SOURCE_RULE: (SOURCE_ICONS[SOURCE_RULE], "bold white"),
 }
 
 
@@ -18,11 +18,12 @@ class ConsoleRenderer:
 
     _PREVIEW_LEN = 60  # 收件箱/独白预览截断长度
 
-    def __init__(self, render_config=None, show_full_inbox=False, show_full_monologue=True):
+    def __init__(self, render_config=None, show_full_inbox=False, show_full_monologue=True, registry=None):
         self.console = Console()
         self.render_config = render_config or {}
         self.show_full_inbox = show_full_inbox
         self.show_full_monologue = show_full_monologue
+        self.registry = registry
 
     def _format_inbox_line(self, m, truncate=False):
         """格式化收件箱消息为 [sender -> target] content 格式"""
@@ -85,8 +86,10 @@ class ConsoleRenderer:
             content += f"[cyan]→ {action_line}[/cyan]\n"
 
         if action and action.result:
+            spec = self.registry.get(action.action_type) if self.registry else None
+            label_map = spec.result_labels if spec else {}
             for key, value in action.result.items():
-                label = {"observed": "观察"}.get(key, key)
+                label = label_map.get(key, key)
                 content += f"[green]  {label}: {value}[/green]\n"
 
         if action and action.internal_monologue:

@@ -6,6 +6,7 @@ from core.message import Message
 
 class RadioAction(ActionSpec):
     name = "radio"
+    icon = "📻"
     description = "通过无线电与任意位置的队友通话。只有通话对象能听到内容，可见范围内的人会看到你在使用无线电但听不到内容、也不知道通话对象。"
     text_format = ("[ACTION]radio[/ACTION]\n"
                    "[TARGET]{通话对象}[/TARGET]\n"

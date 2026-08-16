@@ -33,6 +33,8 @@ class ActionSpec(ABC):
     name: str
     description: str
     text_format: str
+    icon: str = "▶"                       # UI 展示图标（纯字符串，与框架无关）
+    result_labels: dict[str, str] = {}    # result key -> 展示名，如 {"observed": "观察"}
 
     @abstractmethod
     def execute(self, agent_name: str, params: dict, world: "WorldState") -> tuple[list["Message"], dict | None]:
@@ -76,6 +78,16 @@ class ActionRegistry:
     def get_action_names(self) -> list[str]:
         """获取所有注册的 Action 名称"""
         return list(self._actions.keys())
+
+    def get_display_meta(self) -> dict:
+        """返回所有 Action 的 UI 展示元数据 {name: {icon, result_labels}}。
+
+        供 CLI/TUI/WebUI 统一读取，避免在 UI 层硬编码图标与结果标签。
+        """
+        return {
+            name: {"icon": spec.icon, "result_labels": spec.result_labels}
+            for name, spec in self._actions.items()
+        }
 
     def get_tool_schemas(self) -> list[dict]:
         """返回所有 action 的 tool schema 列表，自动注入公共参数"""

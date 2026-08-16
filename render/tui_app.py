@@ -8,14 +8,14 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Header, Tree, Static, Button, Label, Collapsible
 
-from core.event import SOURCE_AGENT, SOURCE_GM, SOURCE_NPC, SOURCE_RULE
+from core.event import SOURCE_AGENT, SOURCE_GM, SOURCE_ICONS, SOURCE_NPC, SOURCE_RULE
 from render.tui_screens import _esc, AgentInfoScreen, LocationInfoScreen, SceneInfoScreen
 
 EVENT_STYLES = {
-    SOURCE_GM: ("🎲", "yellow"),
-    SOURCE_NPC: ("🎭", "magenta"),
-    SOURCE_AGENT: ("👤", "cyan"),
-    SOURCE_RULE: ("⚙️", "white"),
+    SOURCE_GM: (SOURCE_ICONS[SOURCE_GM], "yellow"),
+    SOURCE_NPC: (SOURCE_ICONS[SOURCE_NPC], "magenta"),
+    SOURCE_AGENT: (SOURCE_ICONS[SOURCE_AGENT], "cyan"),
+    SOURCE_RULE: (SOURCE_ICONS[SOURCE_RULE], "white"),
 }
 
 
@@ -109,14 +109,16 @@ class SimulationTuiApp(App):
     }
     """
 
-    ACTION_STYLES = {
-        "speak": ("💬", "cyan"),
-        "whisper": ("🤫", "magenta"),
-        "move": ("👣", "blue"),
-        "observe": ("👁", "green"),
-        "think": ("🧠", "yellow"),
-        "interact": ("🤚", "dark_orange"),
-        "radio": ("📻", "bright_magenta"),
+    # 颜色是 rich/textual 特有的展示样式，保留在 UI 层；图标从 ActionSpec.icon 读
+    ACTION_COLORS = {
+        "speak": "cyan",
+        "whisper": "magenta",
+        "move": "blue",
+        "observe": "green",
+        "think": "yellow",
+        "interact": "dark_orange",
+        "radio": "bright_magenta",
+        "trade": "dark_green",
     }
 
     def __init__(self, world, scene, gm, registry, config,
@@ -355,7 +357,9 @@ class SimulationTuiApp(App):
         if not action:
             return
 
-        icon, color = self.ACTION_STYLES.get(action.action_type, ("▶", "white"))
+        spec = self.registry.get(action.action_type)
+        icon = spec.icon if spec else "▶"
+        color = self.ACTION_COLORS.get(action.action_type, "white")
         summary = f"{icon} [{color}]{_esc(step.agent_name)}[/] → {_esc(action.action_type)}"
         if action.target:
             summary += f" -> [bold]{_esc(action.target)}[/bold]"
@@ -364,8 +368,8 @@ class SimulationTuiApp(App):
 
         title_parts = [summary]
         if action.result:
+            label_map = spec.result_labels if spec else {}
             for key, value in action.result.items():
-                label_map = {"observed": "观察"}
                 prefix = label_map.get(key, key)
                 title_parts.append(f"  {prefix}: {_esc(value)}")
 
