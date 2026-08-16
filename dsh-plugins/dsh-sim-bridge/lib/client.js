@@ -32,6 +32,9 @@ window.__ModuleLoader__.load({
 			const [targetSel, setTargetSel] = React.useState("");
 			const [actContent, setActContent] = React.useState("");
 			const [logLines, setLogLines] = React.useState([]);
+			const [expanded, setExpanded] = React.useState(() => {
+				try { return localStorage.getItem("dsh-sim-bridge-panel-expanded") === "1"; } catch (e) { return false; }
+			});
 
 			const refresh = React.useCallback(async () => {
 				try {
@@ -54,6 +57,10 @@ window.__ModuleLoader__.load({
 					if (r && r.ok && r.data && Array.isArray(r.data.scenes)) setScenes(r.data.scenes);
 				}).catch(() => {});
 			}, []);
+
+			React.useEffect(() => {
+				try { localStorage.setItem("dsh-sim-bridge-panel-expanded", expanded ? "1" : "0"); } catch (e) { /* ignore */ }
+			}, [expanded]);
 
 			const appendLog = (lines) => setLogLines((prev) => [...prev, ...lines].slice(-300));
 
@@ -114,9 +121,10 @@ window.__ModuleLoader__.load({
 				h("div", { style: row },
 					h("b", null, "社会模拟"),
 					h("span", { style: pill }, statusText),
-					h("span", { style: label }, "角色: " + (agents.map((a) => a.name).join("、") || "—")),
+					h("button", { style: btn, onClick: () => setExpanded(!expanded) }, expanded ? "收起 ▴" : "展开 ▾"),
+					expanded ? h("span", { style: label }, "角色: " + (agents.map((a) => a.name).join("、") || "—")) : null,
 				),
-				h("div", { style: row },
+				expanded && h("div", { style: row },
 					h("select", { style: input, value: sceneSel, onChange: (e) => setSceneSel(e.target.value), disabled: busy },
 						(scenes.length ? scenes : ["tavern"]).map((s) => h("option", { key: s, value: s }, s))),
 					h("button", { style: btn, disabled: busy || running, onClick: () => run("start", { scene: sceneSel }) }, "开始"),
@@ -128,12 +136,12 @@ window.__ModuleLoader__.load({
 					h("button", { style: btn, disabled: busy || running, onClick: () => run("load", { path: pathText }) }, "载入"),
 					h("button", { style: btn, disabled: busy || !running, onClick: () => run("quit", {}) }, "退出"),
 				),
-				h("div", { style: row },
+				expanded && h("div", { style: row },
 					h("span", { style: label }, "GM 事件:"),
 					h("input", { style: Object.assign({ flex: 1, minWidth: 160 }, input), value: eventText, placeholder: "如：外面传来一声巨响", onChange: (e) => setEventText(e.target.value) }),
 					h("button", { style: btn, disabled: busy || !running || !eventText, onClick: () => { run("inject_event", { content: eventText }); setEventText(""); } }, "注入"),
 				),
-				h("div", { style: row },
+				expanded && h("div", { style: row },
 					h("span", { style: label }, "替角色行动:"),
 					h("select", { style: input, value: agentSel, onChange: (e) => setAgentSel(e.target.value), disabled: busy },
 						h("option", { value: "" }, "选择角色"),
@@ -143,11 +151,11 @@ window.__ModuleLoader__.load({
 					h("input", { style: Object.assign({ flex: 1, minWidth: 120 }, input), value: actContent, placeholder: "行动内容", onChange: (e) => setActContent(e.target.value) }),
 					h("button", { style: btn, disabled: busy || !running || !agentSel || !actionType, onClick: () => { run("act_as", { agent: agentSel, action_type: actionType, target: targetSel || undefined, content: actContent }); setActContent(""); } }, "执行"),
 				),
-				h("div", { style: row },
+				expanded && h("div", { style: row },
 					h("span", { style: label }, "世界:"),
 					h("span", null, (snap && snap.characters_by_location ? Object.keys(snap.characters_by_location).map((loc) => loc + "[" + snap.characters_by_location[loc].join(",") + "]").join(" | ") : "—")),
 				),
-				h("div", { style: logBox },
+				expanded && h("div", { style: logBox },
 					logLines.length ? logLines.map((l, i) => h("div", { key: i }, l)) : h("span", { style: label }, "（暂无日志：点「开始」启动 tavern 场景）"),
 				),
 			);
