@@ -182,43 +182,33 @@ window.__ModuleLoader__.load({
 			);
 		}
 
-		function SettingsSection(props) {
+		function SettingsSection() {
 			const h = React.createElement;
-			const api = props && props.api;
 			const [enabled, setEnabled] = React.useState(true);
-			const [rev, setRev] = React.useState(null);
 			const [err, setErr] = React.useState("");
 			const [saving, setSaving] = React.useState(false);
 
-			// 注意：api 网关 RPC 统一返回 { result: { ok, value | error } } 信封
+			// 读/写都走自有 RPC（/sim-bridge/rpc）：api 网关对 settings 有
+			// settings-not-exposed 白名单（apiproxy 内硬编码），绕过它改由 host 直接
+			// 调 simSettings scope 的 update —— 仍是真 settings 服务、落盘 + 版本化。
 			React.useEffect(() => {
-				if (!api) return;
-				api.settings.describe({}).then((r) => {
-					const d = r && r.result && r.result.ok ? r.result.value : null;
-					const ns = (d && d.namespaces || []).find((n) => n.ns === "sim-bridge");
-					if (ns) {
-						setEnabled(!!(ns.value && ns.value.panelEnabled));
-						setRev(ns.revision);
+				rpc("config", {}).then((r) => {
+					if (r && r.ok && r.data && typeof r.data.panelEnabled === "boolean") {
+						setEnabled(r.data.panelEnabled);
 					}
 				}).catch((e) => setErr(String((e && e.message) || e)));
-			}, [api]);
+			}, []);
 
 			const toggle = () => {
-				if (!api || saving) return;
+				if (saving) return;
 				setSaving(true);
 				setErr("");
-				api.settings.update({
-					ns: "sim-bridge",
-					patch: { panelEnabled: !enabled },
-					expectedRevision: rev === null ? undefined : rev,
-				}).then((r) => {
-					const view = r && r.result && r.result.ok ? r.result.value : null;
-					if (!view) {
-						setErr((r && r.result && r.result.error && r.result.error.message) || "写入失败");
-						return;
+				rpc("set_config", { panelEnabled: !enabled }).then((r) => {
+					if (r && r.ok && r.data && typeof r.data.panelEnabled === "boolean") {
+						setEnabled(r.data.panelEnabled);
+					} else {
+						setErr((r && r.error) || "写入失败");
 					}
-					setEnabled(!!(view.value && view.value.panelEnabled));
-					if (typeof view.revision === "number") setRev(view.revision);
 				}).catch((e) => setErr(String((e && e.message) || e))).finally(() => setSaving(false));
 			};
 
@@ -240,12 +230,10 @@ window.__ModuleLoader__.load({
 		}
 
 		function apply(ctx) {
-			const connection = ctx.get("connection");
-			const api = (connection && connection.api) || null;
 			// 插件卡片：显示在 设置 → 插件 → 插件配置 页签
 			ctx.slots.inject("settings.plugin.item", () => ctx.slots.register(
 				{ name: "settings.plugin.item", id: "sim-bridge", order: 40, label: "社会模拟" },
-				() => React.createElement(SettingsSection, { api })
+				() => React.createElement(SettingsSection, null)
 			));
 			ctx.slots.inject("conversation.input.dock", () => ctx.slots.register(
 				{ name: "conversation.input.dock", id: "sim-bridge-panel", order: 30 },

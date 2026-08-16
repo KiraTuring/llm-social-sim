@@ -247,6 +247,26 @@ export default {
             routeError: state.routeError,
             settingsError: state.settingsError,
           }
+        } else if (body && body.cmd === 'set_config') {
+          // 写配置：绕过 gateway 的 settings-not-exposed 白名单（apiproxy 内硬编码），
+          // host 直接调 simSettings scope 的 update —— 仍是真 settings 服务，
+          // 持久化到 settings.yaml、revision 由服务内部管理。
+          if (!simSettings) {
+            result.ok = false
+            result.error = 'settings 命名空间未注册'
+          } else if (typeof body.panelEnabled !== 'boolean') {
+            result.ok = false
+            result.error = 'panelEnabled 必须是布尔值'
+          } else {
+            try {
+              await simSettings.update({ panelEnabled: body.panelEnabled })
+              result.ok = true
+              result.data = { panelEnabled: effectivePanelEnabled() }
+            } catch (e) {
+              result.ok = false
+              result.error = String((e && e.message) || e)
+            }
+          }
         } else if (body && typeof body.cmd === 'string' && body.cmd) {
           const args = {}
           for (const k of Object.keys(body)) if (k !== 'cmd') args[k] = body[k]
