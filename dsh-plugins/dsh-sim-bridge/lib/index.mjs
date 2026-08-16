@@ -1,4 +1,3 @@
-'use strict'
 /**
  * dsh-sim-bridge — LLM 社会模拟引擎的 DSH 插件（Host 半，web 组合行）。
  *
@@ -13,17 +12,24 @@
  * - 不发布到 isolate realm（这是 host 平面的共享服务）。
  * - 进程懒启动：只有 start/load/list_scenes 会 spawn；需要世界的命令未启动时
  *   直接报错而不 spawn；quit 后不复活；stop/卸载时 terminate 清理。
+ *
+ * 模块形态（.mjs）：本文件为纯 ESM，让 `schemastery` 走其 `index.mjs` 构建
+ * （纯 `import`，无 CJS require(ESM)），避免 cordis 并发加载插件时触发
+ * `ERR_REQUIRE_ESM_RACE_CONDITION`。`tools.js`/`client.js` 保持 CJS 不变。
  */
 
+import schemastery from '@deepseek-ai/schemastery'
+
 const REPO_ROOT_FALLBACK = '/Users/haitongwang/Work/llm_playground'
-const schemastery = require('@deepseek-ai/schemastery')
 const z = (schemastery && schemastery.default) || schemastery
 
-// subprocess/webServer 是硬依赖：用 inject 声明，cordis 会 park 插件直到两者
-// 就绪再执行 apply（patch 插入的 host 行在 root ctx 上可能先于 webServer 提供者
-// 挂载，apply 时 ctx.get 会拿到 undefined——那是此前路由注册静默失败的根因）。
-module.exports = {
-  inject: ['subprocess', 'webServer'],
+// subprocess/webServer/settings 是硬依赖：用 inject 声明，cordis 会 park 插件直到
+// 三者就绪再执行 apply。此前 webServer 与 settings 都因「patch 插入的 host 行在
+// root ctx 上先于提供者挂载、apply 时 ctx.get 拿到 undefined」而静默失效——
+// webServer 那次表现为路由不注册；settings 这次表现为命名空间从未注册、
+// 设置页开关写不进去（describe/update 都查无此命名空间）。
+export default {
+  inject: ['subprocess', 'webServer', 'settings'],
   apply(ctx, config) {
     const state = {
       child: null,
@@ -46,7 +52,7 @@ module.exports = {
     // ---------- settings 命名空间（设置页可改、持久化、live 生效） ----------
 
     let simSettings = null
-    const settingsService = ctx.get('settings')
+    const settingsService = ctx.settings
     if (settingsService) {
       try {
         simSettings = settingsService.register(

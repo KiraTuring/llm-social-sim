@@ -3,9 +3,9 @@
   "version": "0.2.0",
   "description": "LLM 社会模拟引擎的 DSH 插件：sim_* 模型工具（preset 行）+ simBridge 服务与 Web 实时面板（host 组合行）。",
   "private": true,
-  "main": "lib/index.js",
+  "main": "lib/index.mjs",
   "exports": {
-    ".": "./lib/index.js",
+    ".": "./lib/index.mjs",
     "./tools": "./lib/tools.js",
     "./client": "./lib/client.js",
     "./package.json": "./package.json"
