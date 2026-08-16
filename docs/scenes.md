@@ -172,9 +172,9 @@ GM 使用的 `ActionRegistry` 使用 `include_agent_params=False`（不含 `inte
 
 ### 状态约定
 
-- 金钱/物品存在角色的 `states`：`金钱`=整数、`物品`={名称: 数量}（键名见 `core.world.ECONOMY_STATE_KEYS`）
-- 这两个键应**加入 `private_states`**（他人 observe 不可见）且**不要加入 `writable_states`**（LLM 不能通过 `state_update` 自改钱物，只能通过 `trade` 转移）
-- 校验期支付能力只检查行动者自己的钱物（`build_validation_context` 的 `inventory` 字段，只含自己的经济状态，不泄露他人）
+- 钱包统一放在角色的 `states["inventory"]` 下（键名见 `core.world.INVENTORY_KEY`），内部资源名由场景自定义；trade 沿用 `金钱`=整数、`物品`={名称: 数量}
+- 整个钱包应**加入 `private_states`**（他人 observe 不可见）且**不要加入 `writable_states`**（LLM 不能通过 `state_update` 自改钱物，只能通过 `trade` 转移）
+- 校验期支付能力只检查行动者自己的钱包（`build_validation_context` 的 `inventory` 字段，只含自己的，不泄露他人）
 
 ### 消息流
 

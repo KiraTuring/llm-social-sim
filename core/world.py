@@ -13,20 +13,23 @@ if TYPE_CHECKING:
     from .agent import Agent
 
 
-# 经济类状态键约定（trade 动作使用）：金钱=整数，物品={名称: 数量}。
-# 校验支付能力时只暴露行动者自己的这些状态（见 build_inventory）。
-ECONOMY_STATE_KEYS = ("金钱", "物品")
+# 钱包状态键：角色的经济/物品统一放在 states[INVENTORY_KEY] 下（单一固定键）。
+# 场景在钱包内部自定义资源名（如 金钱/物品/信用点），core 只认识这一个键，
+# 校验支付能力时只暴露行动者自己的钱包（见 build_inventory）。
+INVENTORY_KEY = "inventory"
 
 
 def build_inventory(states: dict) -> dict:
-    """从角色 states 抽取经济类状态视图（行动者自己的支付能力，供参数校验期使用）。
+    """抽取角色的钱包视图 states[INVENTORY_KEY]（行动者自己的支付能力，供参数校验期使用）。
 
-    只包含 ECONOMY_STATE_KEYS 声明的键，dict 值取副本，避免调用方误改真实状态。
+    返回副本（内层 dict 也取副本），避免调用方误改真实状态。
     """
+    wallet = states.get(INVENTORY_KEY)
+    if not isinstance(wallet, dict):
+        return {}
     return {
         key: (dict(value) if isinstance(value, dict) else value)
-        for key, value in states.items()
-        if key in ECONOMY_STATE_KEYS
+        for key, value in wallet.items()
     }
 
 

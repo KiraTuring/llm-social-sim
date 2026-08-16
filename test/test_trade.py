@@ -47,8 +47,8 @@ def _build_world(colocated: bool = True):
     world.agents["测试乙"] = Agent.from_config(
         SCENE, SCENE.agents[1], CONFIG, registry=AGENT_REGISTRY
     )
-    world.agents["测试甲"].states.update({"金钱": 30, "物品": {"干粮": 2, "药草": 3}})
-    world.agents["测试乙"].states.update({"金钱": 50, "物品": {"酒壶": 1, "干粮": 1}})
+    world.agents["测试甲"].states.update({"inventory": {"金钱": 30, "物品": {"干粮": 2, "药草": 3}}})
+    world.agents["测试乙"].states.update({"inventory": {"金钱": 50, "物品": {"酒壶": 1, "干粮": 1}}})
     if colocated:
         assert world.move_character("测试乙", "大厅") is None
     world.rebuild_location_index()
@@ -68,8 +68,8 @@ def test_money_transfer():
     params = {"target": "测试乙", "give_money": 10}
     assert ACTION.validate_params(params, ctx) is None
     msgs, result = ACTION.execute("测试甲", params, world)
-    assert world.agents["测试甲"].states["金钱"] == 20
-    assert world.agents["测试乙"].states["金钱"] == 60
+    assert world.agents["测试甲"].states["inventory"]["金钱"] == 20
+    assert world.agents["测试乙"].states["inventory"]["金钱"] == 60
     assert msgs and msgs[0].msg_type == "trade" and msgs[0].recipients == ["测试乙"]
     assert "金钱10" in result["summary"]
     # 纯 give（无 take）：对手方视角只有获得，没有付出
@@ -85,8 +85,8 @@ def test_items_both_ways():
     params = {"target": "测试乙", "give_items": {"干粮": 1}, "take_items": {"酒壶": 1}}
     assert ACTION.validate_params(params, ctx) is None
     msgs, result = ACTION.execute("测试甲", params, world)
-    assert world.agents["测试甲"].states["物品"] == {"干粮": 1, "药草": 3, "酒壶": 1}
-    assert world.agents["测试乙"].states["物品"] == {"干粮": 2}
+    assert world.agents["测试甲"].states["inventory"]["物品"] == {"干粮": 1, "药草": 3, "酒壶": 1}
+    assert world.agents["测试乙"].states["inventory"]["物品"] == {"干粮": 2}
     # 行动者记忆：自己的视角（付出干粮，获得酒壶）
     assert "付出干粮×1" in result["summary"] and "获得酒壶×1" in result["summary"]
     # 对手方私信：镜像视角（你付出酒壶，获得干粮）
@@ -99,15 +99,15 @@ def test_trade_with_npc():
     world = _build_world()
     npc = NPC(name="神秘商贩", location="大厅", role="商贩", goal="兜售货物")
     assert world.add_npc(npc) is None
-    world.npcs["神秘商贩"].states.update({"金钱": 100, "物品": {"香料": 5}})
+    world.npcs["神秘商贩"].states.update({"inventory": {"金钱": 100, "物品": {"香料": 5}}})
     ctx = _ctx(world, "测试甲")
     params = {"target": "神秘商贩", "give_money": 20, "take_items": {"香料": 2}}
     assert ACTION.validate_params(params, ctx) is None
     msgs, result = ACTION.execute("测试甲", params, world)
-    assert world.agents["测试甲"].states["金钱"] == 10
-    assert world.npcs["神秘商贩"].states["金钱"] == 120
-    assert world.agents["测试甲"].states["物品"]["香料"] == 2
-    assert world.npcs["神秘商贩"].states["物品"] == {"香料": 3}
+    assert world.agents["测试甲"].states["inventory"]["金钱"] == 10
+    assert world.npcs["神秘商贩"].states["inventory"]["金钱"] == 120
+    assert world.agents["测试甲"].states["inventory"]["物品"]["香料"] == 2
+    assert world.npcs["神秘商贩"].states["inventory"]["物品"] == {"香料": 3}
 
 
 # ---------- 校验 ----------
@@ -153,14 +153,14 @@ def test_execute_rejects_insufficient_target():
     msgs, result = ACTION.execute("测试甲", params, world)
     assert msgs == []
     assert "没有足够的金钱" in result["summary"]
-    assert world.agents["测试甲"].states["金钱"] == 30
-    assert world.agents["测试乙"].states["金钱"] == 50
+    assert world.agents["测试甲"].states["inventory"]["金钱"] == 30
+    assert world.agents["测试乙"].states["inventory"]["金钱"] == 50
 
     params = {"target": "测试乙", "give_money": 5, "take_items": {"龙蛋": 1}}
     msgs, result = ACTION.execute("测试甲", params, world)
     assert msgs == []
     assert "没有 龙蛋" in result["summary"]
-    assert world.agents["测试甲"].states["金钱"] == 30  # 首次失败未扣款
+    assert world.agents["测试甲"].states["inventory"]["金钱"] == 30  # 首次失败未扣款
 
 
 # ---------- 消息流与规则 ----------
@@ -220,7 +220,7 @@ def test_validation_context_inventory():
     assert ctx["inventory"]["金钱"] == 30
     assert ctx["inventory"]["物品"] == {"干粮": 2, "药草": 3}
     ctx["inventory"]["金钱"] = 999
-    assert world.agents["测试甲"].states["金钱"] == 30  # 副本，不影响真实状态
+    assert world.agents["测试甲"].states["inventory"]["金钱"] == 30  # 副本，不影响真实状态
     gm_ctx = world.build_validation_context("GM")
     assert "inventory" not in gm_ctx
 
@@ -230,7 +230,7 @@ def test_observe_hides_private_economy():
     world = _build_world()
     _, result = ObserveAction().execute("测试甲", {}, world)
     assert "金钱" in result["observed"]
-    world.agents["测试乙"]._private_states = {"金钱", "物品"}
+    world.agents["测试乙"]._private_states = {"inventory"}
     _, result = ObserveAction().execute("测试甲", {}, world)
     assert "金钱" not in result["observed"]
     assert "物品" not in result["observed"]
@@ -248,7 +248,7 @@ def test_trade_save_load_roundtrip():
     tmp = os.path.join(tempfile.mkdtemp(), "trade.json")
     save_simulation_state(world, gm, "_test", SCENE.name, tmp)
     world2, _, _, _ = load_simulation_state(tmp, CONFIG)
-    assert world2.agents["测试甲"].states["金钱"] == 20
-    assert world2.agents["测试甲"].states["物品"] == {"干粮": 2, "药草": 3, "酒壶": 1}
-    assert world2.agents["测试乙"].states["金钱"] == 60
-    assert world2.agents["测试乙"].states["物品"] == {"干粮": 1}
+    assert world2.agents["测试甲"].states["inventory"]["金钱"] == 20
+    assert world2.agents["测试甲"].states["inventory"]["物品"] == {"干粮": 2, "药草": 3, "酒壶": 1}
+    assert world2.agents["测试乙"].states["inventory"]["金钱"] == 60
+    assert world2.agents["测试乙"].states["inventory"]["物品"] == {"干粮": 1}

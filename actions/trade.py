@@ -1,8 +1,9 @@
 """贸易 Action：同一位置的 Agent 间（含 NPC）转移金钱/物品。
 
-状态约定（与 core.world.ECONOMY_STATE_KEYS 一致）：
-- 金钱: 整数，存在 states["金钱"]
-- 物品: {名称: 数量} dict，存在 states["物品"]
+状态约定：
+- 钱包统一存在 states[INVENTORY_KEY]（见 core.world.INVENTORY_KEY）；
+  内部资源名由场景自定义，trade 沿用 金钱=整数、物品={名称: 数量} 的约定
+- 事件记录由引擎统一处理（Agent 行动写入 event_log），本动作不重复记录
 
 give 是行动者付出的（钱或物品），take 是行动者获得的。take 必须伴随 give
 （有来有往）；纯 give（支付/送礼）允许。旁观者能看到交易的物品，看不到金额。
@@ -14,12 +15,18 @@ from typing import TYPE_CHECKING
 
 from core.action import ActionSpec, validate_content_length
 from core.message import Message
-from core.world import ECONOMY_STATE_KEYS
+from core.world import INVENTORY_KEY
 
 if TYPE_CHECKING:
     from core.world import WorldState
 
-MONEY_KEY, ITEMS_KEY = ECONOMY_STATE_KEYS
+# 钱包（states[INVENTORY_KEY]）内部的资源名约定：金钱=金额(int)，物品={名称: 数量}
+MONEY_KEY, ITEMS_KEY = "金钱", "物品"
+
+
+def _wallet(states: dict) -> dict:
+    """获取（或初始化）角色的钱包字典 states[INVENTORY_KEY]。"""
+    return states.setdefault(INVENTORY_KEY, {})
 
 
 class TradeAction(ActionSpec):
@@ -133,25 +140,27 @@ class TradeAction(ActionSpec):
             return [], {"summary": f"未找到角色 {target}"}
 
         # 防御性双检（validate_params 已拦截，单线程无竞态，这里仅兜底）
-        wallet = actor.states.get(MONEY_KEY, 0)
-        if give_money > wallet:
-            return [], {"summary": f"金钱不足：你只有 {wallet}"}
-        stock = actor.states.get(ITEMS_KEY, {})
+        actor_wallet = actor.states.get(INVENTORY_KEY) or {}
+        money = actor_wallet.get(MONEY_KEY, 0)
+        if give_money > money:
+            return [], {"summary": f"金钱不足：你只有 {money}"}
+        stock = actor_wallet.get(ITEMS_KEY, {})
         for name, qty in give_items.items():
             have = stock.get(name, 0)
             if qty > have:
                 return [], {"summary": f"物品不足：你只有 {name}×{have}"}
-        c_wallet = counterparty.states.get(MONEY_KEY, 0)
-        if take_money > c_wallet:
-            return [], {"summary": f"{target} 没有足够的金钱（只有 {c_wallet}）"}
-        c_stock = counterparty.states.get(ITEMS_KEY, {})
+        counterparty_wallet = counterparty.states.get(INVENTORY_KEY) or {}
+        c_money = counterparty_wallet.get(MONEY_KEY, 0)
+        if take_money > c_money:
+            return [], {"summary": f"{target} 没有足够的金钱（只有 {c_money}）"}
+        c_stock = counterparty_wallet.get(ITEMS_KEY, {})
         for name, qty in take_items.items():
             have = c_stock.get(name, 0)
             if qty > have:
                 return [], {"summary": f"{target} 没有 {name}（只有 {name}×{have}）"}
 
-        # 转移双方账目
-        self._transfer(actor.states, counterparty.states,
+        # 转移双方账目（成功路径才创建钱包字典）
+        self._transfer(_wallet(actor.states), _wallet(counterparty.states),
                        give_money, give_items, take_money, take_items)
 
         detail = self._describe(give_money, give_items, take_money, take_items)
@@ -183,27 +192,27 @@ class TradeAction(ActionSpec):
         return messages, {"summary": f"交易完成: {detail}"}
 
     @staticmethod
-    def _transfer(actor_states: dict, target_states: dict,
+    def _transfer(actor_wallet: dict, target_wallet: dict,
                   give_money: int, give_items: dict,
                   take_money: int, take_items: dict) -> None:
-        """执行双方账目变动：give 从行动者流向对手方，take 从对手方流向行动者。"""
+        """执行双方账目变动：give 从行动者钱包流向对手方，take 反向。"""
         if give_money:
-            actor_states[MONEY_KEY] = actor_states.get(MONEY_KEY, 0) - give_money
-            target_states[MONEY_KEY] = target_states.get(MONEY_KEY, 0) + give_money
+            actor_wallet[MONEY_KEY] = actor_wallet.get(MONEY_KEY, 0) - give_money
+            target_wallet[MONEY_KEY] = target_wallet.get(MONEY_KEY, 0) + give_money
         if take_money:
-            target_states[MONEY_KEY] = target_states.get(MONEY_KEY, 0) - take_money
-            actor_states[MONEY_KEY] = actor_states.get(MONEY_KEY, 0) + take_money
+            target_wallet[MONEY_KEY] = target_wallet.get(MONEY_KEY, 0) - take_money
+            actor_wallet[MONEY_KEY] = actor_wallet.get(MONEY_KEY, 0) + take_money
         if give_items:
-            actor_items = actor_states.setdefault(ITEMS_KEY, {})
-            target_items = target_states.setdefault(ITEMS_KEY, {})
+            actor_items = actor_wallet.setdefault(ITEMS_KEY, {})
+            target_items = target_wallet.setdefault(ITEMS_KEY, {})
             for name, qty in give_items.items():
                 actor_items[name] = actor_items.get(name, 0) - qty
                 if actor_items[name] <= 0:
                     del actor_items[name]
                 target_items[name] = target_items.get(name, 0) + qty
         if take_items:
-            target_items = target_states.setdefault(ITEMS_KEY, {})
-            actor_items = actor_states.setdefault(ITEMS_KEY, {})
+            target_items = target_wallet.setdefault(ITEMS_KEY, {})
+            actor_items = actor_wallet.setdefault(ITEMS_KEY, {})
             for name, qty in take_items.items():
                 target_items[name] = target_items.get(name, 0) - qty
                 if target_items[name] <= 0:

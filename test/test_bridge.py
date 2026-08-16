@@ -378,17 +378,17 @@ def test_act_as_state_update_applies_writable_only(bridge):
     a = next(x for x in state["agents"] if x["name"] == "艾莉娅")
     assert a["states"]["情绪"] == "紧张"
 
-    # 不可写字段（金钱，private 且不在 writable_states）应被忽略
+    # 不可写字段（inventory 钱包，private 且不在 writable_states）应被忽略
     bridge.send({
         "req_id": 5,
         "cmd": "act_as",
         "agent": "艾莉娅",
         "action_type": "interact",
         "content": "数了数钱",
-        "params": {"state_update": {"金钱": 999}},
+        "params": {"state_update": {"inventory": {"金钱": 999}}},
     })
     resp = bridge.send({"req_id": 6, "cmd": "step", "ticks": 1})
     assert resp["ok"] is True
     state = bridge.send({"req_id": 7, "cmd": "state"})["data"]
     a = next(x for x in state["agents"] if x["name"] == "艾莉娅")
-    assert a["states"]["金钱"] == 30
+    assert a["states"]["inventory"]["金钱"] == 30

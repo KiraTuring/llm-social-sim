@@ -45,9 +45,9 @@ class TavernScene(Scene):
     states = {"情绪": "平静"}
     writable_states = ["情绪"]
     # 本场景不设精力：聊天场景无需体力机制，且精力若由 LLM 自决更新不合理。
-    # 经济状态（金钱/物品）对他人 observe 不可见；也不在 writable_states 中，
+    # 钱包（states["inventory"]）对他人 observe 不可见；也不在 writable_states 中，
     # LLM 无法通过 state_update 自改钱物——只能通过 trade 动作转移。
-    private_states = ["金钱", "物品"]
+    private_states = ["inventory"]
 
     agents = [
         {
@@ -60,7 +60,7 @@ class TavernScene(Scene):
                 "雷恩": {"trust": 0, "impression": "欠酒钱的常客，有点心虚"},
                 "艾莉娅": {"trust": 1, "impression": "新来的旅人，看着有些蹊跷"},
             },
-            "states": {"金钱": 80, "物品": {"麦酒": 12, "炖菜": 3}},
+            "states": {"inventory": {"金钱": 80, "物品": {"麦酒": 12, "炖菜": 3}}},
         },
         {
             "name": "雷恩",
@@ -72,7 +72,7 @@ class TavernScene(Scene):
                 "老巴克": {"trust": 0, "impression": "酒馆老板，消息灵通但心机深"},
                 "艾莉娅": {"trust": 0, "impression": "神秘旅人，带着上锁的盒子"},
             },
-            "states": {"金钱": 5, "物品": {"旧佩剑": 1, "干粮": 2}},
+            "states": {"inventory": {"金钱": 5, "物品": {"旧佩剑": 1, "干粮": 2}}},
         },
         {
             "name": "艾莉娅",
@@ -84,7 +84,7 @@ class TavernScene(Scene):
                 "老巴克": {"trust": 1, "impression": "酒馆老板，应该消息灵通"},
                 "雷恩": {"trust": 0, "impression": "佣兵，看起来危险但也许有用"},
             },
-            "states": {"金钱": 30, "物品": {"上锁木盒": 1, "干粮": 1}},
+            "states": {"inventory": {"金钱": 30, "物品": {"上锁木盒": 1, "干粮": 1}}},
         },
     ]
 
