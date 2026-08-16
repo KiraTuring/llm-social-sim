@@ -252,3 +252,94 @@ def test_unknown_command_and_bad_json_keep_process_alive(bridge):
 
     resp = bridge.send({"req_id": 3, "cmd": "list_scenes"})
     assert resp["ok"] is True  # 进程仍然健康
+
+
+def test_step_returns_gm_and_agent_events(bridge):
+    """P0：sim_step 的 log[].events 应包含 GM 事件与 Player 消息（修复前缺失）。"""
+    bridge.start_tavern(1)
+    # act_as 让艾莉娅说话 → agent 事件应进入 events
+    bridge.send({
+        "req_id": 2,
+        "cmd": "act_as",
+        "agent": "艾莉娅",
+        "action_type": "speak",
+        "target": "雷恩",
+        "content": "雷恩，你信那斗篷客的话吗？",
+    })
+    resp = bridge.send({"req_id": 3, "cmd": "step", "ticks": 1})
+    assert resp["ok"] is True
+    tick1 = resp["data"]["log"][0]
+    assert "events" in tick1
+    agent_events = [e for e in tick1["events"] if e["kind"] == "agent"]
+    assert any(
+        e["sender"] == "艾莉娅" and e["msg_type"] == "speech" and e["target"] == "雷恩"
+        for e in agent_events
+    )
+
+    # 推进到 tick 3：tavern 计划事件（GM system_event）应进入 events
+    resp = bridge.send({"req_id": 4, "cmd": "step", "ticks": 2})
+    assert resp["ok"] is True
+    assert resp["data"]["tick"] == 3
+    tick3 = resp["data"]["log"][1]
+    gm_events = [e for e in tick3["events"] if e["kind"] == "gm"]
+    assert any("闷雷" in e["content"] for e in gm_events)
+
+
+def test_step_narrative_view(bridge):
+    """P0：view=narrative 时 cmd_step 返回可读剧情文本。"""
+    bridge.start_tavern(1)
+    bridge.send({
+        "req_id": 2,
+        "cmd": "act_as",
+        "agent": "艾莉娅",
+        "action_type": "speak",
+        "target": "雷恩",
+        "content": "雷恩，你信那斗篷客的话吗？",
+    })
+    resp = bridge.send({"req_id": 3, "cmd": "step", "ticks": 1, "view": "narrative"})
+    assert resp["ok"] is True
+    narrative = resp["data"]["narrative"]
+    assert isinstance(narrative, str)
+    assert "Tick 1" in narrative
+    assert "艾莉娅" in narrative
+    assert "你信那斗篷客的话吗？" in narrative
+
+    # raw 视图（默认）不生成 narrative 字段
+    resp = bridge.send({"req_id": 4, "cmd": "step", "ticks": 1})
+    assert resp["ok"] is True
+    assert "narrative" not in resp["data"]
+
+    # 非法 view 报错
+    resp = bridge.send({"req_id": 5, "cmd": "step", "ticks": 1, "view": "bogus"})
+    assert resp["ok"] is False
+
+
+def test_extract_state_events_pure_function(monkeypatch):
+    """state 事件提取纯函数：只挑纯状态条目，过滤旁白/NPC 台词/裸随机事件。"""
+    monkeypatch.syspath_prepend(str(REPO_ROOT / "scripts"))
+    import sim_bridge
+
+    delta = [
+        "[tick 5] 新 NPC 出现: 披斗篷的陌生人（游方旅人）在角落",
+        "[tick 5] NPC 老游吟诗人: 这鬼天气，雪下得比往年都早。",
+        "[tick 5] 旁白: 壁炉里的火噼啪作响",
+        "[tick 5] 环境变更: 主厅.喧闹程度 → 紧张",
+        "[tick 5] 角色状态: 雷恩.精力 → 80",
+        "[tick 5] NPC 阿福 离开了",
+        "[tick 5] 屋外传来一声闷雷，似乎要下雨了",
+    ]
+    out = sim_bridge._extract_state_events(delta, 5)
+    contents = [e["content"] for e in out]
+    assert "新 NPC 出现: 披斗篷的陌生人（游方旅人）在角落" in contents
+    assert "环境变更: 主厅.喧闹程度 → 紧张" in contents
+    assert "角色状态: 雷恩.精力 → 80" in contents
+    assert "NPC 阿福 离开了" in contents
+    # 双写/NPC 台词/裸事件应被过滤（它们在 message_bus 里已有，避免重复）
+    assert not any("老游吟诗人" in c for c in contents)
+    assert not any("旁白" in c for c in contents)
+    assert not any("闷雷" in c for c in contents)
+    for e in out:
+        assert e["kind"] == "state"
+        assert e["tick"] == 5
+        assert e["sender"] == "GM"
+        assert e["msg_type"] == "system_event"

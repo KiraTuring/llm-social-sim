@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -46,6 +47,32 @@ from core.scene_loader import list_available_scenes  # noqa: E402
 def _log(line: str) -> None:
     """诊断日志一律走 stderr，绝不污染 stdout JSONL 通道。"""
     print(f"[sim_bridge] {line}", file=sys.stderr, flush=True)
+
+
+# GM 工具中「只写 event_log、不写 message_bus」的纯状态事件前缀（见
+# actions/gm_tools.py 与 actions/gm_npc.py 的 add_event 调用）：
+#   npc_add → "新 NPC 出现: ..."；modify_environment → "环境变更: ..."/"环境指标已删除: ..."
+#   modify_char_state → "角色状态: ..."；npc_remove → "NPC X 离开了"
+# 这些条目与 message_bus 内容天然不重叠，提取时无需去重。
+_STATE_EVENT_PREFIXES = ("新 NPC 出现:", "环境变更:", "环境指标已删除:", "角色状态:")
+_STATE_EVENT_LEAVE_RE = re.compile(r"^NPC .+ 离开了$")
+
+
+def _extract_state_events(event_log_delta: list[str], tick: int) -> list[dict]:
+    """从 event_log 增量中提取纯状态事件，返回与 events 数组同构的条目。"""
+    out = []
+    for line in event_log_delta:
+        content = line.split("] ", 1)[-1] if line.startswith("[tick ") else line
+        if content.startswith(_STATE_EVENT_PREFIXES) or _STATE_EVENT_LEAVE_RE.match(content):
+            out.append({
+                "tick": tick,
+                "sender": "GM",
+                "kind": "state",
+                "msg_type": "system_event",
+                "target": None,
+                "content": content,
+            })
+    return out
 
 
 class SimBridge:
@@ -117,11 +144,17 @@ class SimBridge:
         ticks = int(args.get("ticks", 1))
         if ticks < 1:
             raise ValueError("ticks 必须 >= 1")
+        view = args.get("view", "raw")
+        if view not in ("raw", "narrative"):
+            raise ValueError("view 必须是 raw 或 narrative")
         log = []
         for _ in range(ticks):
             tick_log = await self._run_one_tick()
             log.append(tick_log)
-        return {"ticks_run": len(log), "tick": self.world.tick, "log": log}
+        data = {"ticks_run": len(log), "tick": self.world.tick, "log": log}
+        if view == "narrative":
+            data["narrative"] = "\n\n".join(self._render_narrative(tl) for tl in log)
+        return data
 
     def cmd_state(self, args: dict) -> dict:
         self._require_world()
@@ -278,10 +311,21 @@ class SimBridge:
         }
 
     async def _run_one_tick(self) -> dict:
-        """手动驱动 begin_tick → step_agent → end_tick，支持 act_as 强制行动。"""
+        """手动驱动 begin_tick → step_agent → end_tick，支持 act_as 强制行动。
+
+        返回 {tick, actions, events}：actions 仅 Player 行动（含内心独白），
+        events 为本 tick 完整事件流（GM 旁白/NPC 台词/Player 消息/纯状态事件），
+        保证 sim_step 一次调用即可看到完整剧情，无需再查 sim_state。
+        """
         tick = self._next_tick
         engine = self.engine
         self._steps: list = []
+
+        # 记录 tick 边界：begin_tick 内 GM 会注入事件（写 message_bus/event_log），
+        # 必须在它之前记录基线，之后取增量即得本 tick 的全部事件。
+        bus = self.world.message_bus
+        bus_start = len(bus.get_all())
+        event_start = len(self.world.event_log)
 
         await engine.begin_tick(tick)
         while True:
@@ -320,7 +364,79 @@ class SimBridge:
                     for m in step.messages
                 ],
             })
-        return {"tick": tick, "actions": actions}
+
+        # 完整事件流：纯状态事件（只写 event_log）在前，message_bus 增量随后
+        # （message_bus 内部已是 GM 注入 → Player 行动的时序）。
+        state_events = _extract_state_events(self.world.event_log[event_start:], tick)
+        bus_events = []
+        for m in bus.get_all()[bus_start:]:
+            if m.tick != tick:
+                continue
+            if m.sender == "GM":
+                kind = "gm"
+            elif m.sender in self.world.npcs:
+                kind = "npc"
+            elif m.sender in self.world.agents:
+                kind = "agent"
+            else:
+                kind = "other"
+            bus_events.append({
+                "tick": m.tick,
+                "sender": m.sender,
+                "kind": kind,
+                "msg_type": m.msg_type,
+                "target": m.target,
+                "content": m.content,
+            })
+        return {"tick": tick, "actions": actions, "events": state_events + bus_events}
+
+    def _render_narrative(self, tick_log: dict) -> str:
+        """把一个 tick 的日志渲染为可读剧情文本（对齐 CLI ConsoleRenderer 风格）。
+
+        GM/纯状态/NPC 事件取自 events（发生在 Player 行动之前），Player 行动取自
+        actions（含内心独白）；whisper 的「对 X 窃窃私语」重复动作条在渲染层合并。
+        """
+        tick = tick_log["tick"]
+        lines = [f"━━━ Tick {tick} ━━━"]
+        loc_icons = self.scene.render_config.get("location_icons", {})
+
+        def agent_icon(name: str) -> str:
+            agent = self.world.agents.get(name)
+            loc = agent.location if agent else ""
+            return loc_icons.get(loc, "📍")
+
+        # 1) GM / 纯状态 / NPC 事件（Player 行动之前）
+        for ev in tick_log["events"]:
+            if ev["kind"] in ("agent", "other"):
+                continue
+            icon = {"gm": "🎲", "state": "⚙️", "npc": "🗣️"}.get(ev["kind"], "🗣️")
+            tgt = f" → {ev['target']}" if ev["target"] else ""
+            lines.append(f"{icon} {ev['sender']}{tgt}: {ev['content']}")
+
+        # 2) Player 行动（含内心独白）
+        for act in tick_log["actions"]:
+            name = act["agent"]
+            icon = agent_icon(name)
+            at = act["action_type"]
+            if at == "observe":
+                action_line = " 观察四周"
+            elif at == "speak":
+                tgt = f" → {act['target']}" if act["target"] else ""
+                action_line = f"{tgt}: {act['content']}" if act["content"] else tgt
+            elif at == "whisper":
+                tgt = f" → {act['target']}" if act["target"] else ""
+                action_line = f"{tgt}（私语）: {act['content']}" if act["content"] else f"{tgt}（私语）"
+            else:
+                action_line = " " + at + (f" -> {act['target']}" if act["target"] else "")
+                if act["content"]:
+                    action_line += f": {act['content']}"
+            lines.append(f"{icon} {name}{action_line}")
+            if act["internal_monologue"]:
+                lines.append(f"💭 {name}（内心）: {act['internal_monologue']}")
+
+        if len(lines) == 1:
+            lines.append("（本 tick 无事件）")
+        return "\n".join(lines)
 
     def _install_forced_think(self, agent_name: str) -> None:
         """给指定 agent 装一次性 think 覆盖：返回 act_as 排队行动（校验后）。
