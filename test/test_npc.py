@@ -14,7 +14,7 @@ from core.agent import Agent
 from core.character import Character, NPC
 from core.gm import GMAgent
 from core.scene import Scene
-from core.save_load import save_simulation_state
+from app.save_load import save_simulation_state
 from scenarios import load_scene
 from render.tui_info import is_npc
 from scenarios._test import _TestScene

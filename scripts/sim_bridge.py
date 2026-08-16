@@ -260,7 +260,7 @@ class SimBridge:
 
     def cmd_save(self, args: dict) -> dict:
         self._require_world()
-        from core.save_load import save_simulation_state
+        from app.save_load import save_simulation_state
 
         path = args.get("path") or str(REPO_ROOT / "saves" / "bridge_run.json")
         scene_module = self.scene.__class__.__module__.split(".")[-1]

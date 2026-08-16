@@ -17,7 +17,7 @@ from core.logger import SimLogger
 from core.manual_agent import ManualAgent
 from core.message import MessageBus
 from core.rules import RuleEngine
-from core.save_load import SAVE_VERSION, migrate_save_data
+from app.save_load import SAVE_VERSION, migrate_save_data
 from core.scene import validate_agent_configs
 from core.world import WorldState
 from llm.client import LLMClient

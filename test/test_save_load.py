@@ -13,7 +13,7 @@ from core.agent import Agent
 from core.gm import GMAgent
 from core.manual_agent import ManualAgent
 from core.message import Message, BROADCAST
-from core.save_load import SAVE_VERSION, save_simulation_state
+from app.save_load import SAVE_VERSION, save_simulation_state
 from core.scene import validate_agent_configs
 from scenarios import load_scene
 from scenarios.tavern import TavernScene

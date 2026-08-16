@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from core.event import SOURCE_AGENT, SOURCE_GM, SOURCE_NPC, TimelineEvent
-from core.save_load import SAVE_VERSION, migrate_save_data
+from app.save_load import SAVE_VERSION, migrate_save_data
 from core.world import WorldState
 
 

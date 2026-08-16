@@ -45,7 +45,7 @@ from app.factory import prepare_world, setup_services  # noqa: E402
 from core.engine import SimulationEngine  # noqa: E402
 from core.event import SOURCE_AGENT, SOURCE_GM, SOURCE_ICONS, SOURCE_NPC, SOURCE_RULE  # noqa: E402
 from scenarios import list_available_scenes  # noqa: E402
-from core.save_load import save_simulation_state  # noqa: E402
+from app.save_load import save_simulation_state  # noqa: E402
 from render.tui_info import format_scene_sections  # noqa: E402
 
 EVENT_LOG_CAP = 2000   # 快照中事件流最多返回的条数（前端增量渲染）

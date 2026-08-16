@@ -13,7 +13,7 @@ from core.character import NPC
 from core.gm import GMAgent
 from core.message import Message
 from core.rules import RuleEngine
-from core.save_load import save_simulation_state
+from app.save_load import save_simulation_state
 from scenarios import load_scene
 from scenarios._test import _TestScene
 

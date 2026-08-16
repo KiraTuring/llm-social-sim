@@ -538,7 +538,7 @@ class SimulationTuiApp(App):
         )
 
         try:
-            from core.save_load import save_simulation_state
+            from app.save_load import save_simulation_state
             now = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             scene_module = self.scene.__class__.__module__.split(".")[-1]
             crash_path = f"saves/{scene_module}_crash_{now}.json"
@@ -550,7 +550,7 @@ class SimulationTuiApp(App):
             logger.error(f"崩溃快照保存失败: {save_error}")
 
     def _save_state(self):
-        from core.save_load import save_simulation_state
+        from app.save_load import save_simulation_state
         try:
             now = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             scene_module = self.scene.__class__.__module__.split(".")[-1]
@@ -577,7 +577,7 @@ class SimulationTuiApp(App):
         scroll.scroll_end(animate=False)
 
         if self.save_path:
-            from core.save_load import save_simulation_state
+            from app.save_load import save_simulation_state
             scene_module = self.scene.__class__.__module__.split(".")[-1]
             save_simulation_state(
                 self.world, self.gm, scene_module,

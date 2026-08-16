@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from app.config import load_config
 from app.factory import prepare_world, setup_services
 from core.engine import SimulationEngine
-from core.save_load import save_simulation_state
+from app.save_load import save_simulation_state
 from render.console import ConsoleRenderer
 from scenarios import list_available_scenes
 
