@@ -2,7 +2,7 @@
 
 覆盖：命令全集（list_scenes/start/step/state/inject_event/act_as/query_agent/
 save/load/quit）、stdout 严格 JSONL、错误健壮性（未知命令/坏 JSON/非法行动
-回退 observe）、存档往返后 tick 续跑。
+返回空行动）、存档往返后 tick 续跑。
 """
 
 from __future__ import annotations
@@ -179,7 +179,7 @@ def test_inject_event_and_act_as(bridge):
     assert any("窗外闪过一道黑影" in m["content"] for m in state["recent_messages"])
 
 
-def test_act_as_invalid_falls_back_to_observe(bridge):
+def test_act_as_invalid_returns_none(bridge):
     bridge.start_tavern(1)
     resp = bridge.send({
         "req_id": 2,
@@ -188,10 +188,10 @@ def test_act_as_invalid_falls_back_to_observe(bridge):
         "action_type": "no_such_action",
         "content": "x",
     })
-    assert resp["ok"] is True  # 排队成功，执行时回退
+    assert resp["ok"] is True  # 排队成功，执行时返回空行动
     resp = bridge.send({"req_id": 3, "cmd": "step", "ticks": 1})
     by_agent = {a["agent"]: a for a in resp["data"]["log"][0]["actions"]}
-    assert by_agent["艾莉娅"]["action_type"] == "observe"
+    assert "艾莉娅" not in by_agent  # 空行动 → actions 中不出现该角色
 
 
 def test_query_agent(bridge):

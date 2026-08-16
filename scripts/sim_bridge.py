@@ -453,7 +453,7 @@ class SimBridge:
     def _install_forced_think(self, agent_name: str) -> None:
         """给指定 agent 装一次性 think 覆盖：返回 act_as 排队行动（校验后）。
 
-        步进完成后自动还原原 think。行动非法时回退 observe（与 ManualAgent 一致）。
+        步进完成后自动还原原 think。行动非法时返回空行动（None，与 ManualAgent 一致）。
         """
         agent = self.world.agents[agent_name]
         entry = self._pending_actions.pop(agent_name, None)
@@ -479,8 +479,8 @@ class SimBridge:
                 params = {"target": action.target, "content": action.content, **action.params}
                 error = spec.validate_params(params, vctx)
             if error:
-                _log(f"[act_as] {agent_name} 行动不合法（{error}），回退 observe")
-                return Action(action_type="observe", content="观察四周", internal_monologue="...")
+                _log(f"[act_as] {agent_name} 行动不合法（{error}），本次无行动")
+                return None
             _log(f"[act_as] {agent_name} tick {tick}: {action.action_type}")
             return action
 
