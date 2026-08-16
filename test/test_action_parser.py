@@ -1,6 +1,6 @@
 """ActionTextParser 纯文本解析测试。"""
 
-from core.action_parser import parse_action_text
+from core.action import parse_action_text
 
 
 def test_parse_full_action():

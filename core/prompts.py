@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.capabilities import IDLE, NPC_CONTROL
+from core.action import IDLE, NPC_CONTROL
 
 
 def build_agent_system_prompt(agent, registry) -> str:

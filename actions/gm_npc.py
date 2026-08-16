@@ -1,7 +1,7 @@
 """GM NPC 控制 Action：GM 通过工具控制 NPC 说话、移动、添加和移除。"""
 
 from core.action import ActionSpec
-from core.capabilities import NPC_CONTROL
+from core.action import NPC_CONTROL
 from core.character import NPC
 from core.event import SOURCE_NPC
 from core.message import Message

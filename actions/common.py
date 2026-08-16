@@ -1,7 +1,7 @@
 """通用 Action 实现：speak, whisper, move, observe, interact。"""
 
 from core.action import ActionSpec, validate_content_length
-from core.capabilities import IDLE
+from core.action import IDLE
 from core.message import Message, BROADCAST
 
 

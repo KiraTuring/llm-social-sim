@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from core.action import Action, ActionRegistry, format_tool_result
-from core.capabilities import IDLE
+from core.action import IDLE
 from core.character import Character
 
 if TYPE_CHECKING:
