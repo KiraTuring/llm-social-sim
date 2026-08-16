@@ -185,7 +185,7 @@ GM 使用的 `ActionRegistry` 使用 `include_agent_params=False`（不含 `inte
 
 交易完成后可在 `setup_rules()` 里监听 `trade` 事件（如 tavern 的信任规则：对手方对发起方 trust +1）。
 
-校验失败时 LLM 会收到错误提示并重试（最多 2 次），超限 fallback 到 `observe`。
+校验失败时 LLM 会收到错误提示并重试（最多 2 次），超限返回空行动（本次不执行任何行动）。
 
 ## 规则注册
 

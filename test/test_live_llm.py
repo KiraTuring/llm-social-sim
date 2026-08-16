@@ -115,5 +115,6 @@ async def test_agent_perceive_think_flow():
     llm = LLMClient(_llm_config())
     context = await agent.perceive(world)
     action = await agent.think(llm, context)
-    assert action is not None, "think 未返回 Action"
-    assert action.action_type, "think 返回了空 action_type"
+    # 重试耗尽时 think 返回 None（本次无行动），不再兜底 observe
+    if action is not None:
+        assert action.action_type, "think 返回了空 action_type"

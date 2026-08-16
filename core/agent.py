@@ -343,8 +343,8 @@ class Agent(Character):
         context: str,
         tick: int = 0,
         validation_context: dict | None = None,
-    ) -> "Action":
-        """思考：调用 LLM 决策"""
+    ) -> "Action | None":
+        """思考：调用 LLM 决策。重试耗尽未获得可用行动时返回 None（本次无行动）。"""
 
         system_prompt = self.build_system_prompt()
 
@@ -367,14 +367,15 @@ class Agent(Character):
             self._pending_user_msg = {"role": "user", "content": context, "tick": tick}
 
         if not action:
-            self._status("warning", "LLM 未返回 Action，使用默认")
-
-            action = Action(action_type="observe", content="观察四周", internal_monologue="...")
+            self._status("warning", "LLM 未返回 Action，本次无行动")
 
         return action
 
-    async def act(self, action: "Action", world: "WorldState") -> list:
-        """执行 Action 并记录结果。返回产生的消息；执行失败返回空列表。"""
+    async def act(self, action: "Action | None", world: "WorldState") -> list:
+        """执行 Action 并记录结果。返回产生的消息；无行动（None）或执行失败返回空列表。"""
+        if action is None:
+            return []
+
         action_spec = self.registry.get(action.action_type)
         if action_spec is None:
             self._status("warning", f"未知行动类型: {action.action_type}")

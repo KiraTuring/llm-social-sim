@@ -82,12 +82,12 @@ python3 run.py --scene tavern --ticks 5 --mode auto --manual 老巴克 --manual-
 }
 ```
 
-未在 JSON 中配置的 tick → 自动 `observe`，不阻塞。
+未在 JSON 中配置的 tick → 返回空行动（None，本次无行动），不阻塞。
 
 细节：
 - 支持 `"*"` 通配 tick：未单独配置的 tick 重复执行该行动（优先级低于具体 tick）
 - 文件缺失或 JSON 格式错误 → **启动时直接报错退出**（不静默）
-- 行动非法（未知 `action_type`、`target` 不可达、必填字段缺失等）→ 记 WARNING 并回退为 `observe`，与 LLM 路径校验行为一致
+- 行动非法（未知 `action_type`、`target` 不可达、必填字段缺失等）→ 记 WARNING 并返回空行动，与 LLM 路径校验行为一致
 - 示例文件：`manual_actions.example.json`（已加入仓库，可 `--manual-file` 直接使用）
 
 ## 记忆系统

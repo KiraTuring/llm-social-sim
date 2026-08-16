@@ -1,4 +1,4 @@
-"""ManualAgent 测试：默认 observe、通配 tick、行动执行、非法行动回退、文件错误。"""
+"""ManualAgent 测试：无配置返回空、通配 tick、行动执行、非法行动返回空、文件错误。"""
 
 import os
 import tempfile
@@ -50,11 +50,11 @@ async def think(agent, world, tick):
     )
 
 
-async def test_no_config_falls_back_to_observe():
-    """无配置 → observe"""
+async def test_no_config_returns_none():
+    """无配置 → None（本次无行动，不再兜底 observe）"""
     world, agents = await build_world()
     action = await think(agents["老巴克"], world, 1)
-    assert action.action_type == "observe", action
+    assert action is None, action
 
 
 async def test_wildcard_tick():
@@ -106,34 +106,34 @@ async def test_move_executes_and_changes_location():
     assert agent.location == "主厅", agent.location
 
 
-async def test_unknown_action_type_falls_back():
-    """未知 action_type → observe"""
+async def test_unknown_action_type_returns_none():
+    """未知 action_type → None"""
     world, agents = await build_world({
         "老巴克": {"1": {"action_type": "fly"}},
     })
     agent = agents["老巴克"]
     action = await think(agent, world, 1)
-    assert action.action_type == "observe", action
+    assert action is None, action
 
 
-async def test_unreachable_target_falls_back():
-    """目标不可达 → observe"""
+async def test_unreachable_target_returns_none():
+    """目标不可达 → None"""
     world, agents = await build_world({
         "雷恩": {"1": {"action_type": "move", "target": "后厨"}},
     })
     agent = agents["雷恩"]
     action = await think(agent, world, 1)
-    assert action.action_type == "observe", action
+    assert action is None, action
 
 
-async def test_whisper_cross_location_falls_back():
-    """whisper 非同位置 → observe"""
+async def test_whisper_cross_location_returns_none():
+    """whisper 非同位置 → None"""
     world, agents = await build_world({
         "雷恩": {"1": {"action_type": "whisper", "target": "老巴克", "content": "嘘"}},
     })
     agent = agents["雷恩"]
     action = await think(agent, world, 1)
-    assert action.action_type == "observe", action
+    assert action is None, action
 
 
 def test_missing_file_raises():

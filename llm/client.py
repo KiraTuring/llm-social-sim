@@ -412,7 +412,7 @@ class LLMClient:
                 system_prompt=system_prompt, messages=messages,
                 schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
             )
-        self._status("warning", f"{agent_name} 重试耗尽，使用 fallback")
+        self._status("warning", f"{agent_name} 重试耗尽，本次无行动")
         return "fallback", None
 
     async def call_multi(
@@ -507,7 +507,7 @@ class LLMClient:
                     system_prompt=system_prompt, messages=messages,
                     schema_or_guide=str(tool_schemas), raw_response=raw_response, parsed_action=None,
                 )
-            self._status("warning", f"{agent_name} 重试耗尽，使用 fallback")
+            self._status("warning", f"{agent_name} 重试耗尽，本次无行动")
             return "fallback", (choice.message.content, [])
 
         return await self._retry_loop(
@@ -578,7 +578,7 @@ class LLMClient:
                         system_prompt=system_prompt, messages=messages,
                         schema_or_guide=text_guide, raw_response=raw_response, parsed_action=None,
                     )
-                self._status("warning", f"{agent_name} 重试耗尽，使用 fallback")
+                self._status("warning", f"{agent_name} 重试耗尽，本次无行动")
                 return "fallback", (text, None)
 
             parsed_action = {

@@ -149,7 +149,7 @@ class TestThinkChatMode(unittest.TestCase):
                 context="当前环境",
                 tick=3,
             ))
-        self.assertIsNotNone(action)  # fallback
+        self.assertIsNone(action)  # 重试耗尽 → 无行动，不再兜底 observe
         self.assertIsNone(self.agent._pending_user_msg)
 
     def test_messages_structure_passed_to_llm(self):

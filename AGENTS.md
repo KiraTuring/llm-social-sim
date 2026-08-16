@@ -61,7 +61,7 @@ test/           测试
 | `test_chat_format.py` | chat 模式消息结构、截断、retry 隔离、text 模式回归 |
 | `test_engine.py` | SimulationEngine：tick 级与 Agent 级步进、规则触发、GM 注入、顺序轮换 |
 | `test_gm.py` | GM 事件注入：计划事件确定性、随机事件概率 |
-| `test_manual.py` | ManualAgent：默认 observe、通配 tick、行动执行、非法行动回退、文件错误 |
+| `test_manual.py` | ManualAgent：无配置返回空、通配 tick、行动执行、非法行动返回空、文件错误 |
 | `test_save_load.py` | 存档往返：Agent/GMAgent to_dict/from_dict 边界、格式稳定、版本迁移入口 |
 | `test_tui_info.py` | TUI 信息格式化纯函数：工具列表、场景分节白名单、NPC 判断 |
 | `test_world.py` | WorldState 位置索引：重建、副本语义、move_character/remove_npc 增量维护与自愈 |

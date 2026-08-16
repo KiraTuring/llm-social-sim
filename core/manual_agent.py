@@ -31,7 +31,7 @@ class ManualAgent(Agent):
     }
 
     文件缺失或格式错误会在启动时直接报错；单个行动非法（未知 action_type、
-    target 不可达等）时记 warning 并回退为 observe，与 LLM 路径行为一致。
+    target 不可达等）时记 warning 并返回空行动（None），与 LLM 路径行为一致。
     """
 
     agent_type = "ManualAgent"
@@ -94,11 +94,7 @@ class ManualAgent(Agent):
         tick: int = 0,
         validation_context: dict | None = None,
     ):
-        action = self._read_action(tick, self.registry, validation_context)
-        if action:
-            return action
-
-        return Action(action_type="observe", content="等待指令", internal_monologue="...")
+        return self._read_action(tick, self.registry, validation_context)
 
     def _read_action(
         self,
@@ -106,7 +102,7 @@ class ManualAgent(Agent):
         registry: "ActionRegistry",
         validation_context: dict | None = None,
     ):
-        """读取指定 tick 的行动；行动非法时记 warning 并返回 None（回退 observe）。"""
+        """读取指定 tick 的行动；无计划条目或行动非法时记 warning 并返回 None（本次无行动）。"""
         plan = self._manual_plan.get(self.name, {})
         entry = plan.get(str(tick))
         if entry is None:
@@ -115,7 +111,6 @@ class ManualAgent(Agent):
             return None
 
         entry = dict(entry)
-        entry.setdefault("action_type", "observe")
         entry.setdefault("content", "")
         entry.setdefault("target", "")
         entry.setdefault("internal_monologue", "")
@@ -125,7 +120,7 @@ class ManualAgent(Agent):
         if spec is None:
             _log.warning(
                 f"[ManualAgent] {self.name} tick {tick}: 未知行动类型 "
-                f"'{action_type}'，回退为 observe"
+                f"'{action_type}'，本次无行动"
             )
             return None
 
@@ -139,7 +134,7 @@ class ManualAgent(Agent):
             if error:
                 _log.warning(
                     f"[ManualAgent] {self.name} tick {tick}: 行动 '{action_type}' "
-                    f"不合法（{error}），回退为 observe"
+                    f"不合法（{error}），本次无行动"
                 )
                 return None
 

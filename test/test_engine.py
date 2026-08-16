@@ -106,7 +106,8 @@ async def test_agent_level_steps_then_engine_reusable():
 
 
 async def test_agent_action_recorded_to_event_log():
-    """每个 Agent 行动统一写入 event_log：text 给 GM，meta 含 state_update 等完整信息"""
+    """每个 Agent 行动统一写入 event_log：text 给 GM，meta 含 state_update 等完整信息。
+    无计划的 Agent（雷恩/艾莉娅）返回 None，不产生事件。"""
     engine, world, logger = await build_engine({
         "老巴克": {
             "1": {
@@ -121,7 +122,10 @@ async def test_agent_action_recorded_to_event_log():
     await engine.run_tick(1)
 
     agent_events = [e for e in world.event_log_for_tick(1) if e.source_type == "agent"]
-    assert len(agent_events) == len(world.action_order)
+    assert len(agent_events) == 1, agent_events
+    assert engine.agent_actions["老巴克"].action_type == "speak"
+    assert engine.agent_actions["雷恩"] is None
+    assert engine.agent_actions["艾莉娅"] is None
 
     speak_events = [e for e in agent_events if e.meta and e.meta["action_type"] == "speak"]
     assert len(speak_events) == 1
@@ -131,6 +135,15 @@ async def test_agent_action_recorded_to_event_log():
     assert "欢迎光临" in event.text
     assert "招呼客人" in event.text
     assert event.meta["state_update"] == {"情绪": "平静"}
+    logger.close()
+
+
+async def test_agent_without_plan_produces_no_action_or_event():
+    """ManualAgent 无计划 → think 返回 None：不产生事件、agent_actions 记为 None。"""
+    engine, world, logger = await build_engine()
+    actions = await engine.run_tick(1)
+    assert all(v is None for v in actions.values()), actions
+    assert world.event_log_for_tick(1) == [], world.event_log_texts()
     logger.close()
 
 

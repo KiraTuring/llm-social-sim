@@ -116,7 +116,7 @@ def bridge(tmp_path):
         encoding="utf-8",
     )
     plan_path = tmp_path / "plan.json"
-    plan_path.write_text("{}", encoding="utf-8")  # 空计划 → 所有角色 observe
+    plan_path.write_text("{}", encoding="utf-8")  # 空计划 → 所有角色空行动（None）
     proc = BridgeProc(config_path, plan_path)
     yield proc
     proc.close()
@@ -141,10 +141,8 @@ def test_start_step_state(bridge):
     assert resp["data"]["tick"] == 2
     assert len(resp["data"]["log"]) == 2
     for tick_log in resp["data"]["log"]:
-        agents = {a["agent"] for a in tick_log["actions"]}
-        assert agents == set(TAVERN_AGENTS)
-        for action in tick_log["actions"]:
-            assert action["action_type"] == "observe"  # ManualAgent 空计划兜底
+        # 空计划 → 所有角色无行动，actions 列表为空（不再兜底 observe）
+        assert tick_log["actions"] == [], tick_log["actions"]
 
     resp = bridge.send({"req_id": 3, "cmd": "state"})
     assert resp["ok"] is True
@@ -265,7 +263,14 @@ def test_step_returns_gm_and_agent_events(bridge):
         "target": "雷恩",
         "content": "雷恩，你信那斗篷客的话吗？",
     })
-    resp = bridge.send({"req_id": 3, "cmd": "step", "ticks": 1})
+    # act_as 让老巴克观察 → 验证 observe 的 result 仍随 actions 返回（不再由空计划兜底）
+    bridge.send({
+        "req_id": 3,
+        "cmd": "act_as",
+        "agent": "老巴克",
+        "action_type": "observe",
+    })
+    resp = bridge.send({"req_id": 4, "cmd": "step", "ticks": 1})
     assert resp["ok"] is True
     tick1 = resp["data"]["log"][0]
     assert "events" in tick1
@@ -281,7 +286,7 @@ def test_step_returns_gm_and_agent_events(bridge):
     assert observe_actions and all(a["result"] for a in observe_actions)
 
     # 推进到 tick 3：tavern 计划事件（GM system_event）应进入 events
-    resp = bridge.send({"req_id": 4, "cmd": "step", "ticks": 2})
+    resp = bridge.send({"req_id": 5, "cmd": "step", "ticks": 2})
     assert resp["ok"] is True
     assert resp["data"]["tick"] == 3
     tick3 = resp["data"]["log"][1]
@@ -300,7 +305,14 @@ def test_step_narrative_view(bridge):
         "target": "雷恩",
         "content": "雷恩，你信那斗篷客的话吗？",
     })
-    resp = bridge.send({"req_id": 3, "cmd": "step", "ticks": 1, "view": "narrative"})
+    # act_as 让老巴克观察 → 渲染 observe 结果（空计划不再兜底 observe）
+    bridge.send({
+        "req_id": 3,
+        "cmd": "act_as",
+        "agent": "老巴克",
+        "action_type": "observe",
+    })
+    resp = bridge.send({"req_id": 4, "cmd": "step", "ticks": 1, "view": "narrative"})
     assert resp["ok"] is True
     narrative = resp["data"]["narrative"]
     assert isinstance(narrative, str)
@@ -311,12 +323,12 @@ def test_step_narrative_view(bridge):
     assert "📊 观察" in narrative
 
     # raw 视图（默认）不生成 narrative 字段
-    resp = bridge.send({"req_id": 4, "cmd": "step", "ticks": 1})
+    resp = bridge.send({"req_id": 5, "cmd": "step", "ticks": 1})
     assert resp["ok"] is True
     assert "narrative" not in resp["data"]
 
     # 非法 view 报错
-    resp = bridge.send({"req_id": 5, "cmd": "step", "ticks": 1, "view": "bogus"})
+    resp = bridge.send({"req_id": 6, "cmd": "step", "ticks": 1, "view": "bogus"})
     assert resp["ok"] is False
 
 
