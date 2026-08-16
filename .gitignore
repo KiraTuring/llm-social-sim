@@ -38,3 +38,7 @@ saves/
 *.json
 !manual_actions.example.json
 !dsh-plugins/**/package.json
+
+# WebUI 测试工具产物
+node_modules/
+.dsh-vision-router/

@@ -19,6 +19,25 @@ python3 run.py
 python3 run.py --scene tavern --ticks 20 --mode interactive
 ```
 
+## WebUI 界面
+
+浏览器图形界面，支持场景选择、逐 tick / 逐 Agent 步进、自动运行、实时事件流、
+角色与地点面板、存档加载与保存：
+
+```bash
+python3 webui/server.py                 # 默认 http://127.0.0.1:8080
+python3 webui/server.py --port 9000     # 指定端口
+```
+
+打开 http://127.0.0.1:8080 即可。后端复用与 CLI/TUI 完全相同的
+`run.py` 装配逻辑和 `SimulationEngine`，前端为纯静态页面（无构建步骤）。
+
+- 顶部栏选择场景 / 载入存档 / 模式 / tick 数后点击「开始」
+- 「下一 Tick」跑完整一轮；「单步 Agent」逐个角色步进
+- 「自动」按 `config.yaml` 的 `auto_delay` 间隔连续运行，可随时暂停
+- 中间事件流实时推送；点角色 / 地点查看详情；「场景信息」展示配置摘要
+- 「保存」生成 `saves/<场景>_<时间戳>.json`，顶部存档下拉可继续运行
+
 ## 命令行参数
 
 | 参数 | 简写 | 说明 | 示例 |

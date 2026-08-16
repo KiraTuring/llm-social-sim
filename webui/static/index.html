@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LLM 社会模拟引擎 · WebUI</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🧭</span>
+      <div>
+        <h1>LLM 社会模拟引擎</h1>
+        <p class="subtitle">多 Agent 社会模拟 · WebUI</p>
+      </div>
+    </div>
+
+    <div class="setup">
+      <label>场景
+        <select id="scene-select"></select>
+      </label>
+      <label>或载入存档
+        <select id="save-select">
+          <option value="">（新建会话）</option>
+        </select>
+      </label>
+      <label>模式
+        <select id="mode-select">
+          <option value="interactive">交互</option>
+          <option value="auto">自动</option>
+        </select>
+      </label>
+      <label>tick 数
+        <input id="ticks-input" type="number" min="1" max="1000" value="20" />
+      </label>
+      <button id="btn-start" class="btn btn-primary">▶ 开始</button>
+      <button id="btn-scene-info" class="btn">📖 场景信息</button>
+    </div>
+  </header>
+
+  <nav class="controls">
+    <button id="btn-next" class="btn btn-primary" disabled>⏭ 下一 Tick</button>
+    <button id="btn-step" class="btn" disabled>👣 单步 Agent</button>
+    <button id="btn-auto" class="btn" disabled>▶ 自动</button>
+    <button id="btn-save" class="btn" disabled>💾 保存</button>
+
+    <div class="progress">
+      <div class="progress-bar"><div id="progress-fill"></div></div>
+      <span id="tick-label">Tick —/—</span>
+    </div>
+
+    <span id="status-label" class="status"></span>
+  </nav>
+
+  <main class="panels">
+    <section class="panel" id="locations-panel">
+      <h2 class="panel-title">📍 地点</h2>
+      <div class="panel-body" id="locations-body">
+        <p class="empty">启动会话后显示地点与角色分布。</p>
+      </div>
+    </section>
+
+    <section class="panel" id="events-panel">
+      <div class="panel-head">
+        <div class="tabs">
+          <button class="tab active" data-tab="events">📜 事件流</button>
+          <button class="tab" data-tab="messages">💬 消息</button>
+        </div>
+      </div>
+      <div class="panel-body scroll" id="events-body">
+        <p class="empty">启动会话后，事件将在这里逐条呈现。</p>
+      </div>
+    </section>
+
+    <section class="panel" id="characters-panel">
+      <h2 class="panel-title">👥 角色</h2>
+      <div class="panel-body scroll" id="characters-body">
+        <p class="empty">启动会话后显示角色状态。</p>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <!-- 通用弹窗 -->
+  <div class="modal-backdrop" id="modal-backdrop" hidden>
+    <div class="modal" id="modal">
+      <div class="modal-head">
+        <h3 id="modal-title"></h3>
+        <button class="modal-close" id="modal-close">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
