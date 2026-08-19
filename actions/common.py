@@ -54,7 +54,6 @@ class SpeakAction(ActionSpec):
         recipients = world.get_hearable_agents(agent_name)
         msg_target = None if target == BROADCAST or not target else target
         msg = Message(sender=agent_name, recipients=recipients, target=msg_target, content=content, tag="speech", tick=world.tick)
-        world.message_bus.send(msg)
         return [msg], None
 
 
@@ -108,13 +107,11 @@ class WhisperAction(ActionSpec):
             return [], None
 
         whisper_msg = Message(sender=agent_name, recipients=[target], target=target, content=content, tag="whisper", tick=world.tick)
-        world.message_bus.send(whisper_msg)
         messages = [whisper_msg]
 
         notice_recipients = world.get_hearable_agents(agent_name, exclude=target)
         if notice_recipients:
             notice = Message(sender=agent_name, recipients=notice_recipients, content=f"对 {target} 窃窃私语", tag="action", tick=world.tick)
-            world.message_bus.send(notice)
             messages.append(notice)
 
         return messages, None
@@ -185,7 +182,6 @@ class MoveAction(ActionSpec):
             tag="action",
             tick=world.tick,
         )
-        world.message_bus.send(msg)
         return [msg], None
 
 
@@ -340,7 +336,6 @@ class InteractAction(ActionSpec):
 
         recipients = world.get_hearable_agents(agent_name)
         msg = Message(sender=agent_name, recipients=recipients, content=content, tag="interact", trigger_gm=True, tick=world.tick)
-        world.message_bus.send(msg)
 
         if modifications:
             agent = world.agents[agent_name]

@@ -63,7 +63,6 @@ class RadioAction(ActionSpec):
             sender=agent_name, recipients=[target], target=target,
             content=content, tag="radio", tick=world.tick,
         )
-        world.message_bus.send(target_msg)
         msgs = [target_msg]
 
         # 2. Notice to speaker's bystanders (they see the speaker on the radio)
@@ -73,7 +72,6 @@ class RadioAction(ActionSpec):
                 sender=agent_name, recipients=speaker_bystanders, target=None,
                 content="对着无线电说了几句话", tag="action", tick=world.tick,
             )
-            world.message_bus.send(speaker_notice)
             msgs.append(speaker_notice)
 
         # 3. Notice to target's bystanders (they see the target's radio receiving)
@@ -83,7 +81,6 @@ class RadioAction(ActionSpec):
                 sender=target, recipients=target_bystanders, target=None,
                 content="身上的无线电中传来一段通话声", tag="action", tick=world.tick,
             )
-            world.message_bus.send(target_notice)
             msgs.append(target_notice)
 
         return msgs, None
