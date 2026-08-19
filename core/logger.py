@@ -1,9 +1,10 @@
 """日志模块：记录 LLM 调用和系统调试信息。"""
-
+# -*- coding: UTF-8 -*-
 from __future__ import annotations
 
 import logging
 from pathlib import Path
+import json
 
 
 class SimLogger:
@@ -44,7 +45,11 @@ class SimLogger:
         self.logger.debug(f"=== SYSTEM PROMPT ===\n{system_prompt}")
         self.logger.debug(f"=== USER MESSAGES ===\n{messages}")
         self.logger.debug(f"=== TOOL SCHEMA / TEXT GUIDE ===\n{schema_or_guide}")
-        self.logger.debug(f"=== RAW RESPONSE ===\n{raw_response}")
+        raw_json = json.loads(raw_response)
+        raw_tool_calls = raw_json['choices'][0]['message']['tool_calls']
+        for t in raw_tool_calls:
+            t['function']['arguments'] = json.loads(t['function']['arguments'])
+        self.logger.info(f"=== RAW RESPONSE ===\n{raw_json}")
 
     def log_tick_start(self, tick: int):
         """记录 tick 开始"""
