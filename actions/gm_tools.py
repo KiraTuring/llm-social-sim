@@ -61,10 +61,9 @@ class NarrateAction(ActionSpec):
 
         msg = Message(sender="GM", recipients=recipients, target=target if target else None,
                       content=content, tag="system_event", tick=world.tick)
-        world.message_bus.send(msg)
         prefix = f"[{target}] " if target else ""
         world.add_event(f"旁白: {prefix}{content}")
-        return [], None
+        return [msg], None
 
 
 class ModifyEnvironmentAction(ActionSpec):

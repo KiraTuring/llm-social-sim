@@ -112,7 +112,6 @@ class NpcSpeakAction(ActionSpec):
             target=target if target else None,
             content=content, tag="speech", tick=world.tick,
         )
-        world.message_bus.send(msg)
         suffix = f" -> {target}" if target else ""
         world.add_event(
             f"NPC {npc_name}{suffix}: {content}",
@@ -185,7 +184,6 @@ class NpcMoveAction(ActionSpec):
             tag="action",
             tick=world.tick,
         )
-        world.message_bus.send(msg)
         world.add_event(
             f"NPC {npc_name}: {desc}",
             source=npc_name,

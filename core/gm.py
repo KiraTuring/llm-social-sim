@@ -131,7 +131,9 @@ class GMAgent:
                 spec = self.registry.get(action.action_type)
                 if not spec:
                     return f"未知工具: {action.action_type}"
-                _, result = spec.execute("GM", action.params, world)
+                messages, result = spec.execute("GM", action.params, world)
+                for msg in messages:
+                    world.message_bus.send(msg)
                 # 执行后原地刷新校验上下文，使同批后续 tool call 能看到本次副作用
                 validation_context.update(world.build_validation_context("GM"))
                 summary = format_tool_result(action.action_type, result)

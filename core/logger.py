@@ -47,8 +47,9 @@ class SimLogger:
         self.logger.debug(f"=== TOOL SCHEMA / TEXT GUIDE ===\n{schema_or_guide}")
         raw_json = json.loads(raw_response)
         raw_tool_calls = raw_json['choices'][0]['message']['tool_calls']
-        for t in raw_tool_calls:
-            t['function']['arguments'] = json.loads(t['function']['arguments'])
+        if raw_tool_calls:
+            for t in raw_tool_calls:
+                t['function']['arguments'] = json.loads(t['function']['arguments'])
         self.logger.info(f"=== RAW RESPONSE ===\n{raw_json}")
 
     def log_tick_start(self, tick: int):

@@ -276,6 +276,8 @@ class Agent(Character):
 
         try:
             messages = self._execute_action(action_spec, action, world)
+            for msg in messages:
+                world.message_bus.send(msg)
         except Exception as e:
             self._record_failure(action, e)
             return []

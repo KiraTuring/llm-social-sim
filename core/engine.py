@@ -172,7 +172,6 @@ class SimulationEngine:
                 "tag": msg.tag,
                 "tick": msg.tick,
             })
-            self.world.message_bus.send(msg)
             self.rule_engine.trigger(msg.tag, msg, self.world)
 
         return AgentStep(
